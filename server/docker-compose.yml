@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  # This is the configuration for our PostgreSQL database container
+  # Note the `postgres` name is important, in out Go app when we refer
+  # to  `host: "postgres"` that value is mapped on the network to the 
+  # address of this container.
+  postgres:
+    image: postgres:14.1-alpine
+    restart: always
+    environment:
+      # You can set the value of environment variables
+      # in your docker-compose.yml file
+      # Our GO app will use these to connect
+      # to the database
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      # Standard port for PostgreSQL databases
+      - "5432:5432"
+    volumes:
+      # When the PostgresSQL container is started it will run any scripts
+      # provided in the `docker-entrypoint-initdb.d` directory, this connects
+      # our seed file to that directory so that it gets run
+      - ./database-seed.sql:/docker-entrypoint-initdb.d/database-seed.sql
