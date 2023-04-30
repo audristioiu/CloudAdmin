@@ -4,6 +4,7 @@ import (
 	"cloudadmin/api"
 	"cloudadmin/repositories"
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-openapi/spec"
+	"github.com/joho/godotenv"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -23,10 +25,10 @@ func NewService() *Service {
 	return &Service{}
 }
 
-//func asJSON(v interface{}) string {
-//	data, _ := json.MarshalIndent(v, " ", " ")
-//	return string(data)
-//}
+func asJSON(v interface{}) string {
+	data, _ := json.MarshalIndent(v, " ", " ")
+	return string(data)
+}
 
 // StartWebService initializez log , restful api and open api for swagger
 func (s *Service) StartWebService() {
@@ -43,9 +45,22 @@ func (s *Service) StartWebService() {
 
 	ctx := context.Background()
 
-	// initialize repos
-	psqlRepo := repositories.NewPostgreSqlRepo(ctx, "my_user", "root", "localhost", "my_database1", 5432)
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatalf("Error loading environment variables file")
+		return
+	}
+	psqlUser := os.Getenv("POSTGRES_USER")
+	psqlPass := os.Getenv("POSTGRES_PASSWORD")
+	psqlDB := os.Getenv("POSTGRES_DB")
+	psqlHost := "localhost"
+	psqlPort := 5432
 
+	// initialize repos
+	psqlRepo := repositories.NewPostgreSqlRepo(ctx, psqlUser, psqlPass, psqlHost, psqlDB, psqlPort)
+	if psqlRepo == nil {
+		return
+	}
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo)
 	apiManager.RegisterRoutes(ws)
@@ -56,8 +71,8 @@ func (s *Service) StartWebService() {
 		WebServices:                   restful.RegisteredWebServices(), // you control what services are visible
 		APIPath:                       "/apidocs.json",
 		PostBuildSwaggerObjectHandler: enrichSwaggerObject}
-	//actual := restfulspec.BuildSwagger(config)
-	//log.Println(asJSON(actual))
+	actual := restfulspec.BuildSwagger(config)
+	log.Println(asJSON(actual))
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(config))
 
 	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("/Users/Alex/Desktop/CloudAdmin/swagger-ui/dist"))))

@@ -1,373 +1,503 @@
 {
-    "swagger": "2.0",
-    "info": {
-      "description": "Cloud API which servers for schedulling apps",
-      "title": "Cloud Admin API",
-      "contact": {
-        "name": "Alexandru-Mihai Cioplean, Alexandru Udristioiu",
-        "email": "udristioiualexandru@gmail.com"
-      },
-      "license": {
-        "name": "MIT",
-        "url": "http://mit.org"
-      },
-      "version": "1.1.0"
+  "swagger": "2.0",
+  "info": {
+    "description": "Cloud API which servers for schedulling apps",
+    "title": "Cloud Admin API",
+    "contact": {
+      "name": "Alexandru-Mihai Cioplean, Alexandru Udristioiu",
+      "email": "alexandru.cioplean@gmail.com, udristioiualexandru@gmail.com"
     },
-    "paths": {
-      "/app": {
-        "put": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Update app information",
-          "operationId": "UpdateApp",
-          "responses": {
-            "400": {
-              "description": "Bad Request",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            }
-          }
-        }
-      },
-      "/app/{appname}": {
-        "get": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Retrieves app information",
-          "operationId": "GetAppInfo",
-          "parameters": [
-            {
-              "type": "string",
-              "description": "name of the app you want to delete",
-              "name": "appname",
-              "in": "path",
-              "required": true
-            }
-          ],
-          "responses": {
-            "200": {
-              "description": "OK",
-              "schema": {
-                "$ref": "#/definitions/api.ApplicationData"
-              }
-            },
-            "400": {
-              "description": "Bad  Request",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            },
-            "404": {
-              "description": "User Not Found",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            }
-          }
-        }
-      },
-      "/app{appname}": {
-        "delete": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Deletes app from user applications list",
-          "operationId": "DeleteApp",
-          "parameters": [
-            {
-              "type": "string",
-              "description": "name of the app you want to delete",
-              "name": "appname",
-              "in": "path",
-              "required": true
-            }
-          ],
-          "responses": {
-            "200": {
-              "description": "OK"
-            }
-          }
-        }
-      },
-      "/login": {
-        "post": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Login user",
-          "operationId": "UserLogin",
-          "responses": {
-            "200": {
-              "description": "OK",
-              "schema": {
-                "$ref": "#/definitions/api.UserData"
-              }
-            },
-            "400": {
-              "description": "Bad Request",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            },
-            "404": {
-              "description": "User Not Found",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            }
-          }
-        }
-      },
-      "/profile": {
-        "put": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Updates user profile",
-          "operationId": "UpdateUserProfile",
-          "responses": {
-            "400": {
-              "description": "Bad Request",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            }
-          }
-        }
-      },
-      "/profile/{username}": {
-        "get": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Retrieves user profile",
-          "operationId": "GetUserProfile",
-          "parameters": [
-            {
-              "type": "string",
-              "description": "username of the account",
-              "name": "username",
-              "in": "path",
-              "required": true
-            }
-          ],
-          "responses": {
-            "200": {
-              "description": "OK",
-              "schema": {
-                "$ref": "#/definitions/api.UserData"
-              }
-            },
-            "400": {
-              "description": "Bad Request",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            },
-            "404": {
-              "description": "User Not Found",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            }
-          }
-        }
-      },
-      "/register": {
-        "post": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Register user",
-          "operationId": "UserRegister",
-          "responses": {
-            "200": {
-              "description": "OK",
-              "schema": {
-                "$ref": "#/definitions/api.UserData"
-              }
-            },
-            "400": {
-              "description": "Bad Request",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            }
-          }
-        }
-      },
-      "/register/app": {
-        "post": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Upload app to s3",
-          "operationId": "UploadApp",
-          "responses": {
-            "200": {
-              "description": "OK",
-              "schema": {
-                "$ref": "#/definitions/api.ApplicationData"
-              }
-            },
-            "400": {
-              "description": "Bad Request",
-              "schema": {
-                "$ref": "#/definitions/api.ErrorResponse"
-              }
-            }
-          }
-        }
-      },
-      "/user/{username}": {
-        "delete": {
-          "consumes": [
-            "application/json"
-          ],
-          "produces": [
-            "application/json"
-          ],
-          "tags": [
-            "users"
-          ],
-          "summary": "Deletes user",
-          "operationId": "DeleteUser",
-          "parameters": [
-            {
-              "type": "string",
-              "description": "username of the account",
-              "name": "username",
-              "in": "path",
-              "required": true
-            }
-          ],
-          "responses": {
-            "200": {
-              "description": "OK"
-            }
-          }
-        }
-      }
+    "license": {
+      "name": "MIT",
+      "url": "http://mit.org"
     },
-    "definitions": {
-      "api.ApplicationData": {
-        "required": [
-          "name",
-          "description",
-          "is_running"
+    "version": "1.1.0"
+  },
+  "paths": {
+    "/app": {
+      "get": {
+        "consumes": [
+          "application/json"
         ],
-        "properties": {
-          "description": {
-            "type": "string"
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Retrieves app information",
+        "operationId": "GetAppInfo",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "name of the app",
+            "name": "appname",
+            "in": "query"
           },
-          "is_running": {
-            "type": "boolean"
+          {
+            "type": "string",
+            "description": "owner of the app",
+            "name": "username",
+            "in": "query"
           },
-          "name": {
-            "type": "string"
+          {
+            "type": "string",
+            "description": "role used for auth",
+            "name": "Authorization",
+            "in": "header"
+          },
+          {
+            "type": "string",
+            "description": "user unique id",
+            "name": "USER-UUID",
+            "in": "header"
           }
-        }
-      },
-      "api.ErrorResponse": {
-        "required": [
-          "status_code",
-          "message"
         ],
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "status_code": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "api.UserData": {
-        "required": [
-          "username",
-          "password"
-        ],
-        "properties": {
-          "applications": {
-            "type": "array",
-            "items": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
               "$ref": "#/definitions/api.ApplicationData"
             }
           },
-          "city_address": {
-            "type": "string"
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
           },
-          "password": {
-            "type": "string"
+          "404": {
+            "description": "App Not Found",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          }
+        }
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Update app information",
+        "operationId": "UpdateApp",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "role used for auth",
+            "name": "Authorization",
+            "in": "header"
           },
-          "role": {
-            "type": "string"
+          {
+            "type": "string",
+            "description": "user  unique id",
+            "name": "USER-UUID",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "string"
+            }
           },
-          "username": {
-            "type": "string"
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Deletes app",
+        "operationId": "DeleteApp",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "name of the app you want to delete",
+            "name": "appname",
+            "in": "query"
           },
-          "want_notify": {
-            "type": "boolean"
+          {
+            "type": "string",
+            "description": "owner of the app",
+            "name": "username",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "User Not Found",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
           }
         }
       }
     },
-    "tags": [
-      {
-        "description": "Managing users",
-        "name": "users"
+    "/login": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Login user",
+        "operationId": "UserLogin",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "User Not Found",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          }
+        }
       }
-    ]
-  }
+    },
+    "/register/app": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Upload app to s3",
+        "operationId": "UploadApp",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the app",
+            "name": "username",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "role used for auth",
+            "name": "Authorization",
+            "in": "header"
+          },
+          {
+            "type": "string",
+            "description": "user unique id",
+            "name": "USER-UUID",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "302": {
+            "description": "Already found",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/register/user": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Register user",
+        "operationId": "UserRegister",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "302": {
+            "description": "Already found",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/user": {
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Updates user profile",
+        "operationId": "UpdateUserProfile",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "role used for auth",
+            "name": "Authorization",
+            "in": "header"
+          },
+          {
+            "type": "string",
+            "description": "user unique id",
+            "name": "USER-UUID",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/user/{username}": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Retrieves user profile",
+        "operationId": "GetUserProfile",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "username of the account",
+            "name": "username",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "role used for auth",
+            "name": "Authorization",
+            "in": "header"
+          },
+          {
+            "type": "string",
+            "description": "user unique id",
+            "name": "USER-UUID",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/api.UserData"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "User Not Found",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          }
+        }
+      },
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "users"
+        ],
+        "summary": "Deletes user",
+        "operationId": "DeleteUser",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "username of the account",
+            "name": "username",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "User Not Found",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "api.ApplicationData": {
+      "required": [
+        "name",
+        "description",
+        "is_running"
+      ],
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "is_running": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "api.ErrorResponse": {
+      "required": [
+        "status_code",
+        "message"
+      ],
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "status_code": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "api.UserData": {
+      "required": [
+        "username",
+        "password"
+      ],
+      "properties": {
+        "applications": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "city_address": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "want_notify": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Managing users",
+      "name": "users"
+    }
+  ]
+}

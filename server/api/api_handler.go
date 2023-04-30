@@ -13,19 +13,19 @@ import (
 
 // UserData represents user information
 type UserData struct {
-	UserName     string            `json:"username"`
-	Password     string            `json:"password"`
-	CityAddress  string            `json:"city_address,omitempty"`
-	WantNotify   bool              `json:"want_notify,omitempty"`
-	Applications []ApplicationData `json:"applications,omitempty"`
-	Role         string            `json:"role,omitempty"`
+	UserName     string   `json:"username"`
+	Password     string   `json:"password"`
+	CityAddress  string   `json:"city_address,omitempty"`
+	WantNotify   string   `json:"want_notify,omitempty"`
+	Applications []string `json:"applications,omitempty"`
+	Role         string   `json:"role,omitempty"`
 }
 
 // ApplicationdData represents app information
 type ApplicationData struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	IsRunning   bool   `json:"is_running"`
+	IsRunning   string `json:"is_running"`
 }
 
 // ErrorResponse represents error info
@@ -58,7 +58,7 @@ func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Re
 
 	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
 	if err != nil || !helpers.CheckUser(userData, authHeader) {
-		log.Printf("[ERROR] User id" + userIDHeader + " not authorized")
+		log.Printf("[ERROR] User id " + userIDHeader + " not authorized")
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + userIDHeader + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
@@ -257,9 +257,49 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 // UploadApp uploads app to s3
 func (api *API) UploadApp(request *restful.Request, response *restful.Response) {
 
-	//appData := domain.UserData{}
-	//errorData := domain.ErrorResponse{}
+	appData := domain.ApplicationData{}
+	errorData := domain.ErrorResponse{}
+	err := request.ReadEntity(&appData)
+	if err != nil {
+		log.Printf("[ERROR] Couldn't read body")
+		errorData.Message = "Bad Request/ could not read body"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
+		return
+	}
 
+	username := request.QueryParameter("username")
+	if username == "" {
+		log.Printf("[ERROR] Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		return
+	}
+
+	_, err = api.psqlRepo.GetAppData(appData.Name)
+	if err == nil {
+		log.Printf("[ERROR] App %v already exists", appData.Name)
+		errorData.Message = "App already exists"
+		errorData.StatusCode = http.StatusFound
+		response.WriteEntity(errorData)
+		return
+	}
+
+	err = api.psqlRepo.InsertAppData(&appData)
+	if err != nil {
+		errorData.Message = "Internal error/ insert in postgres"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteEntity(errorData)
+		return
+	}
+
+	err = api.psqlRepo.UpdateUserAppsData(appData.Name, username)
+	if err != nil {
+		errorData.Message = "Internal error/ update users in postgres"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteEntity(errorData)
+		return
+	}
 	//app pus in s3 + insert in tabela + aplicatie atasata la user
 
 	response.Write([]byte("App uploaded succesfully"))
@@ -268,43 +308,123 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 // GetAppInfo retrieves app information
 func (api *API) GetAppInfo(request *restful.Request, response *restful.Response) {
 
-	appname := request.PathParameter("appname")
-
-	//luat info din postgres
-
-	appData := domain.ApplicationData{
-		Name:        appname,
-		Description: "Program that prints hello world",
-		IsRunning:   false,
+	errorData := domain.ErrorResponse{}
+	appname := request.QueryParameter("appname")
+	if appname == "" {
+		log.Printf("[ERROR] Couldn't read appname query parameter")
+		errorData.Message = "Bad Request/ empty appname"
+		errorData.StatusCode = http.StatusBadRequest
+		return
 	}
 
+	username := request.QueryParameter("username")
+	if username == "" {
+		log.Printf("[ERROR] Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		return
+	}
+
+	appData, err := api.psqlRepo.GetAppData(appname)
+	if err != nil {
+		log.Printf("[ERROR] App %v not found", appname)
+		errorData.Message = "App not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteEntity(errorData)
+		return
+	}
+
+	userUUID := request.HeaderParameter("USER-UUID")
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		log.Printf("[ERROR] User id" + userUUID + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + userUUID + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteEntity(errorData)
+		return
+	}
+
+	flag := true
+	for _, app := range userData.Applications {
+		if app == appname {
+			flag = false
+			break
+		}
+	}
+
+	userData.UserName = username
+
+	if helpers.CheckUser(userData, userData.Role) {
+		flag = true
+	}
+	if !flag {
+		log.Printf("[ERROR] User" + username + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + username + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteEntity(errorData)
+		return
+	}
 	response.WriteEntity(appData)
 }
 
 // UpdateApp updates app info
 func (api *API) UpdateApp(request *restful.Request, response *restful.Response) {
 
-	//citire + update postgres
+	appData := domain.ApplicationData{}
+	errorData := domain.ErrorResponse{}
 
-	appData := domain.ApplicationData{
-		Name:        "hello_world.c",
-		Description: "Program that prints hello world",
-		IsRunning:   false,
+	err := request.ReadEntity(&appData)
+	if err != nil {
+		log.Printf("[ERROR] Couldn't read body")
+		errorData.Message = "Bad Request/ could not read body"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
+		return
+	}
+	log.Printf("%+v", appData)
+
+	err = api.psqlRepo.UpdateAppData(&appData)
+	if err != nil {
+		errorData.Message = "Internal error / updating in postgres"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteEntity(errorData)
+		return
 	}
 
-	response.WriteEntity(appData)
+	response.Write([]byte("App updated succesfully"))
 }
 
 // DeleteApp deletes app
 func (api *API) DeleteApp(request *restful.Request, response *restful.Response) {
 
-	//citire + delete din tabela de apps + users + s3
+	errorData := domain.ErrorResponse{}
 
-	appData := domain.ApplicationData{
-		Name:        "hello_world.c",
-		Description: "Program that prints hello world",
-		IsRunning:   false,
+	appname := request.QueryParameter("appname")
+	if appname == "" {
+		log.Printf("[ERROR] Couldn't read appname query parameter")
+		errorData.Message = "Bad Request/ empty appname"
+		errorData.StatusCode = http.StatusBadRequest
+		return
 	}
 
-	response.WriteEntity(appData)
+	username := request.QueryParameter("username")
+	if username == "" {
+		log.Printf("[ERROR] Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		return
+	}
+
+	err := api.psqlRepo.DeleteAppData(appname, username)
+	if err != nil {
+		log.Printf("[ERROR] App %v not found", appname)
+		errorData.Message = "App not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteEntity(errorData)
+		return
+	}
+
+	response.Write([]byte("App deleted succesfully"))
 }

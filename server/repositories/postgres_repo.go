@@ -112,12 +112,12 @@ func (p *PostgreSqlRepo) UpdateUserRoleData(role, userID string, userData *domai
 }
 
 // UpdateUserAppsData updates user apps from PostgreSql table
-func (p *PostgreSqlRepo) UpdateUserAppsData(appName string, userData *domain.UserData) error {
+func (p *PostgreSqlRepo) UpdateUserAppsData(appName, userName string) error {
 	updateStatement := "UPDATE  users SET applications=array_append(applications, $1) WHERE username=$2"
 
-	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userData.UserName)
+	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userName)
 	if err != nil {
-		log.Printf("[ERROR] could not update user: %v with the new app : %v  with error : %v\n", userData.UserName, appName, err)
+		log.Printf("[ERROR] could not update user: %v with the new app : %v  with error : %v\n", userName, appName, err)
 		return err
 	}
 	if row.RowsAffected() != 1 {
@@ -177,9 +177,9 @@ func (p *PostgreSqlRepo) GetAppData(appname string) (*domain.ApplicationData, er
 
 // UpdateAppData updates app from PostgreSql table
 func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
-	updateStatement := "UPDATE  apps SET is_running=$1 WHERE name=$2"
+	updateStatement := "UPDATE  apps SET description=$1, is_running=$2 WHERE name=$3"
 
-	row, err := p.conn.Exec(p.ctx, updateStatement, appData.IsRunning, appData.Name)
+	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.Name)
 	if err != nil {
 		log.Printf("[ERROR] could not update data with error : %v\n", err)
 		return err
@@ -193,18 +193,30 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 }
 
 // DeleteAppData deletes app from PostgreSql table
-func (p *PostgreSqlRepo) DeleteAppData(appName string, userData *domain.UserData) error {
+func (p *PostgreSqlRepo) DeleteAppData(appName, userName string) error {
 	updateStatement := "UPDATE  users SET applications=array_remove(applications, $1) WHERE username=$2"
 
-	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userData.UserName)
+	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userName)
 	if err != nil {
-		log.Printf("[ERROR] could not update user: %v with the new app : %v  with error : %v\n", userData.UserName, appName, err)
+		log.Printf("[ERROR] could not update user: %v with deleting app : %v  with error : %v\n", userName, appName, err)
 		return err
 	}
 	if row.RowsAffected() != 1 {
 		log.Printf("[ERROR] no row found to update")
 		return errors.New("no row found to update")
 	}
-	log.Printf("Successfuly updated user apps with : %+v", appName)
+	deleteStatement := "DELETE FROM apps WHERE name = $1"
+
+	row, err = p.conn.Exec(p.ctx, deleteStatement, appName)
+	if err != nil {
+		log.Printf("[ERROR] could not delete app :  %v  with error : %v\n", appName, err)
+		return err
+	}
+	if row.RowsAffected() != 1 {
+		log.Printf("[ERROR] no row found to delete")
+		return errors.New("no row found to delete")
+	}
+
+	log.Printf("Successfuly deleted user app : %+v", appName)
 	return nil
 }
