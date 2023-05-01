@@ -107,8 +107,15 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	}
 	log.Printf("%+v", userData)
 
-	_, err = api.psqlRepo.GetUserData(userData.UserName)
-	if err == nil {
+	userRetrievedData, err := api.psqlRepo.GetUserData(userData.UserName)
+
+	if err != nil {
+		errorData.Message = "Internal error / get user in postgres"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteEntity(errorData)
+		return
+	}
+	if userRetrievedData.UserName != "" {
 		log.Printf("[ERROR] User %v already exists", userData.UserName)
 		errorData.Message = "User already exists"
 		errorData.StatusCode = http.StatusFound
@@ -142,6 +149,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
 		return
 	}
 
@@ -149,6 +157,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read password query parameter")
 		errorData.Message = "Bad Request/ empty password"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
 		return
 	}
 
@@ -184,6 +193,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
 		return
 	}
 	userData, err := api.psqlRepo.GetUserData(username)
@@ -241,6 +251,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
 		return
 	}
 	err := api.psqlRepo.DeleteUserData(username)
@@ -278,8 +289,42 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	_, err = api.psqlRepo.GetAppsData(appData.Name, "")
-	if err == nil {
+	userUUID := request.HeaderParameter("USER-UUID")
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		log.Printf("[ERROR] User id" + userUUID + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + userUUID + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteEntity(errorData)
+		return
+	}
+
+	flag := true
+
+	userData.UserName = username
+
+	if !helpers.CheckUser(userData, userData.Role) {
+		flag = false
+	}
+	if !flag {
+		log.Printf("[ERROR] User" + username + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + username + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appsRetrievedData, err := api.psqlRepo.GetAppsData(appData.Name, "")
+
+	if err != nil {
+		errorData.Message = "Internal error / get app in postgres"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteEntity(errorData)
+		return
+	}
+	if len(appsRetrievedData) != 0 {
 		log.Printf("[ERROR] App %v already exists", appData.Name)
 		errorData.Message = "App already exists"
 		errorData.StatusCode = http.StatusFound
@@ -360,29 +405,28 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		appNamesList = strings.Split(appnames, ",")
 	}
 
-	if len(appNamesList) == 0 {
-		appNamesList = userData.Applications
-	}
-
 	log.Println(appNamesList)
 	appsInfo := make([]*domain.ApplicationData, 0)
 	for _, appName := range appNamesList {
 		appsData, err := api.psqlRepo.GetAppsData(strings.TrimSpace(appName), filter)
-		if err != nil {
+		if err != nil || len(appsData) == 0 {
 			log.Printf("[ERROR] App %v not found", appName)
 			errorData.Message = "App not found"
 			errorData.StatusCode = http.StatusNotFound
 			response.WriteEntity(errorData)
 			return
 		}
-		if len(appsData) > 0 {
-			appsInfo = append(appsInfo, appsData...)
-		}
+		appsInfo = append(appsInfo, appsData...)
 
 	}
 
 	if !helpers.CheckAppExist(userData.Applications, appsInfo) {
-		flag = false
+		log.Printf("[ERROR] User" + username + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + username + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteEntity(errorData)
+		return
 	}
 
 	response.WriteEntity(appsInfo)
