@@ -4,6 +4,7 @@ import (
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
 	"net/http"
+	"strings"
 	"unicode"
 
 	"log"
@@ -273,10 +274,11 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
 		return
 	}
 
-	_, err = api.psqlRepo.GetAppData(appData.Name)
+	_, err = api.psqlRepo.GetAppsData(appData.Name, "")
 	if err == nil {
 		log.Printf("[ERROR] App %v already exists", appData.Name)
 		errorData.Message = "App already exists"
@@ -305,34 +307,25 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	response.Write([]byte("App uploaded succesfully"))
 }
 
-// GetAppInfo retrieves app information
-func (api *API) GetAppInfo(request *restful.Request, response *restful.Response) {
+// GetAppsInfo retrieves apps information
+func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response) {
 
 	errorData := domain.ErrorResponse{}
-	appname := request.QueryParameter("appname")
-	if appname == "" {
-		log.Printf("[ERROR] Couldn't read appname query parameter")
-		errorData.Message = "Bad Request/ empty appname"
-		errorData.StatusCode = http.StatusBadRequest
-		return
-	}
+
+	var appNamesList []string
+	var filter string
+
+	appnames := request.QueryParameter("appnames")
 
 	username := request.QueryParameter("username")
 	if username == "" {
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
-		return
-	}
-
-	appData, err := api.psqlRepo.GetAppData(appname)
-	if err != nil {
-		log.Printf("[ERROR] App %v not found", appname)
-		errorData.Message = "App not found"
-		errorData.StatusCode = http.StatusNotFound
 		response.WriteEntity(errorData)
 		return
 	}
+	filter = request.QueryParameter("filter")
 
 	userUUID := request.HeaderParameter("USER-UUID")
 	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
@@ -346,17 +339,11 @@ func (api *API) GetAppInfo(request *restful.Request, response *restful.Response)
 	}
 
 	flag := true
-	for _, app := range userData.Applications {
-		if app == appname {
-			flag = false
-			break
-		}
-	}
 
 	userData.UserName = username
 
-	if helpers.CheckUser(userData, userData.Role) {
-		flag = true
+	if !helpers.CheckUser(userData, userData.Role) {
+		flag = false
 	}
 	if !flag {
 		log.Printf("[ERROR] User" + username + " not authorized")
@@ -366,7 +353,39 @@ func (api *API) GetAppInfo(request *restful.Request, response *restful.Response)
 		response.WriteEntity(errorData)
 		return
 	}
-	response.WriteEntity(appData)
+
+	if appnames == "" {
+		appNamesList = userData.Applications
+	} else {
+		appNamesList = strings.Split(appnames, ",")
+	}
+
+	if len(appNamesList) == 0 {
+		appNamesList = userData.Applications
+	}
+
+	log.Println(appNamesList)
+	appsInfo := make([]*domain.ApplicationData, 0)
+	for _, appName := range appNamesList {
+		appsData, err := api.psqlRepo.GetAppsData(strings.TrimSpace(appName), filter)
+		if err != nil {
+			log.Printf("[ERROR] App %v not found", appName)
+			errorData.Message = "App not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteEntity(errorData)
+			return
+		}
+		if len(appsData) > 0 {
+			appsInfo = append(appsInfo, appsData...)
+		}
+
+	}
+
+	if !helpers.CheckAppExist(userData.Applications, appsInfo) {
+		flag = false
+	}
+
+	response.WriteEntity(appsInfo)
 }
 
 // UpdateApp updates app info
@@ -406,6 +425,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read appname query parameter")
 		errorData.Message = "Bad Request/ empty appname"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
 		return
 	}
 
@@ -414,6 +434,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteEntity(errorData)
 		return
 	}
 

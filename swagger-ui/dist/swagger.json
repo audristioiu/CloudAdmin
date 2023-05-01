@@ -5,7 +5,7 @@
     "title": "Cloud Admin API",
     "contact": {
       "name": "Alexandru-Mihai Cioplean, Alexandru Udristioiu",
-      "email": "alexandru.cioplean@gmail.com, udristioiualexandru@gmail.com"
+      "email": "udristioiualexandru@gmail.com"
     },
     "license": {
       "name": "MIT",
@@ -23,15 +23,25 @@
           "application/json"
         ],
         "tags": [
-          "users"
+          "apps"
         ],
-        "summary": "Retrieves app information",
-        "operationId": "GetAppInfo",
+        "summary": "Retrieves apps information by name",
+        "operationId": "GetAppsInfo",
         "parameters": [
           {
             "type": "string",
-            "description": "name of the app",
-            "name": "appname",
+            "description": "user unique id",
+            "name": "USER-UUID",
+            "in": "header"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "description": "name of the apps",
+            "name": "appnames",
             "in": "query"
           },
           {
@@ -42,14 +52,15 @@
           },
           {
             "type": "string",
-            "description": "role used for auth",
-            "name": "Authorization",
-            "in": "header"
+            "description": "filter apps by description(keyword) or is_running",
+            "name": "filter",
+            "in": "query",
+            "allowEmptyValue": true
           },
           {
             "type": "string",
-            "description": "user unique id",
-            "name": "USER-UUID",
+            "description": "role used for auth",
+            "name": "Authorization",
             "in": "header"
           }
         ],
@@ -57,7 +68,10 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/api.ApplicationData"
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/api.ApplicationData"
+              }
             }
           },
           "400": {
@@ -82,7 +96,7 @@
           "application/json"
         ],
         "tags": [
-          "users"
+          "apps"
         ],
         "summary": "Update app information",
         "operationId": "UpdateApp",
@@ -95,7 +109,7 @@
           },
           {
             "type": "string",
-            "description": "user  unique id",
+            "description": "user unique id",
             "name": "USER-UUID",
             "in": "header"
           }
@@ -123,7 +137,7 @@
           "application/json"
         ],
         "tags": [
-          "users"
+          "apps"
         ],
         "summary": "Deletes app",
         "operationId": "DeleteApp",
@@ -207,7 +221,7 @@
           "application/json"
         ],
         "tags": [
-          "users"
+          "apps"
         ],
         "summary": "Upload app to s3",
         "operationId": "UploadApp",
@@ -498,6 +512,10 @@
     {
       "description": "Managing users",
       "name": "users"
+    },
+    {
+      "description": "Managing apps",
+      "name": "apps"
     }
   ]
 }

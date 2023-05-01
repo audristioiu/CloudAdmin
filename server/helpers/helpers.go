@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/exp/slices"
 )
 
 // GenerateRole returns a unique role for the current user in order to use their apps
@@ -50,6 +51,15 @@ func CheckUser(userData *domain.UserData, role string) bool {
 func CheckUserCredentials(userData *domain.UserData, username, password string) bool {
 	if userData.UserName != username || userData.Password != password {
 		return false
+	}
+	return true
+}
+
+func CheckAppExist(applications []string, appsData []*domain.ApplicationData) bool {
+	for _, app := range appsData {
+		if !slices.Contains(applications, app.Name) {
+			return false
+		}
 	}
 	return true
 }
