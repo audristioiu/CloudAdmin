@@ -180,8 +180,9 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	response.Write([]byte("User login succesfully.\nHere is your new role(use it for authorization) : " + newUserData.Role +
-		"\nAnd here is your user_id(use it for authorization) : " + newUserData.UserID))
+	newUserData.Password = ""
+
+	response.WriteEntity(newUserData)
 }
 
 // GetUserProfile returns user profile based on username

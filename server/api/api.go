@@ -40,11 +40,11 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 		ws.
 			POST(registerPath+userPath).
 			Doc("Register user").
+			Reads(UserData{}).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			To(api.UserRegister).
-			Writes(UserData{}).
 			Returns(http.StatusOK, "OK", "User registered succesfully").
 			Returns(http.StatusFound, "Already found", ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", ErrorResponse{}))
@@ -58,7 +58,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			To(api.UserLogin).
 			Writes(UserData{}).
-			Returns(http.StatusOK, "OK", "User login succesfully").
+			Returns(http.StatusOK, "OK", UserData{}).
 			Returns(http.StatusNotFound, "User Not Found", ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", ErrorResponse{}))
 	ws.Route(
@@ -110,6 +110,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 		ws.
 			POST(registerPath+appPath).
 			Doc("Upload app to s3").
+			Reads(ApplicationData{}).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).

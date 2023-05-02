@@ -57,7 +57,7 @@ func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) 
 	row := p.conn.QueryRow(p.ctx, selectStatement, username)
 	err := row.Scan(&userData.UserName, &userData.Password, &userData.CityAddress, &userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
 	if err != nil {
-		log.Printf("[ERROR] could not retrieve data with error : %v\n", err)
+		log.Printf("[ERROR] could not retrieve user with error : %v\n", err)
 		return nil, err
 	}
 	log.Printf("Successfuly retrieved user : %+v", userData)
@@ -71,7 +71,7 @@ func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, e
 	row := p.conn.QueryRow(p.ctx, selectStatement, userID)
 	err := row.Scan(&userData.UserName, &userData.Password, &userData.CityAddress, &userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
 	if err != nil {
-		log.Printf("[ERROR] could not retrieve data with error : %v\n", err)
+		log.Printf("[ERROR] could not retrieve user using uuid with error : %v\n", err)
 		return nil, err
 	}
 	log.Printf("Successfuly retrieved user : %+v", userData)
@@ -84,7 +84,7 @@ func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, userData.CityAddress, userData.WantNotify, userData.Password, userData.UserName)
 	if err != nil {
-		log.Printf("[ERROR] could not update data with error : %v\n", err)
+		log.Printf("[ERROR] could not update user with error : %v\n", err)
 		return err
 	}
 	if row.RowsAffected() != 1 {
@@ -101,14 +101,14 @@ func (p *PostgreSqlRepo) UpdateUserRoleData(role, userID string, userData *domai
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, role, userID, userData.UserName)
 	if err != nil {
-		log.Printf("[ERROR] could not update data with error : %v\n", err)
+		log.Printf("[ERROR] could not update user role with error : %v\n", err)
 		return err
 	}
 	if row.RowsAffected() != 1 {
 		log.Printf("[ERROR] no row found to update")
 		return errors.New("no row found to update")
 	}
-	log.Printf("Successfuly updated user with : %v", role)
+	log.Printf("Successfuly updated user role with : %v", role)
 	return nil
 }
 
@@ -154,7 +154,7 @@ func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, appData.Description, appData.IsRunning)
 	err := row.Scan(&newApplicationData.Name)
 	if err != nil {
-		log.Printf("[ERROR] could not insert data with error : %v\n", err)
+		log.Printf("[ERROR] could not insert app with error : %v\n", err)
 		return err
 	}
 	log.Printf("Successfuly inserted app: %+v", newApplicationData)
@@ -175,7 +175,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 			log.Println(selectStatement)
 			rows, err = p.conn.Query(p.ctx, selectStatement, appname, "%"+filterParams[1]+"%")
 			if err != nil {
-				log.Printf("[ERROR] could not retrieve data with error : %v\n", err)
+				log.Printf("[ERROR] could not retrieve app using filter : "+filterCondition+" with error : %v\n", err)
 				return nil, err
 			}
 		} else {
@@ -183,7 +183,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 			log.Println(selectStatement)
 			rows, err = p.conn.Query(p.ctx, selectStatement, appname, filterParams[1])
 			if err != nil {
-				log.Printf("[ERROR] could not retrieve data with error : %v\n", err)
+				log.Printf("[ERROR] could not retrieve app using filter : "+filterCondition+" with error : %v\n", err)
 				return nil, err
 			}
 
@@ -193,7 +193,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 		selectStatement = "SELECT * FROM apps where name=$1"
 		rows, err = p.conn.Query(p.ctx, selectStatement, appname)
 		if err != nil {
-			log.Printf("[ERROR] could not retrieve data with error : %v\n", err)
+			log.Printf("[ERROR] could not retrieve app with error : %v\n", err)
 			return nil, err
 		}
 	}
@@ -201,7 +201,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 		applicationData := &domain.ApplicationData{}
 		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning)
 		if err != nil {
-			log.Printf("[ERROR] could not scan data with error : %v\n", err)
+			log.Printf("[ERROR] could not scan app with error : %v\n", err)
 			return nil, err
 		}
 		applicationsData = append(applicationsData, applicationData)
@@ -217,7 +217,7 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.Name)
 	if err != nil {
-		log.Printf("[ERROR] could not update data with error : %v\n", err)
+		log.Printf("[ERROR] could not update app with error : %v\n", err)
 		return err
 	}
 	if row.RowsAffected() != 1 {
@@ -234,7 +234,7 @@ func (p *PostgreSqlRepo) DeleteAppData(appName, userName string) error {
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userName)
 	if err != nil {
-		log.Printf("[ERROR] could not update user: %v with deleting app : %v  with error : %v\n", userName, appName, err)
+		log.Printf("[ERROR] could not remove app : %v from user : %v with error : %v\n", appName, userName, err)
 		return err
 	}
 	if row.RowsAffected() != 1 {
