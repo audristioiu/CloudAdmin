@@ -99,7 +99,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
-			Filter(api.AdminAuthenticate).
+			Filter(api.BasicAuthenticate).
 			To(api.DeleteUser).
 			Returns(http.StatusOK, "OK", "User deleted succesfully").
 			Returns(http.StatusNotFound, "User Not Found", ErrorResponse{}).
@@ -164,10 +164,11 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
-			Filter(api.AdminAuthenticate).
+			Filter(api.BasicAuthenticate).
 			To(api.DeleteApp).
 			Returns(http.StatusOK, "OK", "App deleted succesfully").
 			Returns(http.StatusNotFound, "User Not Found", ErrorResponse{}).
-			Returns(http.StatusBadRequest, "Bad Request", ErrorResponse{}))
+			Returns(http.StatusBadRequest, "Bad Request", ErrorResponse{}).
+			Returns(http.StatusForbidden, "User not allowed as admin", ErrorResponse{}))
 
 }

@@ -35,22 +35,6 @@ type ErrorResponse struct {
 	Message    string `json:"message"`
 }
 
-// AdminAuthenticate verifies that admin only can access delete endpoints
-func (api *API) AdminAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
-	errorData := domain.ErrorResponse{}
-	u, p, ok := request.Request.BasicAuth()
-
-	if !ok || u != "admin" || p != "admin" {
-		log.Printf("[ERROR] User " + u + " not authorized for delete route")
-		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-		errorData.Message = "User " + u + " is Not Authorized for delete route"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteEntity(errorData)
-		return
-	}
-	chain.ProcessFilter(request, response)
-}
-
 // BasicAuthenticate verifies role and user_id for auth
 func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
 	errorData := domain.ErrorResponse{}
@@ -58,11 +42,12 @@ func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Re
 	userIDHeader := request.HeaderParameter("USER-UUID")
 
 	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
-	if err != nil || !helpers.CheckUser(userData, authHeader) {
+	if err != nil || !helpers.CheckUser(userData, authHeader) || userData.UserName != "admin" {
 		log.Printf("[ERROR] User id " + userIDHeader + " not authorized")
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + userIDHeader + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -79,6 +64,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		log.Printf("[ERROR] Couldn't read body")
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -87,6 +73,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -95,6 +82,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		log.Printf("[ERROR] password too short")
 		errorData.Message = "Bad Request/ Password too short"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -102,23 +90,18 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		log.Printf("[ERROR] password does not start with uppercase")
 		errorData.Message = "Bad Request/ Password does not start with uppercase"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
 	log.Printf("%+v", userData)
 
-	userRetrievedData, err := api.psqlRepo.GetUserData(userData.UserName)
-
-	if err != nil {
-		errorData.Message = "Internal error / get user in postgres"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteEntity(errorData)
-		return
-	}
-	if userRetrievedData.UserName != "" {
+	userRetrievedData, _ := api.psqlRepo.GetUserData(userData.UserName)
+	if userRetrievedData != nil {
 		log.Printf("[ERROR] User %v already exists", userData.UserName)
 		errorData.Message = "User already exists"
 		errorData.StatusCode = http.StatusFound
+		response.WriteHeader(http.StatusFound)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -127,6 +110,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	if err != nil {
 		errorData.Message = "Internal error/ insert in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -142,6 +126,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read body")
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -149,6 +134,15 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName == "admin" || strings.Contains(userData.UserName, "admin") {
+		log.Printf("[ERROR] You are not allowed to login as admin")
+		errorData.Message = "Status forbidden/  You are not allowed to login as admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -157,6 +151,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read password query parameter")
 		errorData.Message = "Bad Request/ empty password"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -166,6 +161,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] User %v not found", userData.UserName)
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -176,6 +172,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	if err != nil {
 		errorData.Message = "Internal error / updating in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -194,6 +191,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -202,6 +200,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		log.Printf("[ERROR] User %v not found", userData.UserName)
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -221,6 +220,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 		log.Printf("[ERROR] Couldn't read body")
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -229,6 +229,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 		log.Printf("[ERROR] Wrong fields to update")
 		errorData.Message = "Bad Request/ wrong fields , you can only update city_address , want_notify or password"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -237,6 +238,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	if err != nil {
 		errorData.Message = "Internal error / updating in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -252,6 +254,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -260,6 +263,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		log.Printf("[ERROR] User %v not found", username)
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -277,6 +281,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read body")
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -286,6 +291,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -297,6 +303,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + userUUID + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -313,6 +320,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -322,6 +330,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	if err != nil {
 		errorData.Message = "Internal error / get app in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -329,6 +338,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] App %v already exists", appData.Name)
 		errorData.Message = "App already exists"
 		errorData.StatusCode = http.StatusFound
+		response.WriteHeader(http.StatusFound)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -337,6 +347,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	if err != nil {
 		errorData.Message = "Internal error/ insert in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -345,6 +356,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	if err != nil {
 		errorData.Message = "Internal error/ update users in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -368,6 +380,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -380,6 +393,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + userUUID + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -396,6 +410,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -414,6 +429,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			log.Printf("[ERROR] App %v not found", appName)
 			errorData.Message = "App not found"
 			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
 			response.WriteEntity(errorData)
 			return
 		}
@@ -426,6 +442,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -444,6 +461,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read body")
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -453,6 +471,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	if err != nil {
 		errorData.Message = "Internal error / updating in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -470,6 +489,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read appname query parameter")
 		errorData.Message = "Bad Request/ empty appname"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -479,6 +499,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
 		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -488,6 +509,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		log.Printf("[ERROR] App %v not found", appname)
 		errorData.Message = "App not found"
 		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
 		response.WriteEntity(errorData)
 		return
 	}
