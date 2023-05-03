@@ -95,6 +95,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 		ws.
 			DELETE(userPath+"/{username}").
 			Doc("Deletes user").
+			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").AllowEmptyValue(false)).
 			Param(ws.PathParameter("username", "username of the account").DataType("string").AllowEmptyValue(false)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
@@ -110,13 +112,13 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 		ws.
 			POST(registerPath+appPath).
 			Doc("Upload app to s3").
+			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").AllowEmptyValue(false)).
 			Reads(ApplicationData{}).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
-			Param(ws.QueryParameter("username", "owner of the app").DataType("string").AllowEmptyValue(false)).
-			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").AllowEmptyValue(false)).
-			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").AllowEmptyValue(false)).
 			Filter(api.BasicAuthenticate).
 			To(api.UploadApp).
 			Writes(ApplicationData{}).
@@ -127,12 +129,12 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 	ws.Route(
 		ws.
 			GET(appPath).
-			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").AllowEmptyValue(false)).
 			Doc("Retrieves apps information by name").
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").AllowEmptyValue(false)).
 			Param(ws.QueryParameter("appnames", "name of the apps").DataType("string").AllowEmptyValue(false).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").AllowEmptyValue(false)).
 			Param(ws.QueryParameter("filter", "filter apps by description(keyword) or is_running").DataType("string").AllowEmptyValue(true)).
-			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").AllowEmptyValue(false)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
@@ -158,6 +160,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 	ws.Route(
 		ws.
 			DELETE(appPath).
+			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").AllowEmptyValue(false)).
 			Param(ws.QueryParameter("appname", "name of the app you want to delete").DataType("string").AllowEmptyValue(false)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").AllowEmptyValue(false)).
 			Doc("Deletes app").

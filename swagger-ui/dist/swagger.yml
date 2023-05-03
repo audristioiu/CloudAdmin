@@ -25,6 +25,10 @@ paths:
           description: user unique id
           name: USER-UUID
           in: header
+        - type: string
+          description: role used for auth
+          name: Authorization
+          in: header
         - type: array
           items:
             type: string
@@ -41,10 +45,6 @@ paths:
           name: filter
           in: query
           allowEmptyValue: true
-        - type: string
-          description: role used for auth
-          name: Authorization
-          in: header
       responses:
         '200':
           description: OK
@@ -98,6 +98,14 @@ paths:
       operationId: DeleteApp
       parameters:
         - type: string
+          description: role used for auth
+          name: Authorization
+          in: header
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
+        - type: string
           description: name of the app you want to delete
           name: appname
           in: query
@@ -112,6 +120,10 @@ paths:
             type: string
         '400':
           description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        '403':
+          description: User not allowed as admin
           schema:
             $ref: '#/definitions/api.ErrorResponse'
         '404':
@@ -132,7 +144,7 @@ paths:
         '200':
           description: OK
           schema:
-            type: string
+            $ref: '#/definitions/api.UserData'
         '400':
           description: Bad Request
           schema:
@@ -153,10 +165,6 @@ paths:
       operationId: UploadApp
       parameters:
         - type: string
-          description: owner of the app
-          name: username
-          in: query
-        - type: string
           description: role used for auth
           name: Authorization
           in: header
@@ -164,6 +172,15 @@ paths:
           description: user unique id
           name: USER-UUID
           in: header
+        - type: string
+          description: owner of the app
+          name: username
+          in: query
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/api.ApplicationData'
       responses:
         '200':
           description: OK
@@ -187,6 +204,12 @@ paths:
         - users
       summary: Register user
       operationId: UserRegister
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/api.UserData'
       responses:
         '200':
           description: OK
@@ -212,7 +235,7 @@ paths:
       operationId: UpdateUserProfile
       parameters:
         - type: string
-          description: role used for auth
+          description: role used  for auth
           name: Authorization
           in: header
         - type: string
@@ -272,9 +295,17 @@ paths:
         - application/json
       tags:
         - users
-      summary: Deletes user
+      summary: Deletes  user
       operationId: DeleteUser
       parameters:
+        - type: string
+          description: role used for auth
+          name: Authorization
+          in: header
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
         - type: string
           description: username of the account
           name: username
@@ -299,6 +330,7 @@ definitions:
       - name
       - description
       - is_running
+    description: Application model
     properties:
       description:
         type: string
@@ -310,6 +342,7 @@ definitions:
     required:
       - status_code
       - message
+    description: Error response used in requests
     properties:
       message:
         type: string
@@ -320,6 +353,7 @@ definitions:
     required:
       - username
       - password
+    description: User model
     properties:
       applications:
         type: array

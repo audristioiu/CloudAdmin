@@ -360,7 +360,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
-	//app pus in s3 + insert in tabela + aplicatie atasata la user
+	//app pus in s3 + insert in tabela + aplicatie atasata la user + mai multe aplicatii + archiva
 
 	response.Write([]byte("App uploaded succesfully"))
 }

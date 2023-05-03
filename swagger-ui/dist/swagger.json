@@ -35,6 +35,12 @@
             "in": "header"
           },
           {
+            "type": "string",
+            "description": "role used for auth",
+            "name": "Authorization",
+            "in": "header"
+          },
+          {
             "type": "array",
             "items": {
               "type": "string"
@@ -56,12 +62,6 @@
             "name": "filter",
             "in": "query",
             "allowEmptyValue": true
-          },
-          {
-            "type": "string",
-            "description": "role used for auth",
-            "name": "Authorization",
-            "in": "header"
           }
         ],
         "responses": {
@@ -144,6 +144,18 @@
         "parameters": [
           {
             "type": "string",
+            "description": "role used for auth",
+            "name": "Authorization",
+            "in": "header"
+          },
+          {
+            "type": "string",
+            "description": "user unique id",
+            "name": "USER-UUID",
+            "in": "header"
+          },
+          {
+            "type": "string",
             "description": "name of the app you want to delete",
             "name": "appname",
             "in": "query"
@@ -164,6 +176,12 @@
           },
           "400": {
             "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/api.ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "User not allowed as admin",
             "schema": {
               "$ref": "#/definitions/api.ErrorResponse"
             }
@@ -194,7 +212,7 @@
           "200": {
             "description": "OK",
             "schema": {
-              "type": "string"
+              "$ref": "#/definitions/api.UserData"
             }
           },
           "400": {
@@ -228,12 +246,6 @@
         "parameters": [
           {
             "type": "string",
-            "description": "owner of the app",
-            "name": "username",
-            "in": "query"
-          },
-          {
-            "type": "string",
             "description": "role used for auth",
             "name": "Authorization",
             "in": "header"
@@ -243,6 +255,20 @@
             "description": "user unique id",
             "name": "USER-UUID",
             "in": "header"
+          },
+          {
+            "type": "string",
+            "description": "owner of the app",
+            "name": "username",
+            "in": "query"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/api.ApplicationData"
+            }
           }
         ],
         "responses": {
@@ -280,6 +306,16 @@
         ],
         "summary": "Register user",
         "operationId": "UserRegister",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/api.UserData"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -318,7 +354,7 @@
         "parameters": [
           {
             "type": "string",
-            "description": "role used for auth",
+            "description": "role used  for auth",
             "name": "Authorization",
             "in": "header"
           },
@@ -410,9 +446,21 @@
         "tags": [
           "users"
         ],
-        "summary": "Deletes user",
+        "summary": "Deletes  user",
         "operationId": "DeleteUser",
         "parameters": [
+          {
+            "type": "string",
+            "description": "role used for auth",
+            "name": "Authorization",
+            "in": "header"
+          },
+          {
+            "type": "string",
+            "description": "user unique id",
+            "name": "USER-UUID",
+            "in": "header"
+          },
           {
             "type": "string",
             "description": "username of the account",
@@ -451,6 +499,7 @@
         "description",
         "is_running"
       ],
+      "description": "Application model",
       "properties": {
         "description": {
           "type": "string"
@@ -468,6 +517,7 @@
         "status_code",
         "message"
       ],
+      "description": "Error response used in requests",
       "properties": {
         "message": {
           "type": "string"
@@ -483,6 +533,7 @@
         "username",
         "password"
       ],
+      "description": "User model",
       "properties": {
         "applications": {
           "type": "array",
