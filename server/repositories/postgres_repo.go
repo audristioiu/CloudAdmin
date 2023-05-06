@@ -157,7 +157,7 @@ func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 		log.Printf("[ERROR] could not insert app with error : %v\n", err)
 		return err
 	}
-	log.Printf("Successfuly inserted app: %+v", newApplicationData)
+	log.Printf("Successfuly inserted app: %+v", newApplicationData.Name)
 	return nil
 }
 

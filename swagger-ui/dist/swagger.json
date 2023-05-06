@@ -32,13 +32,15 @@
             "type": "string",
             "description": "user unique id",
             "name": "USER-UUID",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "role used for auth",
             "name": "Authorization",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "array",
@@ -48,17 +50,19 @@
             "collectionFormat": "csv",
             "description": "name of the apps",
             "name": "appnames",
-            "in": "query"
+            "in": "query",
+            "required": true
           },
           {
             "type": "string",
             "description": "owner of the app",
             "name": "username",
-            "in": "query"
+            "in": "query",
+            "required": true
           },
           {
             "type": "string",
-            "description": "filter apps by description(keyword) or is_running",
+            "description": "filter apps by description(keyword) or  is_running",
             "name": "filter",
             "in": "query",
             "allowEmptyValue": true
@@ -105,13 +109,15 @@
             "type": "string",
             "description": "role used for auth",
             "name": "Authorization",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "user unique id",
             "name": "USER-UUID",
-            "in": "header"
+            "in": "header",
+            "required": true
           }
         ],
         "responses": {
@@ -146,25 +152,29 @@
             "type": "string",
             "description": "role used for auth",
             "name": "Authorization",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "user unique id",
             "name": "USER-UUID",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "name of the app you want to delete",
             "name": "appname",
-            "in": "query"
+            "in": "query",
+            "required": true
           },
           {
             "type": "string",
             "description": "owner of the app",
             "name": "username",
-            "in": "query"
+            "in": "query",
+            "required": true
           }
         ],
         "responses": {
@@ -233,7 +243,8 @@
     "/register/app": {
       "post": {
         "consumes": [
-          "application/json"
+          "application/json",
+          "multipart/form-data"
         ],
         "produces": [
           "application/json"
@@ -248,27 +259,29 @@
             "type": "string",
             "description": "role used for auth",
             "name": "Authorization",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "user unique id",
             "name": "USER-UUID",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
-            "description": "owner of the app",
+            "description": "owner of  the app",
             "name": "username",
-            "in": "query"
+            "in": "query",
+            "required": true
           },
           {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/api.ApplicationData"
-            }
+            "type": "file",
+            "description": "zip archive which contains the code and description files(same name for both,description being txt)",
+            "name": "archive",
+            "in": "formData",
+            "required": true
           }
         ],
         "responses": {
@@ -354,15 +367,17 @@
         "parameters": [
           {
             "type": "string",
-            "description": "role used  for auth",
+            "description": "role used for auth",
             "name": "Authorization",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "user unique id",
             "name": "USER-UUID",
-            "in": "header"
+            "in": "header",
+            "required": true
           }
         ],
         "responses": {
@@ -406,13 +421,15 @@
             "type": "string",
             "description": "role used for auth",
             "name": "Authorization",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "user unique id",
             "name": "USER-UUID",
-            "in": "header"
+            "in": "header",
+            "required": true
           }
         ],
         "responses": {
@@ -446,20 +463,22 @@
         "tags": [
           "users"
         ],
-        "summary": "Deletes  user",
+        "summary": "Deletes user",
         "operationId": "DeleteUser",
         "parameters": [
           {
             "type": "string",
             "description": "role used for auth",
             "name": "Authorization",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
             "description": "user unique id",
             "name": "USER-UUID",
-            "in": "header"
+            "in": "header",
+            "required": true
           },
           {
             "type": "string",
@@ -499,7 +518,6 @@
         "description",
         "is_running"
       ],
-      "description": "Application model",
       "properties": {
         "description": {
           "type": "string"
@@ -517,7 +535,6 @@
         "status_code",
         "message"
       ],
-      "description": "Error response used in requests",
       "properties": {
         "message": {
           "type": "string"
@@ -533,7 +550,6 @@
         "username",
         "password"
       ],
-      "description": "User model",
       "properties": {
         "applications": {
           "type": "array",

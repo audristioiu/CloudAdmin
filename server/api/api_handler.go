@@ -1,9 +1,12 @@
 package api
 
 import (
+	"archive/zip"
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"unicode"
 
@@ -35,6 +38,25 @@ type ErrorResponse struct {
 	Message    string `json:"message"`
 }
 
+// AdminAuthenticate verifies role and user_id for auth
+func (api *API) AdminAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
+	errorData := domain.ErrorResponse{}
+	authHeader := request.HeaderParameter("Authorization")
+	userIDHeader := request.HeaderParameter("USER-UUID")
+
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
+	if err != nil || !helpers.CheckUser(userData, authHeader) || userData.UserName != "admin" {
+		log.Printf("[ERROR] User id " + userIDHeader + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + userIDHeader + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	chain.ProcessFilter(request, response)
+}
+
 // BasicAuthenticate verifies role and user_id for auth
 func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
 	errorData := domain.ErrorResponse{}
@@ -42,7 +64,7 @@ func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Re
 	userIDHeader := request.HeaderParameter("USER-UUID")
 
 	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
-	if err != nil || !helpers.CheckUser(userData, authHeader) || userData.UserName != "admin" {
+	if err != nil || !helpers.CheckUser(userData, authHeader) {
 		log.Printf("[ERROR] User id " + userIDHeader + " not authorized")
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + userIDHeader + " is Not Authorized"
@@ -120,6 +142,8 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 // UserLogin verifies user credentials
 func (api *API) UserLogin(request *restful.Request, response *restful.Response) {
 	userData := domain.UserData{}
+	newUserData := &domain.UserData{}
+
 	errorData := domain.ErrorResponse{}
 	err := request.ReadEntity(&userData)
 	if err != nil {
@@ -166,19 +190,20 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	newUserData := helpers.GenerateRole(dbUserData)
-
-	err = api.psqlRepo.UpdateUserRoleData(newUserData.Role, newUserData.UserID, newUserData)
-	if err != nil {
-		errorData.Message = "Internal error / updating in postgres"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
-		response.WriteEntity(errorData)
-		return
+	if dbUserData.Role == "" {
+		newUserData = helpers.GenerateRole(dbUserData)
+		err = api.psqlRepo.UpdateUserRoleData(newUserData.Role, newUserData.UserID, newUserData)
+		if err != nil {
+			errorData.Message = "Internal error / updating in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+	} else {
+		newUserData = dbUserData
 	}
-
 	newUserData.Password = ""
-
 	response.WriteEntity(newUserData)
 }
 
@@ -273,18 +298,9 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 
 // UploadApp uploads app to s3
 func (api *API) UploadApp(request *restful.Request, response *restful.Response) {
+	//app pus in s3 + insert in tabela + aplicatie atasata la user + mai multe aplicatii + archiva
 
-	appData := domain.ApplicationData{}
 	errorData := domain.ErrorResponse{}
-	err := request.ReadEntity(&appData)
-	if err != nil {
-		log.Printf("[ERROR] Couldn't read body")
-		errorData.Message = "Bad Request/ could not read body"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
 
 	username := request.QueryParameter("username")
 	if username == "" {
@@ -323,44 +339,123 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
+
 	}
 
-	appsRetrievedData, err := api.psqlRepo.GetAppsData(appData.Name, "")
-
+	file, handler, err := request.Request.FormFile("archive")
 	if err != nil {
-		errorData.Message = "Internal error / get app in postgres"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
-		response.WriteEntity(errorData)
-		return
-	}
-	if len(appsRetrievedData) != 0 {
-		log.Printf("[ERROR] App %v already exists", appData.Name)
-		errorData.Message = "App already exists"
-		errorData.StatusCode = http.StatusFound
-		response.WriteHeader(http.StatusFound)
-		response.WriteEntity(errorData)
-		return
-	}
-
-	err = api.psqlRepo.InsertAppData(&appData)
-	if err != nil {
-		errorData.Message = "Internal error/ insert in postgres"
+		log.Printf("[ERROR] Couldn't form file")
+		errorData.Message = "Internal error/ could not form file"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
 
-	err = api.psqlRepo.UpdateUserAppsData(appData.Name, username)
+	defer file.Close()
+
+	// Create a new file in the uploads directory
+	f, err := os.OpenFile(handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		errorData.Message = "Internal error/ update users in postgres"
+		log.Printf("[ERROR] Couldn't open file")
+		errorData.Message = "Internal error/ could not open file"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
-	//app pus in s3 + insert in tabela + aplicatie atasata la user + mai multe aplicatii + archiva
+	defer f.Close()
+
+	// Copy the contents of the file to the new file
+	_, err = io.Copy(f, file)
+	if err != nil {
+		log.Printf("[ERROR] Couldn't copy file")
+		errorData.Message = "Internal error/ could not copy file"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	r, err := zip.OpenReader(handler.Filename)
+	if err != nil {
+		log.Printf("[ERROR] Couldn't open zipReader")
+		errorData.Message = "Internal error/ could not open zipReader"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+	}
+	defer r.Close()
+
+	// Iterate through the files in the archive,
+	// printing some of their contents.
+	for i, f := range r.File {
+
+		appData := domain.ApplicationData{}
+
+		log.Printf("Writting information for file %v:\n", f.Name)
+		rc, err := f.Open()
+		if err != nil {
+			log.Fatal(err)
+		}
+		descr, err1 := io.ReadAll(rc)
+		if err1 != nil {
+			log.Printf("[ERROR] Couldn't read io.Reader")
+			errorData.Message = "Internal Error/  Couldn't read io.Reader"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		defer rc.Close()
+		if strings.Contains(f.Name, ".txt") {
+
+			appData.Description = string(descr)
+			appData.Name = r.File[i-1].Name
+			appData.IsRunning = "false"
+			appsRetrievedData, err := api.psqlRepo.GetAppsData(appData.Name, "")
+
+			if err != nil {
+				errorData.Message = "Internal error / get app in postgres"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			if len(appsRetrievedData) != 0 {
+				log.Printf("[ERROR] App %v already exists", appData.Name)
+				errorData.Message = "App already exists"
+				errorData.StatusCode = http.StatusFound
+				response.WriteHeader(http.StatusFound)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			err = api.psqlRepo.InsertAppData(&appData)
+			if err != nil {
+				errorData.Message = "Internal error/ insert in postgres"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			err = api.psqlRepo.UpdateUserAppsData(appData.Name, username)
+			if err != nil {
+				errorData.Message = "Internal error/ update users in postgres"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+		} else {
+			//upload in s3
+			log.Println("upload s3")
+			descr, _ := io.ReadAll(rc)
+			log.Println(string(descr))
+
+		}
+	}
 
 	response.Write([]byte("App uploaded succesfully"))
 }
