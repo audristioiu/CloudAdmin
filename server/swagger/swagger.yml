@@ -376,8 +376,6 @@ definitions:
         type: array
         items:
           type: string
-      city_address:
-        type: string
       password:
         type: string
       role:

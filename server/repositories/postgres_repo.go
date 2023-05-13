@@ -45,7 +45,7 @@ func (p *PostgreSqlRepo) InsertUserData(userData *domain.UserData) error {
 		log.Printf("[ERROR] could not insert data with error : %v\n", err)
 		return err
 	}
-	log.Printf("Successfuly inserted user : %+v", newUserData)
+	log.Printf("Successfuly inserted user : %+v", newUserData.UserName)
 	return nil
 }
 

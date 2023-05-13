@@ -55,6 +55,7 @@ func CheckUserCredentials(userData *domain.UserData, username, password string) 
 	return true
 }
 
+// CheckAppExists validates that the app appears in user apps
 func CheckAppExist(applications []string, appsData []*domain.ApplicationData) bool {
 	for _, app := range appsData {
 		if !slices.Contains(applications, app.Name) {

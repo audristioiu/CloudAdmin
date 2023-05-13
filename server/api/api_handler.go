@@ -19,7 +19,6 @@ import (
 type UserData struct {
 	UserName     string   `json:"username"`
 	Password     string   `json:"password"`
-	CityAddress  string   `json:"city_address,omitempty"`
 	WantNotify   string   `json:"want_notify,omitempty"`
 	Applications []string `json:"applications,omitempty"`
 	Role         string   `json:"role,omitempty"`
@@ -38,7 +37,7 @@ type ErrorResponse struct {
 	Message    string `json:"message"`
 }
 
-// AdminAuthenticate verifies role and user_id for auth
+// AdminAuthenticate verifies role and user_id for admin
 func (api *API) AdminAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
 	errorData := domain.ErrorResponse{}
 	authHeader := request.HeaderParameter("Authorization")

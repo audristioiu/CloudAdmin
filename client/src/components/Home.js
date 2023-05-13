@@ -1,21 +1,12 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import './Login.css';
 
 function Home() {
   return (
     <div className="login-box">
-      <h1>Welcome to my App!</h1>
-      <p>Please log in or register:</p>
+      <h1>Welcome to Cloud Admin!</h1>
+      <p>Here you will see your running apps:</p>
       <nav>
-        <ul>
-          <li>
-            <Link to="/login">
-              Log in
-            </Link>
-          </li>
-          <li><Link to="/register">Register</Link></li>
-        </ul>
       </nav>
     </div>
 

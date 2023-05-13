@@ -1,14 +1,40 @@
 import React, { useState } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import './Login.css';
 
 function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const history = useNavigate();
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     console.log('Username:', username, 'Password:', password);
     // Implement login logic here
+    try {
+      // Passwords match, register 
+      const config = {
+        headers: {
+          "Content-type": "application/json",
+        },
+      };
+
+      const { data } = await axios.post(
+        "http://localhost:8080/login",
+        { "username": username,"password" : password },
+        config
+      );
+
+      console.log(data);
+      localStorage.setItem("userInfo", JSON.stringify(data));
+      console.log(`Login user with username ${username} and password ${password}`);
+      console.log(` Here is your role : ${data.role} and uuid : ${data.user_id}`)
+      history('/home');
+    } catch (error) {
+      alert(error.response.data.message);
+      return
+    };
   };
 
   return (
@@ -35,7 +61,7 @@ function Login() {
           />
           <label>Password</label>
         </div>
-        <a type="submit">
+        <a type="submit" onClick={handleSubmit}>
           <span></span>
           <span></span>
           <span></span>
