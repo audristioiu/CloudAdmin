@@ -40,12 +40,12 @@ paths:
           in: query
           required: true
         - type: string
-          description: owner of the app
+          description: owner of  the app
           name: username
           in: query
           required: true
         - type: string
-          description: filter apps by description(keyword) or  is_running
+          description: filter apps by description(keyword) or is_running
           name: filter
           in: query
           allowEmptyValue: true
@@ -104,7 +104,7 @@ paths:
       operationId: DeleteApp
       parameters:
         - type: string
-          description: role used for auth
+          description: role  used for auth
           name: Authorization
           in: header
           required: true
@@ -186,12 +186,12 @@ paths:
           in: header
           required: true
         - type: string
-          description: owner of  the app
+          description: owner of the app
           name: username
           in: query
           required: true
         - type: file
-          description: zip archive which contains the code and description files(same name for both,description being txt)
+          description: zip archive which  contains the code and description files(same name for both,description being txt)
           name: archive
           in: formData
           required: true
@@ -370,15 +370,18 @@ definitions:
   api.UserData:
     required:
       - username
-      - password
     properties:
       applications:
         type: array
         items:
           type: string
+      city_address:
+        type: string
       password:
         type: string
       role:
+        type: string
+      user_id:
         type: string
       username:
         type: string

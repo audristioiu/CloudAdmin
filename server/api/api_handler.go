@@ -18,10 +18,12 @@ import (
 // UserData represents user information
 type UserData struct {
 	UserName     string   `json:"username"`
-	Password     string   `json:"password"`
+	Password     string   `json:"password,omitempty"`
+	CityAddress  string   `json:"city_address,omitempty"`
 	WantNotify   string   `json:"want_notify,omitempty"`
 	Applications []string `json:"applications,omitempty"`
 	Role         string   `json:"role,omitempty"`
+	UserID       string   `json:"user_id,omitempty"`
 }
 
 // ApplicationdData represents app information
@@ -341,7 +343,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 	}
 
-	file, handler, err := request.Request.FormFile("archive")
+	file, handler, err := request.Request.FormFile("file")
 	if err != nil {
 		log.Printf("[ERROR] Couldn't form file")
 		errorData.Message = "Internal error/ could not form file"
