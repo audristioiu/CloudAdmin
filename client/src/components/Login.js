@@ -32,7 +32,7 @@ function Login() {
       console.log(` Here is your role : ${data.role} and uuid : ${data.user_id}`)
       history('/home');
     } catch (error) {
-      alert(error.response.data.message);
+      console.log(error.response.data.message);
       return
     };
   };
