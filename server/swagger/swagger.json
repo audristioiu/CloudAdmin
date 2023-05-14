@@ -55,7 +55,7 @@
           },
           {
             "type": "string",
-            "description": "owner of  the app",
+            "description": "owner of the app",
             "name": "username",
             "in": "query",
             "required": true
@@ -74,20 +74,20 @@
             "schema": {
               "type": "array",
               "items": {
-                "$ref": "#/definitions/api.ApplicationData"
+                "$ref": "#/definitions/domain.ApplicationData"
               }
             }
           },
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           },
           "404": {
             "description": "App Not Found",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -105,6 +105,14 @@
         "summary": "Update app information",
         "operationId": "UpdateApp",
         "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/domain.ApplicationData"
+            }
+          },
           {
             "type": "string",
             "description": "role used for auth",
@@ -130,7 +138,7 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -150,7 +158,7 @@
         "parameters": [
           {
             "type": "string",
-            "description": "role  used for auth",
+            "description": "role used for auth",
             "name": "Authorization",
             "in": "header",
             "required": true
@@ -187,19 +195,19 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           },
           "403": {
             "description": "User not allowed as admin",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           },
           "404": {
             "description": "User Not Found",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -218,23 +226,33 @@
         ],
         "summary": "Login user",
         "operationId": "UserLogin",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/domain.UserData"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/api.UserData"
+              "$ref": "#/definitions/domain.UserData"
             }
           },
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           },
           "404": {
             "description": "User Not Found",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -278,8 +296,8 @@
           },
           {
             "type": "file",
-            "description": "zip archive which  contains the code and description files(same name for both,description being txt)",
-            "name": "archive",
+            "description": "zip archive which contains the code and description files(same name for both,description being txt)",
+            "name": "type",
             "in": "formData",
             "required": true
           }
@@ -294,13 +312,13 @@
           "302": {
             "description": "Already found",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           },
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -325,7 +343,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/api.UserData"
+              "$ref": "#/definitions/domain.UserData"
             }
           }
         ],
@@ -339,13 +357,13 @@
           "302": {
             "description": "Already found",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           },
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -365,6 +383,14 @@
         "summary": "Updates user profile",
         "operationId": "UpdateUserProfile",
         "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/domain.UserData"
+            }
+          },
           {
             "type": "string",
             "description": "role used for auth",
@@ -390,7 +416,7 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -436,19 +462,19 @@
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/api.UserData"
+              "$ref": "#/definitions/domain.UserData"
             }
           },
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           },
           "404": {
             "description": "User Not Found",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -498,13 +524,13 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           },
           "404": {
             "description": "User Not Found",
             "schema": {
-              "$ref": "#/definitions/api.ErrorResponse"
+              "$ref": "#/definitions/domain.ErrorResponse"
             }
           }
         }
@@ -512,7 +538,7 @@
     }
   },
   "definitions": {
-    "api.ApplicationData": {
+    "domain.ApplicationData": {
       "required": [
         "name",
         "description",
@@ -530,7 +556,7 @@
         }
       }
     },
-    "api.ErrorResponse": {
+    "domain.ErrorResponse": {
       "required": [
         "status_code",
         "message"
@@ -545,7 +571,7 @@
         }
       }
     },
-    "api.UserData": {
+    "domain.UserData": {
       "required": [
         "username"
       ],

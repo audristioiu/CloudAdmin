@@ -15,30 +15,6 @@ import (
 	"github.com/emicklei/go-restful/v3"
 )
 
-// UserData represents user information
-type UserData struct {
-	UserName     string   `json:"username"`
-	Password     string   `json:"password,omitempty"`
-	CityAddress  string   `json:"city_address,omitempty"`
-	WantNotify   string   `json:"want_notify,omitempty"`
-	Applications []string `json:"applications,omitempty"`
-	Role         string   `json:"role,omitempty"`
-	UserID       string   `json:"user_id,omitempty"`
-}
-
-// ApplicationdData represents app information
-type ApplicationData struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	IsRunning   string `json:"is_running"`
-}
-
-// ErrorResponse represents error info
-type ErrorResponse struct {
-	StatusCode int    `json:"status_code"`
-	Message    string `json:"message"`
-}
-
 // AdminAuthenticate verifies role and user_id for admin
 func (api *API) AdminAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
 	errorData := domain.ErrorResponse{}
