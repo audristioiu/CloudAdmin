@@ -103,12 +103,12 @@ function Register() {
           <label>Confirm Password</label>
         </div>
           <a type="submit" onClick={handleSubmit}>
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+            Register
           </a>
-          Register  
       </form>
       {errorMessage && <div style={{backgroundColor: "red"}} className="error"> {errorMessage} </div>}
     </div>
