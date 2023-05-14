@@ -7,22 +7,29 @@ function Register() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showErrorMessage, setShowErrorMessage] = useState(false);
-  const [isPasswordDirty, setisPasswordDirty] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const history = useNavigate();
 
+  let errMsg = ""
   let handleSubmit = async (event) => {
+
     if (!username || !password || !confirmPassword) {
-      alert('Please fill all the fields!');
-      return;
+      errMsg= 'Please fill all the fields!'
+      setErrorMessage(errMsg)
+      return
+
     }
     if (password.charAt(0) !== password.charAt(0).toUpperCase()){
-      alert('Password should start with an uppercase')
-      return;
+      errMsg = 'Password must start with uppercase'
+      setErrorMessage(errMsg)
+      return
+
     }
     if (password.length < 8) {
-      alert('Password is too short')
-      return;
+      errMsg = 'Password is too short'
+      setErrorMessage(errMsg)
+      return
+
     }
     
     event.preventDefault();
@@ -47,32 +54,18 @@ function Register() {
         console.log(`Registered user with username ${username} and password ${password}`);
         history('/login');
       } catch (error) {
-        setShowErrorMessage(true)
-        alert(error.response.data.message);
+        console.log(error.response.data.message);
         return
       };
 
     } else {
       // Passwords don't match, show error message
       console.error('Passwords do not match');
+      errMsg = 'Passwords do not match'
+      setErrorMessage(errMsg)
     }
   };
-  useEffect(() => {
-    if (isPasswordDirty) {
-      if (password === confirmPassword) {
-        setShowErrorMessage(false);
-        setConfirmPassword('form-control is-valid')
-      } else {
-        setShowErrorMessage(true)
-        setConfirmPassword('form-control is-invalid')
-      }
-    }
-  }, [confirmPassword])
 
-  // const handleConfirmPassword = (e) => {
-  //   setConfirmPassword(e.target.value);
-  //   setisPasswordDirty(true);
-  // }
 
   return (
     <div className="login-box">
@@ -85,6 +78,7 @@ function Register() {
             value={username}
             onChange={(event) => setUsername(event.target.value)}
             required
+            
           />
           <label>Username</label>
         </div>
@@ -114,9 +108,9 @@ function Register() {
           <span></span>
           <span></span>
           </a>
-          Register
+          Register  
       </form>
-      {showErrorMessage && isPasswordDirty ? <div> Passwords did not match </div> : ''}
+      {errorMessage && <div style={{backgroundColor: "red"}} className="error"> {errorMessage} </div>}
     </div>
   );
 }
