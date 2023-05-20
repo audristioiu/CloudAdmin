@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
 
-function Login() {
+function Login({setAuth}) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const history = useNavigate();
@@ -30,7 +30,8 @@ function Login() {
       localStorage.setItem("userInfo", JSON.stringify(data));
       console.log(`Login user with username ${username} and password ${password}`);
       console.log(` Here is your role : ${data.role} and uuid : ${data.user_id}`)
-      history('/home');
+      setAuth(true);
+      history('/');
     } catch (error) {
       console.log(error.response.data.message);
       return
