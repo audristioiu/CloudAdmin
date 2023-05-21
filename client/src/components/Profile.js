@@ -21,13 +21,12 @@ function Profile() {
           const config = {
             headers: {
               "Content-type": "application/json",
-              "Access-Control-Allow-Origin": "localhost:3000",
               "Authorization": userInfo?.role,
               "USER-UUID": userInfo?.user_id,
             },
           };
 
-          const response = await axios.get(`http://localhost:8080/user/${username}`);
+          const response = await axios.get(`http://localhost:8080/user/${username}`, config);
           const userAddress = response.data?.city_address;
           setAddress(userAddress);
         }
@@ -65,12 +64,20 @@ function Profile() {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       const username = userInfo?.username;
 
+      const config = {
+        headers: {
+          "Content-type": "application/json",
+          "Authorization": userInfo?.role,
+          "USER-UUID": userInfo?.user_id,
+        },
+      };
+
       const response = await axios.put(`http://localhost:8080/user/`, {
         "username": username,
         "city_address": address,
         "password": password,
         "want_notify": wantNotify.toString(),
-      });
+      }, config);
 
       // Clear the form fields and display a success message
       setAddress('');
