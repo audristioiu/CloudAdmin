@@ -235,21 +235,23 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 		response.WriteEntity(errorData)
 		return
 	}
-	if len(userData.Password) < 8 {
-		log.Printf("[ERROR] password too short")
-		errorData.Message = "Bad Request/ Password too short"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if !unicode.IsUpper(rune(userData.Password[0])) {
-		log.Printf("[ERROR] password does not start with uppercase")
-		errorData.Message = "Bad Request/ Password does not start with uppercase"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
+	if userData.Password != "" {
+		if len(userData.Password) < 8 {
+			log.Printf("[ERROR] password too short")
+			errorData.Message = "Bad Request/ Password too short"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		if !unicode.IsUpper(rune(userData.Password[0])) {
+			log.Printf("[ERROR] password does not start with uppercase")
+			errorData.Message = "Bad Request/ Password does not start with uppercase"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
 	}
 
 	err = api.psqlRepo.UpdateUserData(&userData)

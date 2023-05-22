@@ -80,7 +80,11 @@ func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, e
 
 // UpdateUserData updates user from PostgreSql table
 func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
-	updateStatement := "UPDATE  users SET city_address=$1, want_notify=$2, password=$3 WHERE username=$4"
+	updateStatement := `UPDATE  users SET 
+						city_address=COALESCE(NULLIF($1,E''), city_address),
+						want_notify=COALESCE(NULLIF($2,E''), want_notify), 
+						password=COALESCE(NULLIF($3,E''), password) 
+						WHERE username=$4`
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, userData.CityAddress, userData.WantNotify, userData.Password, userData.UserName)
 	if err != nil {
@@ -213,7 +217,10 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 
 // UpdateAppData updates app from PostgreSql table
 func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
-	updateStatement := "UPDATE  apps SET description=$1, is_running=$2 WHERE name=$3"
+	updateStatement := `UPDATE  apps SET 
+						description=COALESCE(NULLIF($1,E''), description), 
+						is_running=COALESCE(NULL_IF($2,E''), is_running) 
+						WHERE name=$3`
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.Name)
 	if err != nil {
