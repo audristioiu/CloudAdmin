@@ -3,9 +3,10 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
 
-function Login({setAuth}) {
+function Login({ setAuth }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const history = useNavigate();
 
   const handleSubmit = async (event) => {
@@ -22,7 +23,7 @@ function Login({setAuth}) {
 
       const { data } = await axios.post(
         "http://localhost:8080/login",
-        { "username": username,"password" : password },
+        { "username": username, "password": password },
         config
       );
 
@@ -34,6 +35,7 @@ function Login({setAuth}) {
       history('/');
     } catch (error) {
       console.log(error.response.data.message);
+      setErrorMessage("Wrong username or password")
       return
     };
   };

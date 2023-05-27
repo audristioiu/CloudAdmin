@@ -7,21 +7,23 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PostgresSqlRepo represents info about PostgreSql
 type PostgreSqlRepo struct {
 	ctx  context.Context
-	conn *pgx.Conn
+	conn *pgxpool.Pool
 }
 
 // NewPostgreSqlRepo returns a new PostgreSql repo
 func NewPostgreSqlRepo(ctx context.Context, username, password, host, databaseName string, port int) *PostgreSqlRepo {
 	url := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", username, password, host, port, databaseName)
 
-	dbPool, err := pgx.Connect(ctx, url)
+	dbPool, err := pgxpool.New(context.Background(), url)
 	if err != nil {
 		log.Printf("[ERROR] could not connect to database : %v\n", err)
 		return nil
@@ -36,9 +38,11 @@ func NewPostgreSqlRepo(ctx context.Context, username, password, host, databaseNa
 // InsertUserData inserts user in PostgreSql table
 func (p *PostgreSqlRepo) InsertUserData(userData *domain.UserData) error {
 	newUserData := domain.UserData{}
-	insertStatement := "INSERT INTO users (username, password, city_address,want_notify,applications,user_id, role) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING username"
+	insertStatement := `INSERT INTO users (username, password, full_name, city_address,birth_date, joined_date, last_time_online, want_notify,applications,user_id, role) 
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING username`
 
-	row := p.conn.QueryRow(p.ctx, insertStatement, userData.UserName, userData.Password, userData.CityAddress, userData.WantNotify,
+	row := p.conn.QueryRow(p.ctx, insertStatement, userData.UserName, userData.Password, userData.FullName, userData.CityAddress,
+		userData.BirthDate, userData.JoinedDate, userData.LastTimeOnline, userData.WantNotify,
 		userData.Applications, userData.UserID, userData.Role)
 	err := row.Scan(&newUserData.UserName)
 	if err != nil {
@@ -52,10 +56,12 @@ func (p *PostgreSqlRepo) InsertUserData(userData *domain.UserData) error {
 // GetUserData retrieves user from PostgreSql table
 func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) {
 	userData := domain.UserData{}
-	selectStatement := "SELECT * FROM users where username=$1"
+	selectStatement := `SELECT * FROM users where username=$1`
 
 	row := p.conn.QueryRow(p.ctx, selectStatement, username)
-	err := row.Scan(&userData.UserName, &userData.Password, &userData.CityAddress, &userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
+	err := row.Scan(&userData.UserName, &userData.Password, &userData.FullName,
+		&userData.CityAddress, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
+		&userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
 	if err != nil {
 		log.Printf("[ERROR] could not retrieve user with error : %v\n", err)
 		return nil, err
@@ -69,7 +75,9 @@ func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, e
 	selectStatement := "SELECT * FROM users where user_id=$1"
 
 	row := p.conn.QueryRow(p.ctx, selectStatement, userID)
-	err := row.Scan(&userData.UserName, &userData.Password, &userData.CityAddress, &userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
+	err := row.Scan(&userData.UserName, &userData.Password, &userData.FullName,
+		&userData.CityAddress, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
+		&userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
 	if err != nil {
 		log.Printf("[ERROR] could not retrieve user using uuid with error : %v\n", err)
 		return nil, err
@@ -83,10 +91,12 @@ func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 	updateStatement := `UPDATE  users SET 
 						city_address=COALESCE(NULLIF($1,E''), city_address),
 						want_notify=COALESCE(NULLIF($2,E''), want_notify), 
-						password=COALESCE(NULLIF($3,E''), password) 
-						WHERE username=$4`
+						password=COALESCE(NULLIF($3,E''), password),
+						birth_date=COALESCE(NULLIF($4,E''), birth_date),
+						full_name=COALESCE(NULLIF($5,E''), full_name)
+						WHERE username=$6`
 
-	row, err := p.conn.Exec(p.ctx, updateStatement, userData.CityAddress, userData.WantNotify, userData.Password, userData.UserName)
+	row, err := p.conn.Exec(p.ctx, updateStatement, userData.CityAddress, userData.WantNotify, userData.Password, userData.BirthDate, userData.FullName, userData.UserName)
 	if err != nil {
 		log.Printf("[ERROR] could not update user with error : %v\n", err)
 		return err
@@ -96,6 +106,23 @@ func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 		return errors.New("no row found to update")
 	}
 	log.Printf("Successfuly updated user with : %+v", userData)
+	return nil
+}
+
+// UpdateUserLastTimeOnlineData updates timestamp of last time online from PostgreSql table
+func (p *PostgreSqlRepo) UpdateUserLastTimeOnlineData(lastTimestamp time.Time, userData *domain.UserData) error {
+	updateStatement := "UPDATE  users SET last_time_online=$1 WHERE username=$2"
+
+	row, err := p.conn.Exec(p.ctx, updateStatement, lastTimestamp, userData.UserName)
+	if err != nil {
+		log.Printf("[ERROR] could not update user last time online with error : %v\n", err)
+		return err
+	}
+	if row.RowsAffected() != 1 {
+		log.Printf("[ERROR] no row found to update")
+		return errors.New("no row found to update")
+	}
+	log.Printf("Successfuly updated user last timestamp with : %v", lastTimestamp.String())
 	return nil
 }
 

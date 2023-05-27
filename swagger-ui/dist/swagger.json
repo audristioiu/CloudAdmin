@@ -62,7 +62,7 @@
           },
           {
             "type": "string",
-            "description": "filter apps by description(keyword) or is_running",
+            "description": "filter apps by description(keyword) or  is_running",
             "name": "filter",
             "in": "query",
             "allowEmptyValue": true
@@ -582,8 +582,22 @@
             "type": "string"
           }
         },
+        "birth_date": {
+          "type": "string"
+        },
         "city_address": {
           "type": "string"
+        },
+        "full_name": {
+          "type": "string"
+        },
+        "joined_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_time_online": {
+          "type": "string",
+          "format": "date-time"
         },
         "password": {
           "type": "string"

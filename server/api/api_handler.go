@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 	"unicode"
 
 	"log"
@@ -105,9 +106,13 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 
+	nowTime := time.Now()
+	userData.JoinedDate = nowTime
+	userData.LastTimeOnline = nowTime
+
 	err = api.psqlRepo.InsertUserData(&userData)
 	if err != nil {
-		errorData.Message = "Internal error/ insert in postgres"
+		errorData.Message = "Internal error/ insert user data in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -157,6 +162,23 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 
+	if len(userData.Password) < 8 {
+		log.Printf("[ERROR] password too short")
+		errorData.Message = "Bad Request/ Password too short"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !unicode.IsUpper(rune(userData.Password[0])) {
+		log.Printf("[ERROR] password does not start with uppercase")
+		errorData.Message = "Bad Request/ Password does not start with uppercase"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
 	dbUserData, err := api.psqlRepo.GetUserData(userData.UserName)
 	if err != nil {
 		log.Printf("[ERROR] User %v not found", userData.UserName)
@@ -167,11 +189,19 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 
+	if dbUserData.Password != userData.Password {
+		errorData.Message = "Wrong Password"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
 	if dbUserData.Role == "" {
 		newUserData = helpers.GenerateRole(dbUserData)
 		err = api.psqlRepo.UpdateUserRoleData(newUserData.Role, newUserData.UserID, newUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating in postgres"
+			errorData.Message = "Internal error / updating role in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -180,7 +210,21 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	} else {
 		newUserData = dbUserData
 	}
+
+	nowTime := time.Now()
+	newUserData.LastTimeOnline = nowTime
+
+	err = api.psqlRepo.UpdateUserLastTimeOnlineData(newUserData.LastTimeOnline, newUserData)
+	if err != nil {
+		errorData.Message = "Internal error / updating last_time in postgres"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
 	newUserData.Password = ""
+
 	response.WriteEntity(newUserData)
 }
 
@@ -256,7 +300,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 
 	err = api.psqlRepo.UpdateUserData(&userData)
 	if err != nil {
-		errorData.Message = "Internal error / updating in postgres"
+		errorData.Message = "Internal error / updating user data in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -428,7 +472,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 			err = api.psqlRepo.InsertAppData(&appData)
 			if err != nil {
-				errorData.Message = "Internal error/ insert in postgres"
+				errorData.Message = "Internal error/ insert app data in postgres"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -437,7 +481,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 			err = api.psqlRepo.UpdateUserAppsData(appData.Name, username)
 			if err != nil {
-				errorData.Message = "Internal error/ update users in postgres"
+				errorData.Message = "Internal error/ update user apps in postgres"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -464,6 +508,14 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 	var filter string
 
 	appnames := request.QueryParameter("appnames")
+	if appnames == "" {
+		log.Printf("[ERROR] Couldn't read appnames query parameter")
+		errorData.Message = "Bad Request/ empty list of applications"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	username := request.QueryParameter("username")
 	if username == "" {
@@ -559,7 +611,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 
 	err = api.psqlRepo.UpdateAppData(&appData)
 	if err != nil {
-		errorData.Message = "Internal error / updating in postgres"
+		errorData.Message = "Internal error / updating app data in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
