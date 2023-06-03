@@ -30,7 +30,7 @@ func asJSON(v interface{}) string {
 	return string(data)
 }
 
-// StartWebService initializez log , restful api and open api for swagger
+// StartWebService initializez loggger,restful and swagger api, postgres and s3 repo, docker and kubernetes clients
 func (s *Service) StartWebService() {
 	formatter := runtime.Formatter{ChildFormatter: &log.TextFormatter{
 		FullTimestamp:          true,

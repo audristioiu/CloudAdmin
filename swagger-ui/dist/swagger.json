@@ -126,6 +126,13 @@
             "name": "USER-UUID",
             "in": "header",
             "required": true
+          },
+          {
+            "type": "string",
+            "description": "owner of the app",
+            "name": "username",
+            "in": "query",
+            "required": true
           }
         ],
         "responses": {

@@ -72,6 +72,7 @@ function Login({ setAuth }) {
           Log in
         </a>
       </form>
+      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}
     </div>
   );
 }

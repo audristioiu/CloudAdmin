@@ -28,10 +28,9 @@ function Profile() {
 
   const closeEditMode = () => {
     setEditMode(false)
-    setClicked(false)
+    setClicked(true)
     setChangePassMode(false)
     setContinuePassMode(false)
-    setEditableProfilePage(true)
   }
 
   const openEditMode = () => {

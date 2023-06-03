@@ -61,7 +61,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	errorData := domain.ErrorResponse{}
 	err := request.ReadEntity(&userData)
 	if err != nil {
-		log.Printf("[ERROR] Couldn't read body")
+		log.Printf("[ERROR] Couldn't read body with error : %+v", err)
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
@@ -129,7 +129,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	errorData := domain.ErrorResponse{}
 	err := request.ReadEntity(&userData)
 	if err != nil {
-		log.Printf("[ERROR] Couldn't read body")
+		log.Printf("[ERROR] Couldn't read body with error : %+v", err)
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
@@ -263,7 +263,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 
 	err := request.ReadEntity(&userData)
 	if err != nil {
-		log.Printf("[ERROR] Couldn't read body")
+		log.Printf("[ERROR] Couldn't read body with error : %+v", err)
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
@@ -383,7 +383,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 	file, handler, err := request.Request.FormFile("file")
 	if err != nil {
-		log.Printf("[ERROR] Couldn't form file")
+		log.Printf("[ERROR] Couldn't form file with error : %+v", err)
 		errorData.Message = "Internal error/ could not form file"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
@@ -408,7 +408,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	// Copy the contents of the file to the new file
 	_, err = io.Copy(f, file)
 	if err != nil {
-		log.Printf("[ERROR] Couldn't copy file")
+		log.Printf("[ERROR] Couldn't copy file with error : %+v", err)
 		errorData.Message = "Internal error/ could not copy file"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
@@ -418,7 +418,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 	r, err := zip.OpenReader(handler.Filename)
 	if err != nil {
-		log.Printf("[ERROR] Couldn't open zipReader")
+		log.Printf("[ERROR] Couldn't open zipReader with error : %+v", err)
 		errorData.Message = "Internal error/ could not open zipReader"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
@@ -439,7 +439,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		}
 		descr, err1 := io.ReadAll(rc)
 		if err1 != nil {
-			log.Printf("[ERROR] Couldn't read io.Reader")
+			log.Printf("[ERROR] Couldn't read io.Reader with error : %+v", err)
 			errorData.Message = "Internal Error/  Couldn't read io.Reader"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
@@ -448,9 +448,14 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		}
 		defer rc.Close()
 		if strings.Contains(f.Name, ".txt") {
+			if i%2 == 0 {
+				appData.Name = r.File[i+1].Name
+			} else {
+				appData.Name = r.File[i-1].Name
+			}
 
 			appData.Description = string(descr)
-			appData.Name = r.File[i-1].Name
+
 			appData.IsRunning = "false"
 			appsRetrievedData, err := api.psqlRepo.GetAppsData(appData.Name, "")
 
@@ -569,7 +574,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		appsData, err := api.psqlRepo.GetAppsData(strings.TrimSpace(appName), filter)
 		if err != nil || len(appsData) == 0 {
 			log.Printf("[ERROR] App %v not found", appName)
-			errorData.Message = "App not found"
+			errorData.Message = "App " + appName + " not found"
 			errorData.StatusCode = http.StatusNotFound
 			response.WriteHeader(http.StatusNotFound)
 			response.WriteEntity(errorData)
@@ -600,13 +605,63 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 
 	err := request.ReadEntity(&appData)
 	if err != nil {
-		log.Printf("[ERROR] Couldn't read body")
+		log.Printf("[ERROR] Couldn't read body with error : %+v", err)
 		errorData.Message = "Bad Request/ could not read body"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		log.Printf("[ERROR] Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	userUUID := request.HeaderParameter("USER-UUID")
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		log.Printf("[ERROR] User id" + userUUID + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + userUUID + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	flag := true
+
+	userData.UserName = username
+
+	if !helpers.CheckUser(userData, userData.Role) {
+		flag = false
+	}
+	if !flag {
+		log.Printf("[ERROR] User" + username + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + username + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppExist(userData.Applications, []*domain.ApplicationData{&appData}) {
+		log.Printf("[ERROR] User" + username + " not authorized")
+		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+		errorData.Message = "User " + username + " is Not Authorized"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
 	log.Printf("%+v", appData)
 
 	err = api.psqlRepo.UpdateAppData(&appData)

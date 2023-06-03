@@ -10,6 +10,8 @@ import Register from './components/Register';
 import Home from './components/Home';
 import Main from './components/Main';
 import Profile from './components/Profile';
+import MyApps from './components/MyApps';
+import EditApp from './components/EditApp';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -33,6 +35,8 @@ function App() {
         <Route path='/home' element={<Home />}/>
         <Route path='/profile' element={<Profile />}/>
         <Route path='/main' element={<Main />}/>
+        <Route path='/myapps' element={<MyApps />}/>
+        <Route path='/editapp' element={<EditApp />}/>
       </Routes>
     </BrowserRouter>
   );

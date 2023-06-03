@@ -198,7 +198,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 	var selectStatement string
 	var err error
 	var rows pgx.Rows
-	if filterCondition != "" {
+	if filterCondition != "" || strings.Contains(filterCondition, "name:") {
 		filterParams := strings.Split(filterCondition, ":")
 		//filterParams[0] represents filter name , filterParams[1] represents filter value
 		if filterParams[0] == "description" {
@@ -238,7 +238,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 		applicationsData = append(applicationsData, applicationData)
 	}
 
-	log.Printf("Successfuly retrieved apps: %+v", &applicationsData)
+	log.Printf("Successfuly retrieved apps: %+v", applicationsData)
 	return applicationsData, nil
 }
 
@@ -246,7 +246,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 	updateStatement := `UPDATE  apps SET 
 						description=COALESCE(NULLIF($1,E''), description), 
-						is_running=COALESCE(NULL_IF($2,E''), is_running) 
+						is_running=COALESCE(NULLIF($2,E''), is_running) 
 						WHERE name=$3`
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.Name)
