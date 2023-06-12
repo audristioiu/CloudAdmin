@@ -96,14 +96,15 @@ const EditProfilePage = () => {
           />
           <label>Birth Date</label>
         </div>
-        <div className="user-box">
+        <label className="checkbox-container">
+          Want Notifications
           <input
             type="checkbox"
             checked={wantNotify}
             onChange={(e) => setWantNotify(e.target.checked)}
           />
-          <label>Want Notifications</label>
-        </div>
+          <span class="checkmark"></span>
+        </label>
 
         {showPasswordFields && (
           <div>
