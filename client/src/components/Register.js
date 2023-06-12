@@ -26,11 +26,10 @@ function Register() {
         return
 
       }
-      if (password.charAt(0) >= 'A' && password.charAt(0) <= 'Z') {
-        errMsg = 'Password must start with uppercase'
-        setErrorMessage(errMsg)
-        return
-
+      if (password.charAt(0) !== password.charAt(0).toUpperCase()) {
+        errMsg = 'Password must start with an uppercase letter';
+        setErrorMessage(errMsg);
+        return;
       }
     } else {
       errMsg = "Password empty"

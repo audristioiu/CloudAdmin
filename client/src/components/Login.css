@@ -1,6 +1,7 @@
 html {
   height: 100%;
 }
+
 body {
   margin:0;
   padding:0;
@@ -49,7 +50,7 @@ ul {
 }
 
 .login-box .checkbox-input {
-  float: right;
+  float: left;
 }
 
 .login-box .user-box input {
