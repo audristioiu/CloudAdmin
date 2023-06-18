@@ -57,10 +57,32 @@ func CheckUserCredentials(userData *domain.UserData, username, password string) 
 
 // CheckAppExists validates that the app appears in user apps
 func CheckAppExist(applications []string, appsData []*domain.ApplicationData) bool {
+	if len(applications) == 0 {
+		return false
+	}
 	for _, app := range appsData {
 		if !slices.Contains(applications, app.Name) {
 			return false
 		}
 	}
 	return true
+}
+
+// Unique removes dups from slice
+func Unique(s domain.GetApplicationsData) domain.GetApplicationsData {
+	inResult := make(map[string]bool)
+	var result domain.GetApplicationsData
+	for _, str := range s.Response {
+		if _, ok := inResult[str.Name]; !ok {
+			inResult[str.Name] = true
+			result.Response = append(result.Response, str)
+		}
+	}
+	for _, str := range s.Errors {
+		if _, ok := inResult[str.Message]; !ok {
+			inResult[str.Message] = true
+			result.Errors = append(result.Errors, str)
+		}
+	}
+	return result
 }

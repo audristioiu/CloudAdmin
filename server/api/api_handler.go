@@ -439,7 +439,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		}
 		descr, err1 := io.ReadAll(rc)
 		if err1 != nil {
-			log.Printf("[ERROR] Couldn't read io.Reader with error : %+v", err)
+			log.Printf("[ERROR] Couldn't read io.Reader with error : %+v", err1)
 			errorData.Message = "Internal Error/  Couldn't read io.Reader"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
@@ -495,12 +495,11 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		} else {
 			//upload in s3
 			log.Println("upload s3")
-			descr, _ := io.ReadAll(rc)
 			log.Println(string(descr))
 
 		}
-	}
 
+	}
 	response.Write([]byte("App uploaded succesfully"))
 }
 
@@ -569,22 +568,34 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 	}
 
 	log.Println(appNamesList)
-	appsInfo := make([]*domain.ApplicationData, 0)
+	var appsInfo domain.GetApplicationsData
+	appsInfo.Response = make([]*domain.ApplicationData, 0)
+	appsInfo.Errors = make([]domain.ErrorResponse, 0)
 	for _, appName := range appNamesList {
 		appsData, err := api.psqlRepo.GetAppsData(strings.TrimSpace(appName), filter)
-		if err != nil || len(appsData) == 0 {
+		if err != nil {
 			log.Printf("[ERROR] App %v not found", appName)
 			errorData.Message = "App " + appName + " not found"
 			errorData.StatusCode = http.StatusNotFound
-			response.WriteHeader(http.StatusNotFound)
-			response.WriteEntity(errorData)
-			return
+			appsInfo.Errors = append(appsInfo.Errors, errorData)
+			continue
 		}
-		appsInfo = append(appsInfo, appsData...)
+		if len(appsData) == 0 {
+			log.Printf("[INFO] No apps found")
+
+			errorData.Message = "App " + appName + " not found"
+			errorData.StatusCode = http.StatusNotFound
+			appsInfo.Errors = append(appsInfo.Errors, errorData)
+			continue
+		}
+		appsInfo.Response = append(appsInfo.Response, appsData...)
 
 	}
+	if len(appsInfo.Response) > 1 {
+		appsInfo = helpers.Unique(appsInfo)
+	}
 
-	if !helpers.CheckAppExist(userData.Applications, appsInfo) {
+	if !helpers.CheckAppExist(userData.Applications, appsInfo.Response) {
 		log.Printf("[ERROR] User" + username + " not authorized")
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"

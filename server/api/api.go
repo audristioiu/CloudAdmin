@@ -142,8 +142,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.GetAppsInfo).
-			Writes([]domain.ApplicationData{}).
-			Returns(http.StatusOK, "OK", []domain.ApplicationData{}).
+			Writes(domain.GetApplicationsData{}).
+			Returns(http.StatusOK, "OK", domain.GetApplicationsData{}).
 			Returns(http.StatusNotFound, "App Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 	ws.Route(

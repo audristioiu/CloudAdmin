@@ -59,8 +59,10 @@ func (s *Service) StartWebService() {
 	// initialize repos
 	psqlRepo := repositories.NewPostgreSqlRepo(ctx, psqlUser, psqlPass, psqlHost, psqlDB, psqlPort)
 	if psqlRepo == nil {
+		log.Fatalf("Error in starting postgres service")
 		return
 	}
+
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo)
 	apiManager.RegisterRoutes(ws)

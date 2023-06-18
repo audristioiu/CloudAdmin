@@ -62,7 +62,7 @@
           },
           {
             "type": "string",
-            "description": "filter apps by description(keyword) or  is_running",
+            "description": "filter apps by description(keyword) or is_running",
             "name": "filter",
             "in": "query",
             "allowEmptyValue": true
@@ -72,22 +72,19 @@
           "200": {
             "description": "OK",
             "schema": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/domain.ApplicationData"
-              }
+              "$ref": "#/definitions/domain.GetApplicationsData"
             }
           },
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/domain.ErrorResponse"
+              "$ref": "#/definitions/domain.GetApplicationsData"
             }
           },
           "404": {
             "description": "App Not Found",
             "schema": {
-              "$ref": "#/definitions/domain.ErrorResponse"
+              "$ref": "#/definitions/domain.GetApplicationsData"
             }
           }
         }
@@ -575,6 +572,26 @@
         "status_code": {
           "type": "integer",
           "format": "int32"
+        }
+      }
+    },
+    "domain.GetApplicationsData": {
+      "required": [
+        "Response",
+        "Errors"
+      ],
+      "properties": {
+        "Errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/domain.ErrorResponse"
+          }
+        },
+        "Response": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/domain.ApplicationData"
+          }
         }
       }
     },

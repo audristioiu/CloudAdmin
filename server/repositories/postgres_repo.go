@@ -201,7 +201,15 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 	if filterCondition != "" || strings.Contains(filterCondition, "name:") {
 		filterParams := strings.Split(filterCondition, ":")
 		//filterParams[0] represents filter name , filterParams[1] represents filter value
-		if filterParams[0] == "description" {
+		if filterParams[0] == "name" {
+			selectStatement = "SELECT * FROM apps where name ILIKE $1"
+			rows, err = p.conn.Query(p.ctx, selectStatement, "%"+filterParams[1]+"%")
+			if err != nil {
+				log.Printf("[ERROR] could not retrieve app with error : %v\n", err)
+				return nil, err
+			}
+
+		} else if filterParams[0] == "description" {
 			selectStatement = "SELECT * FROM apps where name=$1 AND " + filterParams[0] + " ILIKE $2"
 			log.Println(selectStatement)
 			rows, err = p.conn.Query(p.ctx, selectStatement, appname, "%"+filterParams[1]+"%")
@@ -222,12 +230,14 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 
 	} else {
 		selectStatement = "SELECT * FROM apps where name=$1"
+		log.Println(selectStatement)
 		rows, err = p.conn.Query(p.ctx, selectStatement, appname)
 		if err != nil {
 			log.Printf("[ERROR] could not retrieve app with error : %v\n", err)
 			return nil, err
 		}
 	}
+
 	for rows.Next() {
 		applicationData := &domain.ApplicationData{}
 		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning)

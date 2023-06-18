@@ -47,7 +47,7 @@ function MyApps() {
 
         console.log(typeInput)
 
-
+        //debug filtru nu merge pe frontend
         const userInfo = JSON.parse(localStorage.getItem('userInfo'));
         const config = {
             headers: {
@@ -60,10 +60,9 @@ function MyApps() {
         try {
             const response = await axios.get(`http://localhost:8080/user/${username}`, config);
             const my_apps = response.data?.applications
-
             const query_my_apps = my_apps.join()
-            if (searchInput.length != 0) {
-                if (typeInput.length == 0 || typeInput == "name") {
+            if (searchInput.length !== 0) {
+                if (typeInput.length === 0 || typeInput === "name") {
                     const config_app = {
                         headers: {
                             "Content-type": "application/json",
@@ -76,7 +75,8 @@ function MyApps() {
                         }
                     }
                     const response_apps = await axios.get(`http://localhost:8080/app`, config_app);
-                    setApps(response_apps.data)
+                    console.log(response_apps)
+                    setApps(response_apps.data.Response)
                 } else {
                     const config_app = {
                         headers: {
@@ -91,7 +91,8 @@ function MyApps() {
                         }
                     }
                     const response_apps = await axios.get(`http://localhost:8080/app`, config_app);
-                    setApps(response_apps.data)
+                    console.log(response_apps)
+                   setApps(response_apps.data.Response)
                 }
                
             } else {
@@ -108,29 +109,35 @@ function MyApps() {
                 }
 
                 const response_apps = await axios.get(`http://localhost:8080/app`, config_app);
-                setApps(response_apps.data)
+                console.log(response_apps)
+                setApps(response_apps.data.Response)
             }
+
 
 
         } catch (error) {
             console.log(error)
             setErrorMessage(error)
+            console.log(errorMessage)
             //to fix wrong search error
-            setApps([])
+            setApps([]) 
         };
     };
 
     useEffect(() => {
         fetchApps();
-    }, []);
+    }, apps);
+
 
 
     const renderApps = () => {
+        console.log(apps)
         if (apps) {
             return apps.map((app, i) => {
                 return <AppItem key={i} app={app} />
             })
         }
+
     };
 
     return (

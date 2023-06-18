@@ -29,3 +29,9 @@ type ErrorResponse struct {
 	StatusCode int    `json:"status_code"`
 	Message    string `json:"message"`
 }
+
+// GetApplicationsData represents get apps info
+type GetApplicationsData struct {
+	Response []*ApplicationData
+	Errors   []ErrorResponse
+}

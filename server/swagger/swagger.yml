@@ -45,7 +45,7 @@ paths:
           in: query
           required: true
         - type: string
-          description: filter apps by description(keyword) or  is_running
+          description: filter apps by description(keyword) or is_running
           name: filter
           in: query
           allowEmptyValue: true
@@ -53,17 +53,15 @@ paths:
         '200':
           description: OK
           schema:
-            type: array
-            items:
-              $ref: '#/definitions/domain.ApplicationData'
+            $ref: '#/definitions/domain.GetApplicationsData'
         '400':
           description: Bad Request
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.GetApplicationsData'
         '404':
           description: App Not Found
           schema:
-            $ref: '#/definitions/domain.ErrorResponse'
+            $ref: '#/definitions/domain.GetApplicationsData'
     put:
       consumes:
         - application/json
@@ -388,6 +386,19 @@ definitions:
       status_code:
         type: integer
         format: int32
+  domain.GetApplicationsData:
+    required:
+      - Response
+      - Errors
+    properties:
+      Errors:
+        type: array
+        items:
+          $ref: '#/definitions/domain.ErrorResponse'
+      Response:
+        type: array
+        items:
+          $ref: '#/definitions/domain.ApplicationData'
   domain.UserData:
     required:
       - username
