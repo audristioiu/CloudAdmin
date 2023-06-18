@@ -134,7 +134,15 @@ const EditProfilePage = () => {
           {showPasswordFields ? "Hide Password Fields" : "Show Password Fields"}
         </a>
 
-        <a type="submit" onClick={handleSubmit}>
+        <a href="/profile">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+          Cancel
+        </a>
+
+        <a type="submit" onClick={handleSubmit} className='profile-submit'>
           <span></span>
           <span></span>
           <span></span>
