@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import './MyApps.css';
 
 function AppItem(app) {
   const [appName, setAppName] = useState(app.app.name)
@@ -25,7 +26,6 @@ function AppItem(app) {
           disabled
         />
       </span>
-
 
       <span>Description
         <input
@@ -62,20 +62,15 @@ function AppItem(app) {
         />
       </span>
 
-      <span>
-        <button className='edit-delete-button btn'
-          onClick={editApp}
-        >Edit App
-          <span className='far fa-solid fa-pen-to-square'>
-
-          </span>
+      <div className="edit_delete_section">
+        <button className='button-3' onClick={editApp}>
+          Edit App
         </button>
 
-        <button className='edit-delete-button btn'
-        >Delete App
-          <span className='far fa-solid fa-trash-can'></span>
+        <button className='button-3'>
+          Delete App
         </button>
-      </span>
+      </div>
 
     </div>
   );

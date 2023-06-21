@@ -349,7 +349,6 @@ hr {
 } 
 
 .app-item {
-  width: 100%;
   background-color: #7df57a;
   padding: 1rem;
   margin: .8rem 0;
@@ -444,7 +443,7 @@ input:checked + .slider:before {
 .led-box {
   height: 45px;
   width: 25%;
-  margin: 10px 0;
+  margin-bottom: 10px;
   float: left;
 }
 
