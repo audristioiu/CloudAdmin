@@ -75,7 +75,14 @@ const EditProfilePage = () => {
           }
 
         const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);
-
+        console.log(response)
+        if (response.status === 200) {
+          // Profile updated successfully, navigate back to profile page
+          navigate('/profile');
+        }
+        } else {
+          const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);
+        console.log(response)
         if (response.status === 200) {
           // Profile updated successfully, navigate back to profile page
           navigate('/profile');

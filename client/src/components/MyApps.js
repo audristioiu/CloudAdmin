@@ -128,7 +128,7 @@ function MyApps() {
       </div>
       <div className="form-style">
         <div className="list-items">{renderApps()}</div>
-        <input type="file" id="input" multiple />
+        <input type="file" id="input" multiple={false} />
         <button type="button" className='button-3' onClick={handleUploadArchive}>
           SubmitArchive
         </button>
