@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
@@ -26,11 +26,10 @@ function Register() {
         return
 
       }
-      if (password.charAt(0) >= 'A' && password.charAt(0) <= 'Z') {
-        errMsg = 'Password must start with uppercase'
-        setErrorMessage(errMsg)
-        return
-
+      if (password.charAt(0) !== password.charAt(0).toUpperCase()) {
+        errMsg = 'Password must start with an uppercase letter';
+        setErrorMessage(errMsg);
+        return;
       }
     } else {
       errMsg = "Password empty"

@@ -1,0 +1,91 @@
+body {
+  margin:0;
+  padding:0;
+  font-family: sans-serif;
+  background: linear-gradient(#141e30, #243b55);
+  color: white;
+}
+
+.profile-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 500px;
+  padding: 40px;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, .5);
+  box-sizing: border-box;
+  box-shadow: 0 15px 25px rgba(0, 0, 0, .6);
+  border-radius: 10px;
+  color: #fff;
+}
+
+.profile-container h2 {
+  font-size: 24px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.profile-container .user-details {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.profile-container .user-photo {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  margin-right: 20px;
+  float: left;
+}
+
+.profile-submit {
+  float: right;
+}
+
+.profile-container .user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-container p {
+  margin: 5px 0;
+}
+
+.profile-container .edit-profile-link {
+  display: block;
+  text-align: center;
+  margin-top: 20px;
+  color: #555;
+  text-decoration: none;
+}
+
+.profile-container .edit-profile-link:hover {
+  color: #000;
+}
+
+.profile-container a {
+  position: relative;
+  display: inline-block;
+  padding: 10px 20px;
+  color: #03e9f4;
+  font-size: 16px;
+  text-decoration: none;
+  text-transform: uppercase;
+  overflow: hidden;
+  transition: .5s;
+  margin-top: 40px;
+  letter-spacing: 4px
+}
+
+.profile-container a:hover {
+  background: #03e9f4;
+  color: #fff;
+  border-radius: 5px;
+  box-shadow: 0 0 5px #03e9f4,
+              0 0 25px #03e9f4,
+              0 0 50px #03e9f4,
+              0 0 100px #03e9f4;
+}
+  

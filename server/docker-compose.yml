@@ -17,7 +17,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     ports:
       # Standard port for PostgreSQL databases
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       # When the PostgresSQL container is started it will run any scripts
       # provided in the `docker-entrypoint-initdb.d` directory, this connects
