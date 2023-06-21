@@ -14,6 +14,10 @@ ul {
   list-style-type: none;
 }
 
+.password-container {
+  margin-top: 40px;
+}
+
 .login-box {
   position: absolute;
   top: 50%;

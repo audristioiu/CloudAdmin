@@ -9,6 +9,7 @@ const EditProfilePage = () => {
   const [birthDate, setBirthDate] = useState('');
   const [wantNotify, setWantNotify] = useState('');
   const [password, setPassword] = useState('');
+  const [oldPassword, setOldPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPasswordFields, setShowPasswordFields] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -51,14 +52,34 @@ const EditProfilePage = () => {
             return;
           }
 
-          updatedData["password"] = password;
-        }
+          if (username) {
+            try {
+              const config = {
+                headers: {
+                  "Content-type": "application/json",
+                },
+              };
+              console.log({ "username": username, "password": oldPassword })
+              await axios.post(
+                "http://localhost:8080/login",
+                { "username": username, "password": oldPassword },
+                config
+              );
+            } catch (error) {
+              console.log(error.response.data.message);
+              setErrorMessage("Wrong password")
+              return
+            };
+
+            updatedData["password"] = password;
+          }
 
         const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);
 
         if (response.status === 200) {
           // Profile updated successfully, navigate back to profile page
           navigate('/profile');
+        }
         }
       }
     } catch (error) {
@@ -107,7 +128,15 @@ const EditProfilePage = () => {
         </label>
 
         {showPasswordFields && (
-          <div>
+          <div className='password-container'>
+            <div className="user-box">
+              <input
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+              />
+              <label>Old Password</label>
+            </div>
             <div className="user-box">
               <input
                 type="password"
