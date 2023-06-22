@@ -67,7 +67,7 @@ const EditProfilePage = () => {
               );
             } catch (error) {
               console.log(error.response.data.message);
-              setErrorMessage("Wrong password")
+              setErrorMessage("Wrong old password")
               return
             };
 
