@@ -77,7 +77,7 @@ func (s *Service) StartWebService() {
 	log.Println(asJSON(actual))
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(config))
 
-	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("/Users/Alex/Desktop/CloudAdmin/swagger-ui/dist"))))
+	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("/Users/udris/Desktop/CloudAdmin/swagger-ui/dist"))))
 
 	// Optionally, you may need to enable CORS for the UI to work.
 	cors := restful.CrossOriginResourceSharing{
