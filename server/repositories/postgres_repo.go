@@ -23,14 +23,21 @@ type PostgreSqlRepo struct {
 func NewPostgreSqlRepo(ctx context.Context, username, password, host, databaseName string, port int) *PostgreSqlRepo {
 	url := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", username, password, host, port, databaseName)
 
-	dbPool, err := pgxpool.New(context.Background(), url)
+	dbPool, err := pgxpool.New(ctx, url)
 	if err != nil {
 		log.Printf("[ERROR] could not connect to database : %v\n", err)
 		return nil
 	}
 
+	// check connection
+	err = dbPool.Ping(ctx)
+	if err != nil {
+		log.Printf("[ERROR] could not ping : %v\n", err)
+		return nil
+	}
+
 	return &PostgreSqlRepo{
-		ctx:  context.Background(),
+		ctx:  ctx,
 		conn: dbPool,
 	}
 }
