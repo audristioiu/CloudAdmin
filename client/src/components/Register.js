@@ -6,6 +6,7 @@ import './Login.css';
 function Register() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [userEmail, setUserEmail] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const history = useNavigate();
@@ -13,7 +14,7 @@ function Register() {
   let errMsg = ""
   let handleSubmit = async (event) => {
 
-    if (!username || !password || !confirmPassword) {
+    if (!username || !password || !confirmPassword || !userEmail) {
       errMsg = 'Please fill all the fields!'
       setErrorMessage(errMsg)
       return
@@ -51,7 +52,7 @@ function Register() {
 
         const { data } = await axios.post(
           "http://localhost:8080/register/user",
-          { "username": username, "password": password },
+          { "username": username, "password": password, "email" : userEmail },
           config
         );
 
@@ -84,9 +85,18 @@ function Register() {
             value={username}
             onChange={(event) => setUsername(event.target.value)}
             required
-
           />
           <label>Username</label>
+          </div>
+        <div className="user-box">
+          <input
+            type="text"
+            name="email"
+            value={userEmail}
+            onChange={(event) => setUserEmail(event.target.value)}
+            required
+          />
+          <label>Email</label>
         </div>
         <div className="user-box">
           <input
@@ -116,7 +126,7 @@ function Register() {
           Register
         </a>
       </form>
-      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}
+      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>
   );
 }

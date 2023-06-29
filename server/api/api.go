@@ -136,7 +136,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("appnames", "name of the apps").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("filter", "filter apps by description(keyword) or is_running").DataType("string").AllowEmptyValue(true)).
+			Param(ws.QueryParameter("filter", "filter apps by name(keyword), description(keyword) or is_running").DataType("string").AllowEmptyValue(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).

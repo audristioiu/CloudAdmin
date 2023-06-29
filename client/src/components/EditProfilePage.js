@@ -11,6 +11,7 @@ const EditProfilePage = () => {
   const [password, setPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [userEmail, setUserEmail] = useState('')
   const [showPasswordFields, setShowPasswordFields] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -35,6 +36,7 @@ const EditProfilePage = () => {
 
         const updatedData = {
           "username": username,
+          "email" : userEmail,
           "full_name" : fullName,
           "city_address": address,
           "birth_date": birthDate,
@@ -107,6 +109,14 @@ const EditProfilePage = () => {
             onChange={(e) => setFullName(e.target.value)}
           />
           <label>Full Name</label>
+        </div>
+        <div className="user-box">
+          <input
+            type="text"
+            value={userEmail}
+            onChange={(e) => setUserEmail(e.target.value)}
+          />
+          <label>Email</label>
         </div>
         <div className="user-box">
           <input
@@ -186,7 +196,7 @@ const EditProfilePage = () => {
           Update
         </a>
       </form>
-      {errorMessage && <p>{errorMessage}</p>}
+      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>
   );
   

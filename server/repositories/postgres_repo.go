@@ -45,12 +45,13 @@ func NewPostgreSqlRepo(ctx context.Context, username, password, host, databaseNa
 // InsertUserData inserts user in PostgreSql table
 func (p *PostgreSqlRepo) InsertUserData(userData *domain.UserData) error {
 	newUserData := domain.UserData{}
-	insertStatement := `INSERT INTO users (username, password, full_name, city_address,birth_date, joined_date, last_time_online, want_notify,applications,user_id, role) 
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING username`
+	insertStatement := `INSERT INTO users (username, password, email, full_name, city_address,birth_date, joined_date, 
+						last_time_online, want_notify,applications,user_id, role) 
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING username`
 
-	row := p.conn.QueryRow(p.ctx, insertStatement, userData.UserName, userData.Password, userData.FullName, userData.CityAddress,
-		userData.BirthDate, userData.JoinedDate, userData.LastTimeOnline, userData.WantNotify,
-		userData.Applications, userData.UserID, userData.Role)
+	row := p.conn.QueryRow(p.ctx, insertStatement, userData.UserName, userData.Password, userData.Email,
+		userData.FullName, userData.CityAddress, userData.BirthDate, userData.JoinedDate, userData.LastTimeOnline,
+		userData.WantNotify, userData.Applications, userData.UserID, userData.Role)
 	err := row.Scan(&newUserData.UserName)
 	if err != nil {
 		log.Printf("[ERROR] could not insert data with error : %v\n", err)
@@ -66,7 +67,7 @@ func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) 
 	selectStatement := `SELECT * FROM users where username=$1`
 
 	row := p.conn.QueryRow(p.ctx, selectStatement, username)
-	err := row.Scan(&userData.UserName, &userData.Password, &userData.FullName,
+	err := row.Scan(&userData.UserName, &userData.Password, &userData.Email, &userData.FullName,
 		&userData.CityAddress, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
 		&userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
 	if err != nil {
@@ -82,7 +83,7 @@ func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, e
 	selectStatement := "SELECT * FROM users where user_id=$1"
 
 	row := p.conn.QueryRow(p.ctx, selectStatement, userID)
-	err := row.Scan(&userData.UserName, &userData.Password, &userData.FullName,
+	err := row.Scan(&userData.UserName, &userData.Password, &userData.Email, &userData.FullName,
 		&userData.CityAddress, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
 		&userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
 	if err != nil {
@@ -97,13 +98,15 @@ func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, e
 func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 	updateStatement := `UPDATE  users SET 
 						city_address=COALESCE(NULLIF($1,E''), city_address),
-						want_notify=COALESCE(NULLIF($2,E''), want_notify), 
-						password=COALESCE(NULLIF($3,E''), password),
-						birth_date=COALESCE(NULLIF($4,E''), birth_date),
-						full_name=COALESCE(NULLIF($5,E''), full_name)
-						WHERE username=$6`
+						email=COALESCE(NULLIF($2,E''), email),
+						want_notify=COALESCE(NULLIF($3,E''), want_notify), 
+						password=COALESCE(NULLIF($4,E''), password),
+						birth_date=COALESCE(NULLIF($5,E''), birth_date),
+						full_name=COALESCE(NULLIF($6,E''), full_name)
+						WHERE username=$7`
 
-	row, err := p.conn.Exec(p.ctx, updateStatement, userData.CityAddress, userData.WantNotify, userData.Password, userData.BirthDate, userData.FullName, userData.UserName)
+	row, err := p.conn.Exec(p.ctx, updateStatement, userData.CityAddress, userData.Email,
+		userData.WantNotify, userData.Password, userData.BirthDate, userData.FullName, userData.UserName)
 	if err != nil {
 		log.Printf("[ERROR] could not update user with error : %v\n", err)
 		return err
@@ -205,10 +208,10 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 	var selectStatement string
 	var err error
 	var rows pgx.Rows
-	if filterCondition != "" || strings.Contains(filterCondition, "name:") {
+	if filterCondition != "" {
 		filterParams := strings.Split(filterCondition, ":")
 		//filterParams[0] represents filter name , filterParams[1] represents filter value
-		if filterParams[0] == "name" {
+		if filterParams[0] == "kname" {
 			selectStatement = "SELECT * FROM apps where name ILIKE $1"
 			rows, err = p.conn.Query(p.ctx, selectStatement, "%"+filterParams[1]+"%")
 			if err != nil {

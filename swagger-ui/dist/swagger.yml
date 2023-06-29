@@ -8,7 +8,7 @@ info:
   license:
     name: MIT
     url: http://mit.org
-  version: 1.1.0
+  version: 1.2.0
 paths:
   /app:
     get:
@@ -45,7 +45,7 @@ paths:
           in: query
           required: true
         - type: string
-          description: filter apps by description(keyword) or is_running
+          description: filter apps by name(keyword), description(keyword) or is_running
           name: filter
           in: query
           allowEmptyValue: true
@@ -57,11 +57,11 @@ paths:
         '400':
           description: Bad Request
           schema:
-            $ref: '#/definitions/domain.GetApplicationsData'
+            $ref: '#/definitions/domain.ErrorResponse'
         '404':
           description: App Not Found
           schema:
-            $ref: '#/definitions/domain.GetApplicationsData'
+            $ref: '#/definitions/domain.ErrorResponse'
     put:
       consumes:
         - application/json
@@ -69,7 +69,7 @@ paths:
         - application/json
       tags:
         - apps
-      summary: Update app information
+      summary: Update app  information
       operationId: UpdateApp
       parameters:
         - name: body
@@ -410,6 +410,8 @@ definitions:
       birth_date:
         type: string
       city_address:
+        type: string
+      email:
         type: string
       full_name:
         type: string

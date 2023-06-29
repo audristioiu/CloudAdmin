@@ -109,6 +109,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	nowTime := time.Now()
 	userData.JoinedDate = nowTime
 	userData.LastTimeOnline = nowTime
+	userData.Applications = []string{}
 
 	err = api.psqlRepo.InsertUserData(&userData)
 	if err != nil {
@@ -273,7 +274,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	log.Printf("%+v", userData)
 	if userData.Role != "" || userData.UserID != "" || len(userData.Applications) > 0 {
 		log.Printf("[ERROR] Wrong fields to update")
-		errorData.Message = "Bad Request/ wrong fields , you can only update city_address , want_notify or password"
+		errorData.Message = "Bad Request/ wrong fields , you can only update city_address ,email,  want_notify or password"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)

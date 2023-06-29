@@ -6,6 +6,7 @@ import "time"
 type UserData struct {
 	UserName       string    `json:"username"`
 	Password       string    `json:"password,omitempty"`
+	Email          string    `json:"email,omitempty"`
 	CityAddress    string    `json:"city_address,omitempty"`
 	WantNotify     string    `json:"want_notify,omitempty"`
 	Applications   []string  `json:"applications,omitempty"`

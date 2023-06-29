@@ -52,42 +52,45 @@ function MyApps() {
     try {
       const response = await axios.get(`http://localhost:8080/user/${username}`, config);
       const my_apps = response.data?.applications;
-      const query_my_apps = my_apps.join();
+      if (my_apps !== undefined) {
+        const query_my_apps = my_apps.join();
 
-      let config_app = {
-        headers: {
-          'Content-type': 'application/json',
-          Authorization: userInfo?.role,
-          'USER-UUID': userInfo?.user_id,
-        },
-        params: {
-          appnames: query_my_apps,
-          username: username,
-        },
-      };
-
-      if (searchInput.length !== 0) {
-        if (typeInput.length === 0 || typeInput === 'name') {
-          config_app = {
-            ...config_app,
-            params: {
-              ...config_app.params,
-              appnames: searchInput,
-            },
-          };
-        } else {
-          config_app = {
-            ...config_app,
-            params: {
-              ...config_app.params,
-              filter: typeInput + ':' + searchInput,
-            },
-          };
+        let config_app = {
+          headers: {
+            'Content-type': 'application/json',
+            Authorization: userInfo?.role,
+            'USER-UUID': userInfo?.user_id,
+          },
+          params: {
+            appnames: query_my_apps,
+            username: username,
+          },
+        };
+  
+        if (searchInput.length !== 0) {
+          if (typeInput.length === 0 || typeInput === 'name') {
+            config_app = {
+              ...config_app,
+              params: {
+                ...config_app.params,
+                appnames: searchInput,
+              },
+            };
+          } else {
+            config_app = {
+              ...config_app,
+              params: {
+                ...config_app.params,
+                filter: typeInput + ':' + searchInput,
+              },
+            };
+          }
         }
+  
+        const response_apps = await axios.get('http://localhost:8080/app', config_app);
+        setApps(response_apps.data.Response);
       }
-
-      const response_apps = await axios.get('http://localhost:8080/app', config_app);
-      setApps(response_apps.data.Response);
+     
     } catch (error) {
       console.log(error);
       setErrorMessage(error);
@@ -118,6 +121,7 @@ function MyApps() {
           Pick filter:
           <select value={typeInput} onChange={(e) => setTypeInput(e.target.value)}>
             <option value="name">name</option>
+            <option value="kname">name(keyword)</option>
             <option value="description">Description(keyword)</option>
             <option value="is_running">IsRunning</option>
           </select>
@@ -133,7 +137,9 @@ function MyApps() {
           SubmitArchive
         </button>
       </div>
+      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>
+    
   );
 }
 

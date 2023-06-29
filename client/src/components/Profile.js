@@ -11,6 +11,7 @@ const ProfilePage = () => {
   const [joinedDate, setJoinedDate] = useState('');
   const [lastTimeOnline, setLastTimeOnline] = useState('');
   const [wantNotify, setWantNotify] = useState('');
+  const [userEmail, setUserEmail] = useState('')
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -37,6 +38,7 @@ const ProfilePage = () => {
           const last_online = new Date(lastOnline.replace(' ', 'T'));
           const full_name = response.data?.full_name;
           const want_notify = response.data?.want_notify;
+          const email = response.data?.email
           setAddress(userAddress);
           setUsername(username);
           setBirthDate(birth);
@@ -44,8 +46,10 @@ const ProfilePage = () => {
           setLastTimeOnline(last_online.toUTCString());
           setFullName(full_name);
           setWantNotify(want_notify);
+          setUserEmail(email);
         }
       } catch (error) {
+        setErrorMessage(error)
         console.log('Error retrieving user details:', error);
       }
     };
@@ -60,6 +64,7 @@ const ProfilePage = () => {
         <img src={user_photo} className="user-photo" alt="User" />
         <div className="user-info">
           <p>Username: {username}</p>
+          <p>Email : {userEmail}</p>
           <p>Full Name: {fullName}</p>
           <p>Address: {address}</p>
           <p>Birth Date: {birthDate}</p>
@@ -71,6 +76,7 @@ const ProfilePage = () => {
       <a href="/editprofile">
         Edit Profile
       </a>
+      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>
   );
 };

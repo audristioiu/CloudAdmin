@@ -71,7 +71,7 @@ function AppItem(app) {
           Delete App
         </button>
       </div>
-
+    
     </div>
   );
 };
