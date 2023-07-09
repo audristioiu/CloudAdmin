@@ -106,7 +106,7 @@ func enrichSwaggerObject(swo *spec.Swagger) {
 	swo.Info = &spec.Info{
 		InfoProps: spec.InfoProps{
 			Title:       "Cloud Admin API",
-			Description: "Cloud API which servers for schedulling apps",
+			Description: "Cloud API which serves for schedulling apps",
 			Contact: &spec.ContactInfo{
 				ContactInfoProps: spec.ContactInfoProps{
 					Name:  "Alexandru-Mihai Cioplean, Alexandru Udristioiu",
