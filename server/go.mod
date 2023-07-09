@@ -12,6 +12,7 @@ require (
 require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
+	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.6 // indirect
 	github.com/go-openapi/swag v0.19.15 // indirect
@@ -28,6 +29,7 @@ require (
 )
 
 require (
+	github.com/coocood/freecache v1.2.3
 	github.com/emicklei/go-restful-openapi/v2 v2.9.1
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v5 v5.3.1
@@ -35,7 +37,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	golang.org/x/crypto v0.8.0
+	golang.org/x/crypto v0.8.0 // indirect
 	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
 	golang.org/x/sys v0.7.0 // indirect
 )

@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/coocood/freecache"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 )
@@ -17,17 +18,19 @@ const (
 	appPath      = "/app"
 )
 
-// API represents the object used for the api, api handlers and contains context and storage
+// API represents the object used for the api, api handlers and contains context and storage + local cache
 type API struct {
 	ctx      context.Context
 	psqlRepo *repositories.PostgreSqlRepo
+	apiCache *freecache.Cache
 }
 
 // NewAPI returns an API object
-func NewAPI(ctx context.Context, psqlRepo *repositories.PostgreSqlRepo) *API {
+func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *freecache.Cache) *API {
 	return &API{
 		ctx:      ctx,
-		psqlRepo: psqlRepo,
+		psqlRepo: postgresRepo,
+		apiCache: cache,
 	}
 }
 
@@ -36,7 +39,6 @@ func NewAPI(ctx context.Context, psqlRepo *repositories.PostgreSqlRepo) *API {
 // RegisterRoutes adds routes for all endpoints
 func (api *API) RegisterRoutes(ws *restful.WebService) {
 	tags := []string{"users"}
-
 	ws.Route(
 		ws.
 			POST(registerPath+userPath).
@@ -134,9 +136,10 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Doc("Retrieves apps information by name").
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("appnames", "name of the apps").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
+			Param(ws.QueryParameter("appnames", "name of the apps").DataType("string").AllowEmptyValue(true).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("filter", "filter apps by name(keyword), description(keyword) or is_running").DataType("string").AllowEmptyValue(true)).
+			Param(ws.QueryParameter("filter", "filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(?) or separate").
+				DataType("string").AllowEmptyValue(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).

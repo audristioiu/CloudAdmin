@@ -8,6 +8,19 @@ function MyApps() {
   const [errorMessage, setErrorMessage] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [typeInput, setTypeInput] = useState('');
+  const [timestampInput, setTimestampInput] = useState('');
+  const [timestampOn, setTimeStampOn] = useState(false);
+  const timeRanges = {
+    "1 day" : "1 day",
+    "3 days" : "3 day",
+    "7 days" : "7 day",
+    "14 days" : "14 day",
+    "30 days" : "30 day",
+    "60 days" : "60 day",
+    "90 days" : "90 day"
+  };
+
+  
 
   const handleUploadArchive = () => {
     const selectedFile = document.getElementById('input').files[0];
@@ -40,6 +53,12 @@ function MyApps() {
   const fetchApps = async () => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
     const username = userInfo?.username;
+
+    if (typeInput === "created_timestamp" || typeInput === "updated_timestamp") {
+      setTimeStampOn(true);
+    } else {
+      setTimeStampOn(false);
+    }
 
     const config = {
       headers: {
@@ -76,6 +95,15 @@ function MyApps() {
                 appnames: searchInput,
               },
             };
+          } if (typeInput === 'custom_filter') {
+            
+            config_app = {
+              ...config_app,
+              params: {
+                ...config_app.params,
+                filter: searchInput,
+              },
+            };
           } else {
             config_app = {
               ...config_app,
@@ -85,6 +113,17 @@ function MyApps() {
               },
             };
           }
+        }
+
+        if (typeInput === 'created_timestamp' || typeInput === 'updated_timestamp') {
+          console.log(timeRanges[timestampInput]);
+          config_app = {
+            ...config_app,
+            params: {
+              ...config_app.params,
+              filter: typeInput + ':' + timeRanges[timestampInput],
+            },
+          };
         }
   
         const response_apps = await axios.get('http://localhost:8080/app', config_app);
@@ -99,8 +138,9 @@ function MyApps() {
   };
 
   useEffect(() => {
+   
     fetchApps();
-  }, [searchInput, typeInput]);
+  }, [searchInput, typeInput, timestampInput]);
 
   const renderApps = () => {
     if (apps) {
@@ -124,8 +164,25 @@ function MyApps() {
             <option value="kname">name(keyword)</option>
             <option value="description">Description(keyword)</option>
             <option value="is_running">IsRunning</option>
+            <option value="created_timestamp">CreatedTimestamp</option>
+            <option value="updated_timestamp">UpdatedTimestamp</option>
+            <option value ="custom_filter">CustomFilter</option>
           </select>
         </label>
+        {timestampOn &&
+        <label>
+          Pick Range:
+          <select value={timestampInput} onChange={(e) => setTimestampInput(e.target.value)}>
+            <option value="1 day">1 day</option>
+            <option value="3 days">3 days</option>
+            <option value="7 days">7 days</option>
+            <option value="14 days">14 days</option>
+            <option value="30 days">30 days</option>
+            <option value="60 days">60 days</option>
+            <option value="90 days">90 days</option>
+          </select>
+        </label>
+}
         <button type="button" className='button-3' onClick={fetchApps}>
           Submit
         </button>

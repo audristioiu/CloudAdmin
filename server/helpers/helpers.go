@@ -2,10 +2,10 @@ package helpers
 
 import (
 	"cloudadmin/domain"
-	"log"
+	"crypto/sha256"
+	"encoding/base64"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/exp/slices"
 )
 
@@ -14,11 +14,8 @@ func GenerateRole(userData *domain.UserData) *domain.UserData {
 	id := uuid.New().String()
 	userData.UserID = id
 	currentRole := AddSaltToRole(id, userData.UserName)
-	hashedRole, err := HashPassword(currentRole)
-	if err != nil {
-		log.Printf("[ERROR] Couldn't hash role : " + currentRole)
-		return nil
-	}
+	hashedRole := HashPassword(currentRole)
+
 	userData.Role = hashedRole
 	return userData
 
@@ -29,22 +26,23 @@ func AddSaltToRole(id, salt string) string {
 	return id + ":" + salt
 }
 
-// HashPassword uses bcrypt to generate a hash over password
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	return string(bytes), err
+// HashPassword uses sha256 to generate a hash over password
+func HashPassword(password string) string {
+	sum := sha256.Sum256([]byte(password))
+	return base64.URLEncoding.EncodeToString(sum[:])
 }
 
 // CheckPasswordHash verifies hashes between a plaintext password and a hash
 func CheckPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
+	passHash := HashPassword(password)
+	return passHash == hash
 }
 
 // CheckUser verifies if user is authorized
 func CheckUser(userData *domain.UserData, role string) bool {
 	possibleRole := AddSaltToRole(userData.UserID, userData.UserName)
 	return CheckPasswordHash(possibleRole, role)
+
 }
 
 // CheckUserCredentials validates username and passwod match

@@ -80,17 +80,15 @@ func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) 
 
 func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, error) {
 	userData := domain.UserData{}
-	selectStatement := "SELECT * FROM users where user_id=$1"
+	selectStatement := "SELECT username,user_id,role, applications FROM users where user_id=$1"
 
 	row := p.conn.QueryRow(p.ctx, selectStatement, userID)
-	err := row.Scan(&userData.UserName, &userData.Password, &userData.Email, &userData.FullName,
-		&userData.CityAddress, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
-		&userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
+	err := row.Scan(&userData.UserName, &userData.UserID, &userData.Role, &userData.Applications)
 	if err != nil {
 		log.Printf("[ERROR] could not retrieve user using uuid with error : %v\n", err)
 		return nil, err
 	}
-	log.Printf("Successfuly retrieved user : %+v", userData)
+	log.Printf("Successfuly retrieved user : %+v", userData.UserName)
 	return &userData, nil
 }
 
@@ -115,7 +113,7 @@ func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 		log.Printf("[ERROR] no row found to update")
 		return errors.New("no row found to update")
 	}
-	log.Printf("Successfuly updated user with : %+v", userData)
+	log.Printf("Successfuly updated user : %+v", userData.UserName)
 	return nil
 }
 
@@ -190,9 +188,9 @@ func (p *PostgreSqlRepo) DeleteUserData(username string) error {
 // InsertAppData inserts app in PostgreSql table
 func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 	newApplicationData := domain.ApplicationData{}
-	insertStatement := "INSERT INTO apps (name, description, is_running) VALUES ($1, $2, $3) RETURNING name"
+	insertStatement := "INSERT INTO apps (name, description, is_running, created_timestamp, updated_timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING name"
 
-	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, appData.Description, appData.IsRunning)
+	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, appData.Description, appData.IsRunning, appData.CreatedTimestamp, appData.UpdatedTimestamp)
 	err := row.Scan(&newApplicationData.Name)
 	if err != nil {
 		log.Printf("[ERROR] could not insert app with error : %v\n", err)
@@ -203,39 +201,45 @@ func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 }
 
 // GetAppsData retrieves apps from PostgreSql table
-func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain.ApplicationData, error) {
+func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domain.ApplicationData, error) {
 	applicationsData := make([]*domain.ApplicationData, 0)
 	var selectStatement string
 	var err error
 	var rows pgx.Rows
-	if filterCondition != "" {
-		filterParams := strings.Split(filterCondition, ":")
-		//filterParams[0] represents filter name , filterParams[1] represents filter value
-		if filterParams[0] == "kname" {
-			selectStatement = "SELECT * FROM apps where name ILIKE $1"
-			rows, err = p.conn.Query(p.ctx, selectStatement, "%"+filterParams[1]+"%")
-			if err != nil {
-				log.Printf("[ERROR] could not retrieve app with error : %v\n", err)
-				return nil, err
+	filterArguments := make(pgx.NamedArgs, 0)
+	filters := strings.Split(filterConditions, "?")
+	if len(filters) > 0 && filters[0] != "" {
+		selectStatement := "SELECT * FROM apps where "
+		for i, filterCondition := range filters {
+			filterParams := strings.Split(filterCondition, ":")
+			//filterParams[0] represents filter name , filterParams[1] represents filter value
+			if filterParams[0] == "kname" {
+				selectStatement += "name ILIKE @kname"
+				filterArguments["kname"] = "%" + filterParams[1] + "%"
+
+			} else if filterParams[0] == "description" {
+				selectStatement += filterParams[0] + " ILIKE @description"
+				filterArguments["description"] = "%" + filterParams[1] + "%"
+
+			} else if filterParams[0] == "created_timestamp" || filterParams[0] == "updated_timestamp" {
+				selectStatement += filterParams[0] + " >= current_timestamp - @timestamp :: interval"
+				filterArguments["timestamp"] = "%" + filterParams[1] + "%"
+
+			} else {
+				selectStatement += filterParams[0] + "=@is_running"
+				filterArguments["is_running"] = filterParams[1]
+
+			}
+			if i != len(filters)-1 {
+				selectStatement += " AND "
 			}
 
-		} else if filterParams[0] == "description" {
-			selectStatement = "SELECT * FROM apps where name=$1 AND " + filterParams[0] + " ILIKE $2"
-			log.Println(selectStatement)
-			rows, err = p.conn.Query(p.ctx, selectStatement, appname, "%"+filterParams[1]+"%")
-			if err != nil {
-				log.Printf("[ERROR] could not retrieve app using filter : "+filterCondition+" with error : %v\n", err)
-				return nil, err
-			}
-		} else {
-			selectStatement = "SELECT * FROM apps where name=$1 AND " + filterParams[0] + "=$2"
-			log.Println(selectStatement)
-			rows, err = p.conn.Query(p.ctx, selectStatement, appname, filterParams[1])
-			if err != nil {
-				log.Printf("[ERROR] could not retrieve app using filter : "+filterCondition+" with error : %v\n", err)
-				return nil, err
-			}
-
+		}
+		log.Println(selectStatement)
+		rows, err = p.conn.Query(p.ctx, selectStatement, filterArguments)
+		if err != nil {
+			log.Printf("[ERROR] could not retrieve app with error : %v\n", err)
+			return nil, err
 		}
 
 	} else {
@@ -250,7 +254,8 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 
 	for rows.Next() {
 		applicationData := &domain.ApplicationData{}
-		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning)
+		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning,
+			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp)
 		if err != nil {
 			log.Printf("[ERROR] could not scan app with error : %v\n", err)
 			return nil, err
@@ -266,10 +271,11 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterCondition string) ([]*domain
 func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 	updateStatement := `UPDATE  apps SET 
 						description=COALESCE(NULLIF($1,E''), description), 
-						is_running=COALESCE(NULLIF($2,E''), is_running) 
-						WHERE name=$3`
+						is_running=COALESCE(NULLIF($2,E''), is_running),
+						updated_timestamp=$3 
+						WHERE name=$4`
 
-	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.Name)
+	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.UpdatedTimestamp, appData.Name)
 	if err != nil {
 		log.Printf("[ERROR] could not update app with error : %v\n", err)
 		return err
@@ -278,7 +284,7 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 		log.Printf("[ERROR] no row found to update")
 		return errors.New("no row found to update")
 	}
-	log.Printf("Successfuly updated app with : %+v", appData)
+	log.Printf("Successfuly updated app: %+v", appData.Name)
 	return nil
 }
 

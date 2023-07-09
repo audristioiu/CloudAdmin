@@ -4,11 +4,11 @@ info:
   title: Cloud Admin API
   contact:
     name: Alexandru-Mihai Cioplean, Alexandru Udristioiu
-    email: udristioiualexandru@gmail.com
+    email: alexandru.cioplean@gmail.com, udristioiualexandru@gmail.com
   license:
     name: MIT
     url: http://mit.org
-  version: 1.2.0
+  version: 1.1.0
 paths:
   /app:
     get:
@@ -38,14 +38,14 @@ paths:
           description: name of the apps
           name: appnames
           in: query
-          required: true
+          allowEmptyValue: true
         - type: string
           description: owner of the app
           name: username
           in: query
           required: true
         - type: string
-          description: filter apps by name(keyword), description(keyword) or is_running
+          description: filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(?) or separate
           name: filter
           in: query
           allowEmptyValue: true
@@ -69,7 +69,7 @@ paths:
         - application/json
       tags:
         - apps
-      summary: Update app  information
+      summary: Update app information
       operationId: UpdateApp
       parameters:
         - name: body
@@ -366,20 +366,28 @@ paths:
 definitions:
   domain.ApplicationData:
     required:
+      - created_timestamp
+      - updated_timestamp
       - name
       - description
       - is_running
     properties:
+      created_timestamp:
+        type: string
+        format: date-time
       description:
         type: string
       is_running:
         type: string
       name:
         type: string
+      updated_timestamp:
+        type: string
+        format: date-time
   domain.ErrorResponse:
     required:
-      - status_code
       - message
+      - status_code
     properties:
       message:
         type: string

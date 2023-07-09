@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"runtime/debug"
 
 	runtime "github.com/banzaicloud/logrus-runtime-formatter"
+	"github.com/coocood/freecache"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-openapi/spec"
@@ -50,6 +52,12 @@ func (s *Service) StartWebService() {
 		log.Fatalf("Error loading environment variables file")
 		return
 	}
+
+	//initialize local cache for get info endpoints
+	cacheSize := 100 * 1024 * 1024
+	cache := freecache.NewCache(cacheSize)
+	debug.SetGCPercent(20)
+
 	psqlUser := os.Getenv("POSTGRES_USER")
 	psqlPass := os.Getenv("POSTGRES_PASSWORD")
 	psqlDB := os.Getenv("POSTGRES_DB")
@@ -64,7 +72,7 @@ func (s *Service) StartWebService() {
 	}
 
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo)
+	apiManager := api.NewAPI(ctx, psqlRepo, cache)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)

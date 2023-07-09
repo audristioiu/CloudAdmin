@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -233,28 +234,74 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 func (api *API) GetUserProfile(request *restful.Request, response *restful.Response) {
 
 	errorData := domain.ErrorResponse{}
-	username := request.PathParameter("username")
-	if username == "" {
-		log.Printf("[ERROR] Couldn't read username query parameter")
-		errorData.Message = "Bad Request/ empty username"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	userData, err := api.psqlRepo.GetUserData(username)
+
+	marshalledRequest, err := json.Marshal(request.Request.URL)
 	if err != nil {
-		log.Printf("[ERROR] User %v not found", userData.UserName)
-		errorData.Message = "User not found"
-		errorData.StatusCode = http.StatusNotFound
-		response.WriteHeader(http.StatusNotFound)
+		log.Printf("[ERROR] Couldn't marshal request %v", request.Request.URL)
+		errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Profile"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
-	userData.Password = ""
-	userData.Role = ""
-	userData.UserID = ""
-	response.WriteEntity(userData)
+	userDataCache, err := api.apiCache.Get(marshalledRequest)
+	if err != nil {
+
+		username := request.PathParameter("username")
+		if username == "" {
+			log.Printf("[ERROR] Couldn't read username path parameter")
+			errorData.Message = "Bad Request/ empty username"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		userData, err := api.psqlRepo.GetUserData(username)
+		if err != nil {
+			log.Printf("[ERROR] User %v not found", userData.UserName)
+			errorData.Message = "User not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		}
+		log.Printf("[DEBUG] Not found in cache %v", username)
+		userData.Password = ""
+		userData.Role = ""
+		userData.UserID = ""
+		response.WriteEntity(userData)
+		marshalledUserData, err := json.Marshal(userData)
+		if err != nil {
+			log.Printf("[ERROR] Couldn't unmarshal request %v", userData)
+			errorData.Message = "Internal server error/Cannot unmarshal user data cache"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+
+		}
+		api.apiCache.Set(marshalledRequest, marshalledUserData, 300)
+	} else {
+
+		userData := domain.UserData{}
+		err = json.Unmarshal(userDataCache, &userData)
+		if err != nil {
+			log.Printf("[ERROR] Couldn't unmarshal user_data %v", string(userDataCache))
+			errorData.Message = "Internal server error/Cannot unmarshal user data from cache"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+		}
+
+		log.Printf("[INFO] Found in cache %v", userData.UserName)
+
+		userData.Password = ""
+		userData.Role = ""
+		userData.UserID = ""
+		response.WriteEntity(userData)
+	}
+
 }
 
 // UpdateUserProfile updates user profile
@@ -271,7 +318,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 		response.WriteEntity(errorData)
 		return
 	}
-	log.Printf("%+v", userData)
+
 	if userData.Role != "" || userData.UserID != "" || len(userData.Applications) > 0 {
 		log.Printf("[ERROR] Wrong fields to update")
 		errorData.Message = "Bad Request/ wrong fields , you can only update city_address ,email,  want_notify or password"
@@ -338,9 +385,10 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 
 // UploadApp uploads app to s3
 func (api *API) UploadApp(request *restful.Request, response *restful.Response) {
-	//app pus in s3 + insert in tabela + aplicatie atasata la user + mai multe aplicatii + archiva
 
 	errorData := domain.ErrorResponse{}
+
+	userIDHeader := request.HeaderParameter("USER-UUID")
 
 	username := request.QueryParameter("username")
 	if username == "" {
@@ -352,12 +400,11 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	userUUID := request.HeaderParameter("USER-UUID")
-	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
 	if err != nil {
-		log.Printf("[ERROR] User id" + userUUID + " not authorized")
+		log.Printf("[ERROR] User id" + userIDHeader + " not authorized")
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-		errorData.Message = "User " + userUUID + " is Not Authorized"
+		errorData.Message = "User " + userIDHeader + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
 		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
@@ -432,6 +479,10 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	for i, f := range r.File {
 
 		appData := domain.ApplicationData{}
+
+		nowTime := time.Now()
+		appData.CreatedTimestamp = nowTime
+		appData.UpdatedTimestamp = nowTime
 
 		log.Printf("Writting information for file %v:\n", f.Name)
 		rc, err := f.Open()
@@ -509,104 +560,132 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 
 	errorData := domain.ErrorResponse{}
 
-	var appNamesList []string
-	var filter string
+	userIDHeader := request.HeaderParameter("USER-UUID")
+	authHeader := request.HeaderParameter("Authorization")
 
-	appnames := request.QueryParameter("appnames")
-	if appnames == "" {
-		log.Printf("[ERROR] Couldn't read appnames query parameter")
-		errorData.Message = "Bad Request/ empty list of applications"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-
-	username := request.QueryParameter("username")
-	if username == "" {
-		log.Printf("[ERROR] Couldn't read username query parameter")
-		errorData.Message = "Bad Request/ empty username"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	filter = request.QueryParameter("filter")
-
-	userUUID := request.HeaderParameter("USER-UUID")
-	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	marshalledRequest, err := json.Marshal(request.Request.URL)
 	if err != nil {
-		log.Printf("[ERROR] User id" + userUUID + " not authorized")
-		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-		errorData.Message = "User " + userUUID + " is Not Authorized"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteHeader(http.StatusForbidden)
+		log.Printf("[ERROR] Couldn't marshal request %v", request.Request.URL)
+		errorData.Message = "Internal server error/Cannot marshal"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
 
-	flag := true
+	appsDataCache, err := api.apiCache.Get(marshalledRequest)
 
-	userData.UserName = username
+	if err != nil {
+		var appNamesList []string
+		var filter string
 
-	if !helpers.CheckUser(userData, userData.Role) {
-		flag = false
-	}
-	if !flag {
-		log.Printf("[ERROR] User" + username + " not authorized")
-		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-		errorData.Message = "User " + username + " is Not Authorized"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteHeader(http.StatusForbidden)
-		response.WriteEntity(errorData)
-		return
-	}
+		appnames := request.QueryParameter("appnames")
 
-	if appnames == "" {
-		appNamesList = userData.Applications
-	} else {
-		appNamesList = strings.Split(appnames, ",")
-	}
+		username := request.QueryParameter("username")
+		if username == "" {
+			log.Printf("[ERROR] Couldn't read username query parameter")
+			errorData.Message = "Bad Request/ empty username"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		log.Printf("[DEBUG] Apps not found in cache for user %v", username)
 
-	log.Println(appNamesList)
-	var appsInfo domain.GetApplicationsData
-	appsInfo.Response = make([]*domain.ApplicationData, 0)
-	appsInfo.Errors = make([]domain.ErrorResponse, 0)
-	for _, appName := range appNamesList {
-		appsData, err := api.psqlRepo.GetAppsData(strings.TrimSpace(appName), filter)
+		userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
+		if err != nil || !helpers.CheckUser(userData, authHeader) {
+			log.Printf("[ERROR] User id " + userIDHeader + " not authorized")
+			response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+			errorData.Message = "User " + userIDHeader + " is Not Authorized"
+			errorData.StatusCode = http.StatusForbidden
+			response.WriteHeader(http.StatusForbidden)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		filter = request.QueryParameter("filter")
+		if filter != "" {
+			if !strings.Contains(filter, ":") || strings.Split(filter, ":")[1] == "" {
+				log.Printf("[ERROR] Invalid filter")
+				errorData.Message = "Bad Request / Invalid filter"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
+
+		}
+
+		if appnames == "" {
+			appNamesList = userData.Applications
+		} else {
+			appNamesList = strings.Split(appnames, ",")
+		}
+
+		var appsInfo domain.GetApplicationsData
+		appsInfo.Response = make([]*domain.ApplicationData, 0)
+		appsInfo.Errors = make([]domain.ErrorResponse, 0)
+		for _, appName := range appNamesList {
+			appsData, err := api.psqlRepo.GetAppsData(strings.TrimSpace(appName), filter)
+			if err != nil {
+				log.Printf("[ERROR] App %v not found", appName)
+				errorData.Message = "App " + appName + " not found"
+				errorData.StatusCode = http.StatusNotFound
+				appsInfo.Errors = append(appsInfo.Errors, errorData)
+				continue
+			}
+			if len(appsData) == 0 {
+				log.Printf("[INFO] No apps found")
+
+				errorData.Message = "App " + appName + " not found"
+				errorData.StatusCode = http.StatusNotFound
+				appsInfo.Errors = append(appsInfo.Errors, errorData)
+				continue
+			}
+			appsInfo.Response = append(appsInfo.Response, appsData...)
+
+		}
+		if len(appsInfo.Response) > 1 {
+			appsInfo = helpers.Unique(appsInfo)
+		}
+
+		if !helpers.CheckAppExist(userData.Applications, appsInfo.Response) {
+			log.Printf("[ERROR] User " + username + " not authorized")
+			response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
+			errorData.Message = "User " + username + " is Not Authorized"
+			errorData.StatusCode = http.StatusForbidden
+			response.WriteHeader(http.StatusForbidden)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		response.WriteEntity(appsInfo)
+		marshalledAppsInfo, err := json.Marshal(appsInfo)
 		if err != nil {
-			log.Printf("[ERROR] App %v not found", appName)
-			errorData.Message = "App " + appName + " not found"
-			errorData.StatusCode = http.StatusNotFound
-			appsInfo.Errors = append(appsInfo.Errors, errorData)
-			continue
+			log.Printf("[ERROR] Couldn't marshal apps %v", appsInfo)
+			errorData.Message = "Internal server error/Cannot marshal apps info"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
 		}
-		if len(appsData) == 0 {
-			log.Printf("[INFO] No apps found")
-
-			errorData.Message = "App " + appName + " not found"
-			errorData.StatusCode = http.StatusNotFound
-			appsInfo.Errors = append(appsInfo.Errors, errorData)
-			continue
-		}
-		appsInfo.Response = append(appsInfo.Response, appsData...)
-
-	}
-	if len(appsInfo.Response) > 1 {
-		appsInfo = helpers.Unique(appsInfo)
-	}
-
-	if !helpers.CheckAppExist(userData.Applications, appsInfo.Response) {
-		log.Printf("[ERROR] User" + username + " not authorized")
-		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-		errorData.Message = "User " + username + " is Not Authorized"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteHeader(http.StatusForbidden)
-		response.WriteEntity(errorData)
+		api.apiCache.Set(marshalledRequest, marshalledAppsInfo, 300)
 		return
+	} else {
+		appsData := domain.GetApplicationsData{}
+		err = json.Unmarshal(appsDataCache, &appsData)
+		if err != nil {
+			log.Printf("[ERROR] Couldn't unmarshall apps %v", string(appsDataCache))
+			errorData.Message = "Internal server error/Cannot unmarshal apps from cache"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		log.Printf("[DEBUG] Apps  found in cache")
+		response.WriteEntity(appsData)
 	}
 
-	response.WriteEntity(appsInfo)
 }
 
 // UpdateApp updates app info
@@ -655,7 +734,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		flag = false
 	}
 	if !flag {
-		log.Printf("[ERROR] User" + username + " not authorized")
+		log.Printf("[ERROR] User " + username + " not authorized")
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
@@ -665,7 +744,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	}
 
 	if !helpers.CheckAppExist(userData.Applications, []*domain.ApplicationData{&appData}) {
-		log.Printf("[ERROR] User" + username + " not authorized")
+		log.Printf("[ERROR] User " + username + " not authorized")
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
@@ -674,7 +753,8 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	log.Printf("%+v", appData)
+	nowTime := time.Now()
+	appData.UpdatedTimestamp = nowTime
 
 	err = api.psqlRepo.UpdateAppData(&appData)
 	if err != nil {
