@@ -95,7 +95,6 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
-	log.Printf("%+v", userData)
 
 	userRetrievedData, _ := api.psqlRepo.GetUserData(userData.UserName)
 	if userRetrievedData != nil {
