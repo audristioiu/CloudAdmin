@@ -15,7 +15,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-openapi/spec"
 	"github.com/joho/godotenv"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // Service describes the structure used for starting the web service
@@ -34,14 +34,16 @@ func asJSON(v interface{}) string {
 
 // StartWebService initializez loggger,restful and swagger api, postgres and s3 repo, docker and kubernetes clients
 func (s *Service) StartWebService() {
-	formatter := runtime.Formatter{ChildFormatter: &log.TextFormatter{
+	log := logrus.New()
+	formatter := runtime.Formatter{ChildFormatter: &logrus.TextFormatter{
 		FullTimestamp:          true,
 		DisableLevelTruncation: true,
 	}}
 	formatter.Line = true
 	log.SetFormatter(&formatter)
 	log.SetOutput(os.Stdout)
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(logrus.InfoLevel)
+	log.SetReportCaller(true)
 
 	ws := new(restful.WebService)
 
@@ -65,14 +67,14 @@ func (s *Service) StartWebService() {
 	psqlPort := 5432
 
 	// initialize repos
-	psqlRepo := repositories.NewPostgreSqlRepo(ctx, psqlUser, psqlPass, psqlHost, psqlDB, psqlPort)
+	psqlRepo := repositories.NewPostgreSqlRepo(ctx, psqlUser, psqlPass, psqlHost, psqlDB, psqlPort, log)
 	if psqlRepo == nil {
 		log.Fatalf("Error in starting postgres service")
 		return
 	}
 
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache)
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)

@@ -9,6 +9,7 @@ import (
 	"github.com/coocood/freecache"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -20,17 +21,19 @@ const (
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache
 type API struct {
-	ctx      context.Context
-	psqlRepo *repositories.PostgreSqlRepo
-	apiCache *freecache.Cache
+	ctx       context.Context
+	psqlRepo  *repositories.PostgreSqlRepo
+	apiCache  *freecache.Cache
+	apiLogger *logrus.Logger
 }
 
 // NewAPI returns an API object
-func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *freecache.Cache) *API {
+func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *freecache.Cache, logger *logrus.Logger) *API {
 	return &API{
-		ctx:      ctx,
-		psqlRepo: postgresRepo,
-		apiCache: cache,
+		ctx:       ctx,
+		psqlRepo:  postgresRepo,
+		apiCache:  cache,
+		apiLogger: logger,
 	}
 }
 
@@ -120,8 +123,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.FormParameter("type", "zip archive which contains the code and description files(same name for both,description being txt)").DataType("file").Required(true)).
-			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Param(ws.FormParameter("type", "zip archive which contains the code and description files(same name for both,description being txt)").
+				DataType("file").Required(true)).Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON, "multipart/form-data").
 			Filter(api.BasicAuthenticate).
@@ -138,7 +141,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("appnames", "name of the apps").DataType("string").AllowEmptyValue(true).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("filter", "filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(?) or separate").
+			Param(ws.QueryParameter("filter",
+				"filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(?) or separate").
 				DataType("string").AllowEmptyValue(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).

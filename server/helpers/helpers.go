@@ -9,7 +9,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// GenerateRole returns a unique role for the current user in order to use their apps
+// GenerateRole returns a unique role used for authenticating the current user
 func GenerateRole(userData *domain.UserData) *domain.UserData {
 	id := uuid.New().String()
 	userData.UserID = id
@@ -45,16 +45,8 @@ func CheckUser(userData *domain.UserData, role string) bool {
 
 }
 
-// CheckUserCredentials validates username and passwod match
-func CheckUserCredentials(userData *domain.UserData, username, password string) bool {
-	if userData.UserName != username || userData.Password != password {
-		return false
-	}
-	return true
-}
-
-// CheckAppExists validates that the app appears in user apps
-func CheckAppExist(applications []string, appsData []*domain.ApplicationData) bool {
+// CheckAppsExists validates that the list of applications appear in user apps
+func CheckAppsExist(applications []string, appsData []*domain.ApplicationData) bool {
 	if len(applications) == 0 {
 		return false
 	}
