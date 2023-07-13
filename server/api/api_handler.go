@@ -108,6 +108,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	userData.JoinedDate = nowTime
 	userData.LastTimeOnline = nowTime
 	userData.Applications = []string{}
+	userData.NrDeployedApps = 0
 
 	err = api.psqlRepo.InsertUserData(&userData)
 	if err != nil {
@@ -243,8 +244,8 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		response.WriteEntity(errorData)
 		return
 	}
-	userDataCache, err := api.apiCache.Get(marshalledRequest)
-	if err != nil {
+	userDataCache, userFound := api.apiCache.Get(marshalledRequest)
+	if !userFound {
 
 		username := request.PathParameter("username")
 		if username == "" {
@@ -270,29 +271,11 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		userData.Role = ""
 		userData.UserID = ""
 		response.WriteEntity(userData)
-		marshalledUserData, err := json.Marshal(userData)
-		if err != nil {
-			api.apiLogger.Printf("[ERROR] Couldn't unmarshal request %v", userData)
-			errorData.Message = "Internal server error/Cannot unmarshal user data cache"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-
-		}
 		// If not in cache, set it
-		api.apiCache.Set(marshalledRequest, marshalledUserData, 300)
+		api.apiCache.Set(marshalledRequest, userData, 1)
 	} else {
 
-		userData := domain.UserData{}
-		err = json.Unmarshal(userDataCache, &userData)
-		if err != nil {
-			api.apiLogger.Printf("[ERROR] Couldn't unmarshal user_data %v", string(userDataCache))
-			errorData.Message = "Internal server error/Cannot unmarshal user data from cache"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-		}
+		userData := userDataCache.(*domain.UserData)
 
 		api.apiLogger.Printf("[INFO] Found in cache %v", userData.UserName)
 
@@ -321,7 +304,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 
 	if userData.Role != "" || userData.UserID != "" || len(userData.Applications) > 0 {
 		api.apiLogger.Printf("[ERROR] Wrong fields to update")
-		errorData.Message = "Bad Request/ wrong fields , you can only update city_address ,email,  want_notify or password"
+		errorData.Message = "Bad Request/ wrong fields , you can only update birth_date ,job_role,email,  want_notify or password"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
@@ -354,6 +337,21 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 		response.WriteEntity(errorData)
 		return
 	}
+	reqUrl, _ := request.Request.URL.Parse(request.Request.URL.String() + "/" + userData.UserName)
+
+	marshalledRequest, err := json.Marshal(reqUrl)
+	if err != nil {
+		api.apiLogger.Printf("[ERROR] Couldn't marshal request %v", request.Request.URL)
+		errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Profile"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	//gather the fresh new data to be cached
+	newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
+	api.apiCache.SetWithTTL(marshalledRequest, newUserData, 1, time.Minute*5)
 
 	response.Write([]byte("User updated succesfully"))
 }
@@ -576,9 +574,9 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		return
 	}
 
-	appsDataCache, err := api.apiCache.Get(marshalledRequest)
+	appsDataCache, appsFound := api.apiCache.Get(marshalledRequest)
 
-	if err != nil {
+	if !appsFound {
 		var appNamesList []string
 		var filter string
 
@@ -664,30 +662,11 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		}
 
 		response.WriteEntity(appsInfo)
-		marshalledAppsInfo, err := json.Marshal(appsInfo)
-		if err != nil {
-			api.apiLogger.Printf("[ERROR] Couldn't marshal apps %v", appsInfo)
-			errorData.Message = "Internal server error/Cannot marshal apps info"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
 
-		//If not in cache, set it
-		api.apiCache.Set(marshalledRequest, marshalledAppsInfo, 300)
+		api.apiCache.SetWithTTL(marshalledRequest, appsInfo, 1, time.Minute*5)
 		return
 	} else {
-		appsData := domain.GetApplicationsData{}
-		err = json.Unmarshal(appsDataCache, &appsData)
-		if err != nil {
-			api.apiLogger.Printf("[ERROR] Couldn't unmarshall apps %v", string(appsDataCache))
-			errorData.Message = "Internal server error/Cannot unmarshal apps from cache"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
+		appsData := appsDataCache.(domain.GetApplicationsData)
 		api.apiLogger.Printf("[DEBUG] Apps  found in cache")
 		response.WriteEntity(appsData)
 	}
@@ -770,6 +749,9 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
+
+	//clear all the cache
+	defer api.apiCache.Clear()
 
 	response.Write([]byte("App updated succesfully"))
 }

@@ -7,10 +7,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"runtime/debug"
 
 	runtime "github.com/banzaicloud/logrus-runtime-formatter"
-	"github.com/coocood/freecache"
+	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-openapi/spec"
@@ -56,9 +55,14 @@ func (s *Service) StartWebService() {
 	}
 
 	//initialize local cache for get info endpoints
-	cacheSize := 100 * 1024 * 1024
-	cache := freecache.NewCache(cacheSize)
-	debug.SetGCPercent(20)
+	cache, err := ristretto.NewCache(&ristretto.Config{
+		NumCounters: 1e7,     // Num keys to track frequency of (10M).
+		MaxCost:     1 << 30, // Maximum cost of cache (1GB).
+		BufferItems: 64,      // Number of keys per Get buffer.
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	psqlUser := os.Getenv("POSTGRES_USER")
 	psqlPass := os.Getenv("POSTGRES_PASSWORD")

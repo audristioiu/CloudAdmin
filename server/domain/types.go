@@ -6,16 +6,17 @@ import "time"
 type UserData struct {
 	JoinedDate     time.Time `json:"joined_date,omitempty"`
 	LastTimeOnline time.Time `json:"last_time_online,omitempty"`
-	UserName       string    `json:"username"`
+	JobRole        string    `json:"job_role,omitempty"`
 	Password       string    `json:"password,omitempty"`
 	Email          string    `json:"email,omitempty"`
-	CityAddress    string    `json:"city_address,omitempty"`
+	UserName       string    `json:"username"`
 	WantNotify     string    `json:"want_notify,omitempty"`
 	Role           string    `json:"role,omitempty"`
 	UserID         string    `json:"user_id,omitempty"`
 	FullName       string    `json:"full_name,omitempty"`
 	BirthDate      string    `json:"birth_date,omitempty"`
 	Applications   []string  `json:"applications,omitempty"`
+	NrDeployedApps int       `json:"nr_deployed_apps"`
 }
 
 // ApplicationdData represents app information

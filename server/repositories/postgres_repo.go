@@ -52,12 +52,12 @@ func (p *PostgreSqlRepo) InsertUserData(userData *domain.UserData) error {
 	}
 
 	newUserData := domain.UserData{}
-	insertStatement := `INSERT INTO users (username, password, email, full_name, city_address,birth_date, joined_date, 
-						last_time_online, want_notify,applications,user_id, role) 
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING username`
+	insertStatement := `INSERT INTO users (username, password, email, full_name, nr_deployed_apps, job_role,
+						birth_date, joined_date, last_time_online, want_notify,applications,user_id, role) 
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING username`
 
 	row := p.conn.QueryRow(p.ctx, insertStatement, userData.UserName, userData.Password, userData.Email,
-		userData.FullName, userData.CityAddress, userData.BirthDate, userData.JoinedDate, userData.LastTimeOnline,
+		userData.FullName, userData.NrDeployedApps, userData.JobRole, userData.BirthDate, userData.JoinedDate, userData.LastTimeOnline,
 		userData.WantNotify, userData.Applications, userData.UserID, userData.Role)
 	err := row.Scan(&newUserData.UserName)
 	if err != nil {
@@ -75,7 +75,7 @@ func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) 
 
 	row := p.conn.QueryRow(p.ctx, selectStatement, username)
 	err := row.Scan(&userData.UserName, &userData.Password, &userData.Email, &userData.FullName,
-		&userData.CityAddress, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
+		&userData.NrDeployedApps, &userData.JobRole, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
 		&userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
 	if err != nil {
 		p.psqlLogger.Printf("[ERROR] could not retrieve user with error : %v\n", err)
@@ -105,15 +105,16 @@ func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 		userData.Password = helpers.HashPassword(userData.Password)
 	}
 	updateStatement := `UPDATE  users SET 
-						city_address=COALESCE(NULLIF($1,E''), city_address),
-						email=COALESCE(NULLIF($2,E''), email),
-						want_notify=COALESCE(NULLIF($3,E''), want_notify), 
-						password=COALESCE(NULLIF($4,E''), password),
-						birth_date=COALESCE(NULLIF($5,E''), birth_date),
-						full_name=COALESCE(NULLIF($6,E''), full_name)
-						WHERE username=$7`
+						nr_deployed_apps= $1,
+						job_role = COALESCE(NULLIF($2,E''),job_role),
+						email=COALESCE(NULLIF($3,E''), email),
+						want_notify=COALESCE(NULLIF($4,E''), want_notify), 
+						password=COALESCE(NULLIF($5,E''), password),
+						birth_date=COALESCE(NULLIF($6,E''), birth_date),
+						full_name=COALESCE(NULLIF($7,E''), full_name)
+						WHERE username=$8`
 
-	row, err := p.conn.Exec(p.ctx, updateStatement, userData.CityAddress, userData.Email,
+	row, err := p.conn.Exec(p.ctx, updateStatement, userData.NrDeployedApps, userData.JobRole, userData.Email,
 		userData.WantNotify, userData.Password, userData.BirthDate, userData.FullName, userData.UserName)
 	if err != nil {
 		p.psqlLogger.Printf("[ERROR] could not update user with error : %v\n", err)

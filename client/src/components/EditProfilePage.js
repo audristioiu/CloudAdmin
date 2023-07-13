@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import user_photo from '../user.png';
 
 const EditProfilePage = () => {
-  const [address, setAddress] = useState('');
+  const [jobRole, setJobRole] = useState('');
   const [fullName, setFullName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [wantNotify, setWantNotify] = useState('');
@@ -38,9 +38,10 @@ const EditProfilePage = () => {
           "username": username,
           "email" : userEmail,
           "full_name" : fullName,
-          "city_address": address,
+          "job_role": jobRole,
           "birth_date": birthDate,
           "want_notify": wantNotify.toString(),
+          "nr_deployed_apps" : userInfo?.nr_deployed_apps,
         };        
 
         if (showPasswordFields) {
@@ -121,10 +122,10 @@ const EditProfilePage = () => {
         <div className="user-box">
           <input
             type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            value={jobRole}
+            onChange={(e) => setJobRole(e.target.value)}
           />
-          <label>Address</label>
+          <label>Job Role(Optional)</label>
         </div>
         <div className="user-box">
           <input

@@ -2,16 +2,16 @@
   "openapi": "3.0.1",
   "info": {
     "title": "Cloud Admin API",
-    "description": "Cloud API which serves for schedulling apps",
+    "description": "Cloud API which servers for schedulling apps",
     "contact": {
       "name": "Alexandru-Mihai Cioplean, Alexandru Udristioiu",
-      "email": "udristioiualexandru@gmail.com"
+      "email": "alexandru.cioplean@gmail.com, udristioiualexandru@gmail.com"
     },
     "license": {
       "name": "MIT",
       "url": "http://mit.org"
     },
-    "version": "1.5.0"
+    "version": "1.6.0"
   },
   "tags": [
     {

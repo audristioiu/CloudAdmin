@@ -6,7 +6,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/coocood/freecache"
+	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/sirupsen/logrus"
@@ -23,12 +23,12 @@ const (
 type API struct {
 	ctx       context.Context
 	psqlRepo  *repositories.PostgreSqlRepo
-	apiCache  *freecache.Cache
+	apiCache  *ristretto.Cache
 	apiLogger *logrus.Logger
 }
 
 // NewAPI returns an API object
-func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *freecache.Cache, logger *logrus.Logger) *API {
+func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *logrus.Logger) *API {
 	return &API{
 		ctx:       ctx,
 		psqlRepo:  postgresRepo,

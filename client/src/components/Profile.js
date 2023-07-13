@@ -4,7 +4,8 @@ import user_photo from '../user.png';
 import './Profile.css';
 
 const ProfilePage = () => {
-  const [address, setAddress] = useState('');
+  const [jobRole, setJobRole] = useState('');
+  const [nrAppsDeployed , setNrAppsDeployed] = useState(0);
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -30,7 +31,8 @@ const ProfilePage = () => {
           };
 
           const response = await axios.get(`http://localhost:8080/user/${username}`, config);
-          const userAddress = response.data?.city_address;
+          const userJobRole = response.data?.job_role;
+          const userNrAppsDeployed = response.data?.nr_deployed_apps
           const birth = response.data?.birth_date;
           const joined = response.data?.joined_date;
           const lastOnline = response.data?.last_time_online;
@@ -39,7 +41,8 @@ const ProfilePage = () => {
           const full_name = response.data?.full_name;
           const want_notify = response.data?.want_notify;
           const email = response.data?.email
-          setAddress(userAddress);
+          setJobRole(userJobRole);
+          setNrAppsDeployed(userNrAppsDeployed)
           setUsername(username);
           setBirthDate(birth);
           setJoinedDate(joined_date.toUTCString());
@@ -66,10 +69,11 @@ const ProfilePage = () => {
           <p>Username: {username}</p>
           <p>Email : {userEmail}</p>
           <p>Full Name: {fullName}</p>
-          <p>Address: {address}</p>
+          <p>Job Role: {jobRole}</p>
           <p>Birth Date: {birthDate}</p>
           <p>Joined Date: {joinedDate}</p>
           <p>Last Time Online: {lastTimeOnline}</p>
+          <p>Nr of applications deployed : {nrAppsDeployed} </p>
           <p>Want Notifications: {wantNotify}</p>
         </div>
       </div>
