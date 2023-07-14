@@ -15,6 +15,11 @@ import (
 	"github.com/emicklei/go-restful/v3"
 )
 
+var (
+	//map of users with their specific cached requests as value
+	cachedRequests = make(map[string][]string, 0)
+)
+
 // AdminAuthenticate verifies role and user_id for admin
 func (api *API) AdminAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
 	errorData := domain.ErrorResponse{}
@@ -272,7 +277,9 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		userData.UserID = ""
 		response.WriteEntity(userData)
 		// If not in cache, set it
-		api.apiCache.Set(marshalledRequest, userData, 1)
+		api.apiCache.SetWithTTL(marshalledRequest, userData, 1, time.Hour*24)
+		cachedRequests[username] = append(cachedRequests[username], string(marshalledRequest))
+
 	} else {
 
 		userData := userDataCache.(*domain.UserData)
@@ -351,7 +358,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 
 	//gather the fresh new data to be cached
 	newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
-	api.apiCache.SetWithTTL(marshalledRequest, newUserData, 1, time.Minute*5)
+	api.apiCache.SetWithTTL(marshalledRequest, newUserData, 1, time.Hour*24)
 
 	response.Write([]byte("User updated succesfully"))
 }
@@ -377,6 +384,20 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		response.WriteEntity(errorData)
 		return
 	}
+
+	marshalledRequest, err := json.Marshal(request.Request.URL)
+	if err != nil {
+		api.apiLogger.Printf("[ERROR] Couldn't marshal request %v", request.Request.URL)
+		errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Profile"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	//delete entry from cache
+	api.apiCache.Del(marshalledRequest)
+	cachedRequests[username] = make([]string, 0)
 
 	response.Write([]byte("User deleted succesfully"))
 }
@@ -552,6 +573,13 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	f.Close()
 	r.Close()
 	os.Remove(handler.Filename)
+
+	//clear all the cache for that specific user
+	for _, cachedReq := range cachedRequests[username] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[username] = make([]string, 0)
+
 	response.Write([]byte("App uploaded succesfully"))
 }
 
@@ -663,7 +691,8 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 
 		response.WriteEntity(appsInfo)
 
-		api.apiCache.SetWithTTL(marshalledRequest, appsInfo, 1, time.Minute*5)
+		api.apiCache.SetWithTTL(marshalledRequest, appsInfo, 1, time.Hour*24)
+		cachedRequests[username] = append(cachedRequests[username], string(marshalledRequest))
 		return
 	} else {
 		appsData := appsDataCache.(domain.GetApplicationsData)
@@ -750,8 +779,11 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	//clear all the cache
-	defer api.apiCache.Clear()
+	//clear all the cache for that specific user
+	for _, cachedReq := range cachedRequests[username] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[username] = make([]string, 0)
 
 	response.Write([]byte("App updated succesfully"))
 }
@@ -790,6 +822,11 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
+	//clear all the cache for that specific user
+	for _, cachedReq := range cachedRequests[username] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[username] = make([]string, 0)
 
 	response.Write([]byte("App deleted succesfully"))
 }

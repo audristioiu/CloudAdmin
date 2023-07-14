@@ -50,18 +50,19 @@ func (s *Service) StartWebService() {
 
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatalf("Error loading environment variables file")
+		log.Fatalf("Error loading environment variables file with error %v", err)
 		return
 	}
 
 	//initialize local cache for get info endpoints
 	cache, err := ristretto.NewCache(&ristretto.Config{
-		NumCounters: 1e7,     // Num keys to track frequency of (10M).
-		MaxCost:     1 << 30, // Maximum cost of cache (1GB).
+		NumCounters: 1e6,     // Num keys to track frequency of (10k).
+		MaxCost:     1 << 19, // Maximum cost of cache (50Mb).
 		BufferItems: 64,      // Number of keys per Get buffer.
 	})
 	if err != nil {
-		panic(err)
+		log.Fatalf("Error intializing ristretto Cache with error %v", err)
+		return
 	}
 
 	psqlUser := os.Getenv("POSTGRES_USER")
@@ -125,7 +126,7 @@ func enrichSwaggerObject(swo *spec.Swagger) {
 					URL:  "http://mit.org",
 				},
 			},
-			Version: "1.1.0",
+			Version: "1.6.0",
 		},
 	}
 	swo.Tags = []spec.Tag{{TagProps: spec.TagProps{
