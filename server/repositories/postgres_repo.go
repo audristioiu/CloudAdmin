@@ -164,7 +164,7 @@ func (p *PostgreSqlRepo) UpdateUserRoleData(role, userID string, userData *domai
 
 // UpdateUserAppsData updates user apps from PostgreSql table
 func (p *PostgreSqlRepo) UpdateUserAppsData(appName, userName string) error {
-	updateStatement := "UPDATE  users SET applications=array_append(applications, $1) WHERE username=$2"
+	updateStatement := "UPDATE users SET applications=array_append(applications, $1) WHERE username=$2"
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userName)
 	if err != nil {

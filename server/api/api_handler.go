@@ -375,17 +375,44 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		response.WriteEntity(errorData)
 		return
 	}
-	err := api.psqlRepo.DeleteUserData(username)
+
+	//Get user data and update applications column + delete apps
+	//calculate key and use cache to get the response
+	marshalledRequest, err := json.Marshal(request.Request.URL)
 	if err != nil {
-		api.apiLogger.Printf("[ERROR] User %v not found", username)
-		errorData.Message = "User not found"
-		errorData.StatusCode = http.StatusNotFound
-		response.WriteHeader(http.StatusNotFound)
+		api.apiLogger.Printf("[ERROR] Couldn't marshal request %v", request.Request.URL)
+		errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Profile"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
+	userApps := make([]string, 0)
+	userData := &domain.UserData{}
+	userDataCache, userFound := api.apiCache.Get(marshalledRequest)
+	if !userFound {
+		userData, _ = api.psqlRepo.GetUserData(username)
 
-	marshalledRequest, err := json.Marshal(request.Request.URL)
+	} else {
+		userData = userDataCache.(*domain.UserData)
+
+	}
+
+	userApps = append(userApps, userData.Applications...)
+
+	for _, userApp := range userApps {
+		err = api.psqlRepo.DeleteAppData(userApp, username)
+		if err != nil {
+			api.apiLogger.Printf("[ERROR] App %v could not be deleted/not found ", userApp)
+			errorData.Message = "App not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		}
+	}
+
+	marshalledRequest, err = json.Marshal(request.Request.URL)
 	if err != nil {
 		api.apiLogger.Printf("[ERROR] Couldn't marshal request %v", request.Request.URL)
 		errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Profile"
@@ -398,6 +425,16 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 	//delete entry from cache
 	api.apiCache.Del(marshalledRequest)
 	cachedRequests[username] = make([]string, 0)
+
+	err = api.psqlRepo.DeleteUserData(username)
+	if err != nil {
+		api.apiLogger.Printf("[ERROR] User %v not found", username)
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	response.Write([]byte("User deleted succesfully"))
 }
@@ -492,7 +529,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	// Iterate through the files in the archive,
 	// printing some of their contents.
 	for i, f := range r.File {
-
 		appData := domain.ApplicationData{}
 
 		nowTime := time.Now()

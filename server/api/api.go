@@ -123,7 +123,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("Authorization", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.FormParameter("type", "zip archive which contains the code and description files(same name for both,description being txt)").
+			Param(ws.FormParameter("type", "zip archive which contains the code and description files(same name for both,description being txt,order for every app is source_code,then description)").
 				DataType("file").Required(true)).Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON, "multipart/form-data").
