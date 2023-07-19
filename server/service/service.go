@@ -31,7 +31,7 @@ func asJSON(v interface{}) string {
 	return string(data)
 }
 
-// StartWebService initializez loggger,restful and swagger api, postgres and s3 repo, docker and kubernetes clients
+// StartWebService initializez loggger,restful and swagger api, postgres and s3 repo, local cache,docker and kubernetes clients
 func (s *Service) StartWebService() {
 	log := logrus.New()
 	formatter := runtime.Formatter{ChildFormatter: &logrus.TextFormatter{
@@ -41,7 +41,7 @@ func (s *Service) StartWebService() {
 	formatter.Line = true
 	log.SetFormatter(&formatter)
 	log.SetOutput(os.Stdout)
-	log.SetLevel(logrus.InfoLevel)
+	log.SetLevel(logrus.TraceLevel)
 	log.SetReportCaller(true)
 
 	ws := new(restful.WebService)
@@ -50,7 +50,7 @@ func (s *Service) StartWebService() {
 
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatalf("Error loading environment variables file with error %v", err)
+		log.Fatalf("[FATAL] Error loading environment variables file with error %v", err)
 		return
 	}
 
@@ -61,7 +61,7 @@ func (s *Service) StartWebService() {
 		BufferItems: 64,      // Number of keys per Get buffer.
 	})
 	if err != nil {
-		log.Fatalf("Error intializing ristretto Cache with error %v", err)
+		log.Fatalf("[FATAL] Error intializing ristretto Cache with error %v", err)
 		return
 	}
 
@@ -74,7 +74,7 @@ func (s *Service) StartWebService() {
 	// initialize repos
 	psqlRepo := repositories.NewPostgreSqlRepo(ctx, psqlUser, psqlPass, psqlHost, psqlDB, psqlPort, log)
 	if psqlRepo == nil {
-		log.Fatalf("Error in starting postgres service")
+		log.Fatalf("[FATAL] Error in starting postgres service")
 		return
 	}
 
@@ -92,7 +92,7 @@ func (s *Service) StartWebService() {
 	log.Println(asJSON(actual))
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(config))
 
-	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("/Users/udris/Desktop/CloudAdmin/swagger-ui/dist"))))
+	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("/Users/udris/Desktop/CloudAdmin/swagger-ui-5.0.0/dist"))))
 
 	// Optionally, you may need to enable CORS for the UI to work.
 	cors := restful.CrossOriginResourceSharing{

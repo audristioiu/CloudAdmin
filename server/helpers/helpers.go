@@ -2,12 +2,28 @@ package helpers
 
 import (
 	"cloudadmin/domain"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
+	"math/big"
+	"strings"
 
+	fql "github.com/ganigeorgiev/fexpr"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 )
+
+// GetRandomInt returns a random int used for postgres params
+func GetRandomInt() int {
+	nBig, err := rand.Int(rand.Reader, big.NewInt(100))
+	if err != nil {
+		panic(err)
+	}
+	n := nBig.Int64()
+	return int(n)
+}
 
 // GenerateRole returns a unique role used for authenticating the current user
 func GenerateRole(userData *domain.UserData) *domain.UserData {
@@ -40,8 +56,7 @@ func CheckPasswordHash(password, hash string) bool {
 
 // CheckUser verifies if user is authorized
 func CheckUser(userData *domain.UserData, role string) bool {
-	possibleRole := AddSaltToRole(userData.UserID, userData.UserName)
-	return CheckPasswordHash(possibleRole, role)
+	return userData.Role == role
 
 }
 
@@ -50,7 +65,9 @@ func CheckAppsExist(applications []string, appsData []*domain.ApplicationData) b
 	if len(applications) == 0 {
 		return false
 	}
+
 	for _, app := range appsData {
+
 		if !slices.Contains(applications, app.Name) {
 			return false
 		}
@@ -75,4 +92,35 @@ func Unique(s domain.GetApplicationsData) domain.GetApplicationsData {
 		}
 	}
 	return result
+}
+
+// ParseFQLFilter returns filters in slice of slices of strings
+func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
+	s := fql.NewScanner(strings.NewReader(fqlString))
+
+	listFilters := make([][]string, 10)
+
+	idx := 0
+	listFilters[idx] = make([]string, 0)
+	for {
+		t, err := s.Scan()
+		if t.Type == fql.TokenEOF {
+			logger.Debug("End of parsing")
+			break
+		}
+		if err != nil {
+			logger.Errorf("error in scanning : %v", err)
+			break
+		}
+		if t.Type == fql.TokenWS {
+
+			idx = idx + 1
+			continue
+		}
+		listFilters[idx] = append(listFilters[idx], t.Literal)
+
+	}
+
+	fmt.Println(listFilters)
+	return listFilters
 }

@@ -23,23 +23,28 @@ function MyApps() {
   
 
   const handleUploadArchive = () => {
-    const selectedFile = document.getElementById('input').files[0];
-    if (selectedFile) {
+    const selectedFiles = document.getElementById('input').files
+    if (selectedFiles) {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       const username = userInfo?.username;
 
       const config_app = {
         headers: {
           'Content-type': 'multipart/form-data',
-          Authorization: userInfo?.role,
+          'USER-AUTH': userInfo?.role,
           'USER-UUID': userInfo?.user_id,
         },
         params: {
           username: username,
         },
       };
+
+      
+
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      for(var i=0;i<selectedFiles.length;i++){
+        formData.append("file", selectedFiles[i]);
+      }
 
       try {
         axios.post('http://localhost:8080/register/app', formData, config_app);
@@ -49,7 +54,7 @@ function MyApps() {
       }
     }
   };
-
+  //TODO filtre update ciudat (actualizare sau ceva)
   const fetchApps = async () => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
     const username = userInfo?.username;
@@ -63,7 +68,7 @@ function MyApps() {
     const config = {
       headers: {
         'Content-type': 'application/json',
-        Authorization: userInfo?.role,
+        'USER-AUTH': userInfo?.role,
         'USER-UUID': userInfo?.user_id,
       },
     };
@@ -77,7 +82,7 @@ function MyApps() {
         let config_app = {
           headers: {
             'Content-type': 'application/json',
-            Authorization: userInfo?.role,
+            'USER-AUTH': userInfo?.role,
             'USER-UUID': userInfo?.user_id,
           },
           params: {
@@ -95,7 +100,7 @@ function MyApps() {
                 appnames: searchInput,
               },
             };
-          } if (typeInput === 'custom_filter') {
+          } else if (typeInput === 'custom_filter') {
             
             config_app = {
               ...config_app,
@@ -109,7 +114,7 @@ function MyApps() {
               ...config_app,
               params: {
                 ...config_app.params,
-                filter: typeInput + ':' + searchInput,
+                filter: typeInput + '=' + searchInput,
               },
             };
           }
@@ -121,7 +126,7 @@ function MyApps() {
             ...config_app,
             params: {
               ...config_app.params,
-              filter: typeInput + ':' + timeRanges[timestampInput],
+              filter: typeInput + '<=' + timeRanges[timestampInput],
             },
           };
         }
@@ -189,7 +194,7 @@ function MyApps() {
       </div>
       <div className="form-style">
         <div className="list-items">{renderApps()}</div>
-        <input type="file" id="input" multiple={false} />
+        <input type="file" id="input" multiple={true} />
         <button type="button" className='button-3' onClick={handleUploadArchive}>
           SubmitArchive
         </button>

@@ -25,7 +25,7 @@ const ProfilePage = () => {
           const config = {
             headers: {
               "Content-type": "application/json",
-              "Authorization": userInfo?.role,
+              "USER-AUTH": userInfo?.role,
               "USER-UUID": userInfo?.user_id,
             },
           };

@@ -35,6 +35,7 @@ require (
 	github.com/coocood/freecache v1.2.3
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/emicklei/go-restful-openapi/v2 v2.9.1
+	github.com/ganigeorgiev/fexpr v0.3.0
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/joho/godotenv v1.5.1
