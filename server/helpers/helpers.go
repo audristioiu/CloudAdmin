@@ -110,14 +110,19 @@ func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
 		}
 		if err != nil {
 			logger.Errorf("error in scanning : %v", err)
-			break
+			return nil
 		}
-		if t.Type == fql.TokenWS {
+		if t.Type == fql.TokenWS || (t.Type == fql.TokenNumber && t.Literal != "NULL") || (t.Type == fql.TokenText && t.Literal == "NULL") {
+			logger.Errorf("invalid fql value")
+			return nil
+		}
+		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || (t.Type == fql.TokenNumber && t.Literal == "NULL") {
+			listFilters[idx] = append(listFilters[idx], t.Literal)
+			if t.Type == fql.TokenText || t.Literal == "NULL" || t.Literal == "&&" || t.Literal == "||" {
+				idx = idx + 1
+			}
 
-			idx = idx + 1
-			continue
 		}
-		listFilters[idx] = append(listFilters[idx], t.Literal)
 
 	}
 

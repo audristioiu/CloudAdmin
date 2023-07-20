@@ -716,10 +716,18 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		for _, appName := range appNamesList {
 			appsData, err := api.psqlRepo.GetAppsData(strings.TrimSpace(appName), filter)
 			if err != nil {
-				api.apiLogger.Errorf("[ERROR] App %v not found", appName)
-				errorData.Message = "App " + appName + " not found"
-				errorData.StatusCode = http.StatusNotFound
-				appsInfo.Errors = append(appsInfo.Errors, errorData)
+				if strings.Contains(err.Error(), "fql") {
+					api.apiLogger.Errorf("[ERROR] Invalid fql filter for app %+v", appName)
+					errorData.Message = "Invalid fql filter"
+					errorData.StatusCode = http.StatusBadRequest
+					appsInfo.Errors = append(appsInfo.Errors, errorData)
+				} else {
+					api.apiLogger.Errorf("[ERROR] App %v not found", appName)
+					errorData.Message = "App " + appName + " not found"
+					errorData.StatusCode = http.StatusNotFound
+					appsInfo.Errors = append(appsInfo.Errors, errorData)
+				}
+
 				continue
 			}
 			if len(appsData) == 0 {

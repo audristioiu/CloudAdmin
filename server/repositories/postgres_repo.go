@@ -220,7 +220,9 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 	filterArguments := make(pgx.NamedArgs, 0)
 	//Parse fql filter
 	filters := helpers.ParseFQLFilter(filterConditions, p.psqlLogger)
-
+	if filters == nil {
+		return nil, fmt.Errorf("could not parse fql filter")
+	}
 	if len(filters) > 0 && len(filters[0]) >= 3 {
 		selectStatement := "SELECT * FROM apps where ("
 		for i, filterParams := range filters {
