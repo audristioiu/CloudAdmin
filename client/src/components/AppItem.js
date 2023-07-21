@@ -3,15 +3,14 @@ import { useNavigate } from "react-router-dom";
 import './MyApps.css';
 
 function AppItem(app) {
-  const [appName, setAppName] = useState(app.app.name)
-  const [appDescription, setAppDescr] = useState(app.app.description)
-  const [appRunningState, setAppRunning] = useState(app.app.is_running)
-  const history = useNavigate()
+  const [appName, setAppName] = useState(app.app.name);
+  const [appDescription, setAppDescr] = useState(app.app.description);
+  const [appRunningState, setAppRunning] = useState(app.app.is_running);
+  const history = useNavigate();
 
   const editApp = () => {
-    console.log(appName)
     localStorage.setItem("appInfo", JSON.stringify({ "app_name": appName }));
-    history('/editapp')
+    history('/editapp');
   }
 
   return (

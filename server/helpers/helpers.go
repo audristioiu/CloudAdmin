@@ -101,6 +101,7 @@ func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
 	listFilters := make([][]string, 10)
 
 	idx := 0
+
 	listFilters[idx] = make([]string, 0)
 	for {
 		t, err := s.Scan()

@@ -54,6 +54,8 @@ func (s *Service) StartWebService() {
 		return
 	}
 
+	log.Debugln("Env variables are loaded")
+
 	//initialize local cache for get info endpoints
 	cache, err := ristretto.NewCache(&ristretto.Config{
 		NumCounters: 1e6,     // Num keys to track frequency of (10k).
@@ -64,6 +66,8 @@ func (s *Service) StartWebService() {
 		log.Fatalf("[FATAL] Error intializing ristretto Cache with error %v", err)
 		return
 	}
+
+	log.Debugln("Local Ristretto Cache initalized")
 
 	psqlUser := os.Getenv("POSTGRES_USER")
 	psqlPass := os.Getenv("POSTGRES_PASSWORD")
@@ -77,6 +81,8 @@ func (s *Service) StartWebService() {
 		log.Fatalf("[FATAL] Error in starting postgres service")
 		return
 	}
+
+	log.Debugln("Postgres Repo initalized")
 
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, log)

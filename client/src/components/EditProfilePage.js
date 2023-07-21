@@ -23,8 +23,6 @@ const EditProfilePage = () => {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       const username = userInfo?.username;
 
-      console.log(username);
-
       if (username) {
         const config = {
           headers: {
@@ -36,22 +34,33 @@ const EditProfilePage = () => {
 
         const updatedData = {
           "username": username,
-          "email" : userEmail,
-          "full_name" : fullName,
+          "email": userEmail,
+          "full_name": fullName,
           "job_role": jobRole,
           "birth_date": birthDate,
           "want_notify": wantNotify.toString(),
-          "nr_deployed_apps" : userInfo?.nr_deployed_apps,
-        };        
+          "nr_deployed_apps": userInfo?.nr_deployed_apps,
+        };
 
         if (showPasswordFields) {
-          if (password !== confirmPassword) {
-            setErrorMessage('Passwords do not match.');
-            return;
-          }
+          if (password.length > 0) {
+            if (password.length < 8) {
+              setErrorMessage('Password should be at least 8 characters long.');
+              return;
+            }
 
-          if (password.length < 8) {
-            setErrorMessage('Password should be at least 8 characters long.');
+            if (password.charAt(0) !== password.charAt(0).toUpperCase()) {
+              errMsg = 'Password must start with an uppercase letter.';
+              setErrorMessage(errMsg);
+              return;
+            }
+            if (password !== confirmPassword) {
+              setErrorMessage('Passwords do not match.');
+              return;
+            }
+          } else {
+            errMsg = "Password is empty.";
+            setErrorMessage(errMsg);
             return;
           }
 
@@ -62,39 +71,35 @@ const EditProfilePage = () => {
                   "Content-type": "application/json",
                 },
               };
-              console.log({ "username": username, "password": oldPassword })
+
               await axios.post(
                 "http://localhost:8080/login",
                 { "username": username, "password": oldPassword },
                 config
               );
             } catch (error) {
-              console.log(error.response.data.message);
-              setErrorMessage("Wrong old password")
+              setErrorMessage("Wrong old password / " + error.response.data.message);
               return
             };
 
             updatedData["password"] = password;
           }
 
-        const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);
-        console.log(response)
-        if (response.status === 200) {
-          // Profile updated successfully, navigate back to profile page
-          navigate('/profile');
-        }
+          const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);
+          if (response.status === 200) {
+            // Profile updated successfully, navigate back to profile page
+            navigate('/profile');
+          }
         } else {
           const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);
-        console.log(response)
-        if (response.status === 200) {
-          // Profile updated successfully, navigate back to profile page
-          navigate('/profile');
-        }
+          if (response.status === 200) {
+            // Profile updated successfully, navigate back to profile page
+            navigate('/profile');
+          }
         }
       }
     } catch (error) {
-      console.log('Error updating profile:', error);
-      setErrorMessage('Error updating profile. Please try again.');
+      setErrorMessage('Error updating profile. Please try again. /' + error.response.data.message);
     }
   };
 
@@ -200,7 +205,7 @@ const EditProfilePage = () => {
       {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>
   );
-  
+
 };
 
 export default EditProfilePage;

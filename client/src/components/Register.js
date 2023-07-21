@@ -11,35 +11,35 @@ function Register() {
   const [errorMessage, setErrorMessage] = useState('');
   const history = useNavigate();
 
-  let errMsg = ""
+  let errMsg = "";
   let handleSubmit = async (event) => {
 
     if (!username || !password || !confirmPassword || !userEmail) {
-      errMsg = 'Please fill all the fields!'
-      setErrorMessage(errMsg)
+      errMsg = 'Please fill all the fields!';
+      setErrorMessage(errMsg);
       return
 
     }
     if (password.length > 0) {
       if (password.length < 8) {
-        errMsg = 'Password is too short'
-        setErrorMessage(errMsg)
+        errMsg = 'Password is too short.';
+        setErrorMessage(errMsg);
         return
 
       }
       if (password.charAt(0) !== password.charAt(0).toUpperCase()) {
-        errMsg = 'Password must start with an uppercase letter';
+        errMsg = 'Password must start with an uppercase letter.';
         setErrorMessage(errMsg);
         return;
       }
     } else {
-      errMsg = "Password empty"
-      setErrorMessage(errMsg)
+      errMsg = "Password is empty.";
+      setErrorMessage(errMsg);
+      return;
     }
 
 
     event.preventDefault();
-    console.log('Username:', username, 'Password:', password);
     // Implement login logic here
     if (password === confirmPassword) {
       try {
@@ -50,26 +50,23 @@ function Register() {
           },
         };
 
-        const { data } = await axios.post(
+       await axios.post(
           "http://localhost:8080/register/user",
           { "username": username, "password": password, "email" : userEmail },
           config
         );
 
-        console.log(data);
-        console.log(`Registered user with username ${username} and password ${password}`);
         history('/login');
       } catch (error) {
-        console.log(error.response.data.message);
-        setErrorMessage("Wrong password")
+
+        setErrorMessage(error.response.data.message);
         return
       };
 
     } else {
       // Passwords don't match, show error message
-      console.error('Passwords do not match');
-      errMsg = 'Passwords do not match'
-      setErrorMessage(errMsg)
+      errMsg = 'Passwords do not match.';
+      setErrorMessage(errMsg);
     }
   };
 

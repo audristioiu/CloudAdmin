@@ -4,30 +4,27 @@ import axios from 'axios';
 
 function EditApp() {
 
-    const app = JSON.parse(localStorage.getItem("appInfo"))
-    console.log(app)
-    const [appName, setAppName] = useState(app.app_name)
-    const [appDescription, setAppDescr] = useState("")
-    const [appRunningState, setAppRunning] = useState("")
+    const app = JSON.parse(localStorage.getItem("appInfo"));
+    const [appName, setAppName] = useState(app.app_name);
+    const [appDescription, setAppDescr] = useState("");
     const [errorMessage, setErrorMessage] = useState('');
-    const [editMode, setEditMode] = useState(false)
+    const [editMode, setEditMode] = useState(false);
     const [clicked, setClicked] = useState(true);
-    const [editableMode, setEditableMode] = useState(false)
-    const history = useNavigate()
+    const [editableMode, setEditableMode] = useState(false);
+    const history = useNavigate();
     
 
 
     const closeEditMode = () => {
-        setEditMode(false)
-        setClicked(true)
+        setEditMode(false);
+        setClicked(true);
        
       }
 
       const openEditMode = () => {
-         setClicked(false)
-        setEditMode(true)
-        setEditableMode(true)
-    
+         setClicked(false);
+        setEditMode(true);
+        setEditableMode(true);
       }
 
     const onEditHandler = () => {
@@ -58,7 +55,6 @@ function EditApp() {
           await axios.put(`http://localhost:8080/app`, {
             "name" : appName,
             "description" : appDescription,
-            "is_running" : appRunningState,
           }, config);
     
           // Clear the form fields and display a success message
@@ -66,11 +62,10 @@ function EditApp() {
           setAppName('');
           setClicked(true);
           setEditableMode(false);
-          history("/myapps")
+          history("/myapps");
 
         } catch (error) {
-            console.log(error)
-          setErrorMessage('Failed to update APP. Please try again.');
+          setErrorMessage('Failed to update APP. Please try again. /' + error.response.data.message);
         }
       };
     

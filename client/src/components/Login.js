@@ -11,7 +11,6 @@ function Login({ setAuth }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    console.log('Username:', username, 'Password:', password);
     // Implement login logic here
     try {
       // Passwords match, register 
@@ -27,15 +26,11 @@ function Login({ setAuth }) {
         config
       );
 
-      console.log(data);
       localStorage.setItem("userInfo", JSON.stringify(data));
-      console.log(`Login user with username ${username} and password ${password}`);
-      console.log(` Here is your role : ${data.role} and uuid : ${data.user_id}`)
       setAuth(true);
       history('/');
     } catch (error) {
-      console.log(error.response.data.message);
-      setErrorMessage("Wrong username or password")
+      setErrorMessage("Wrong username or password. /" + error.response.data.message);
       return
     };
   };

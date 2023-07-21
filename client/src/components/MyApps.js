@@ -23,7 +23,7 @@ function MyApps() {
   
 
   const handleUploadArchive = () => {
-    const selectedFiles = document.getElementById('input').files
+    const selectedFiles = document.getElementById('input').files;
     if (selectedFiles) {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       const username = userInfo?.username;
@@ -49,8 +49,7 @@ function MyApps() {
       try {
         axios.post('http://localhost:8080/register/app', formData, config_app);
       } catch (error) {
-        console.log(error);
-        setErrorMessage(error);
+        setErrorMessage("Failed to upload app. /" + error.response.data.message );
       }
     }
   };
@@ -121,7 +120,6 @@ function MyApps() {
         }
 
         if (typeInput === 'created_timestamp' || typeInput === 'updated_timestamp') {
-          console.log(timeRanges[timestampInput]);
           config_app = {
             ...config_app,
             params: {
@@ -136,8 +134,7 @@ function MyApps() {
       }
      
     } catch (error) {
-      console.log(error);
-      setErrorMessage(error);
+      setErrorMessage("Could not retrieve your apps. /" + error.response.data.message);
       setApps([]);
     }
   };

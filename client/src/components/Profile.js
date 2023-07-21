@@ -52,8 +52,7 @@ const ProfilePage = () => {
           setUserEmail(email);
         }
       } catch (error) {
-        setErrorMessage(error)
-        console.log('Error retrieving user details:', error);
+        setErrorMessage("Could not retrieve user details. /" + error.response.data.message);
       }
     };
 
