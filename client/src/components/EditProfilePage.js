@@ -15,6 +15,8 @@ const EditProfilePage = () => {
   const [showPasswordFields, setShowPasswordFields] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  let errMsg = "";
+
   const navigate = useNavigate();
 
   const handleSubmit = async (event) => {
