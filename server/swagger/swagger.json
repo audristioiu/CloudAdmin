@@ -99,7 +99,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                  "$ref": "#/components/schemas/domain.GetApplicationsData"
                 }
               }
             }
@@ -109,7 +109,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                  "$ref": "#/components/schemas/domain.GetApplicationsData"
                 }
               }
             }
@@ -290,6 +290,18 @@
           },
           "required": true
         },
+        "parameters": [
+          {
+            "name": "old_password",
+            "in": "query",
+            "description": "old pass for changing password",
+            "required": false,
+            "allowEmptyValue": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",

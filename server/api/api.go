@@ -59,6 +59,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 		ws.
 			POST(loginPath).
 			Doc("Login user").
+			Param(ws.QueryParameter("old_password", "old pass for changing password").DataType("boolean").Required(false).AllowEmptyValue(true)).
 			Reads(domain.UserData{}).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
@@ -152,8 +153,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			To(api.GetAppsInfo).
 			Writes(domain.GetApplicationsData{}).
 			Returns(http.StatusOK, "OK", domain.GetApplicationsData{}).
-			Returns(http.StatusNotFound, "App Not Found", domain.ErrorResponse{}).
-			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
+			Returns(http.StatusNotFound, "App Not Found", domain.GetApplicationsData{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.GetApplicationsData{}))
 	ws.Route(
 		ws.
 			PUT(appPath).

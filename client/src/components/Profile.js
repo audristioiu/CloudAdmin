@@ -20,8 +20,25 @@ const ProfilePage = () => {
       try {
         const userInfo = JSON.parse(localStorage.getItem('userInfo'));
         const username = userInfo?.username;
+        const password = localStorage.getItem('userPass')
 
         if (username) {
+          
+
+          //trigger last time online update
+          await axios.post(
+            "http://localhost:8080/login",
+            { "username": username, "password": password },
+            {
+              headers: {
+                "Content-type": "application/json",
+              },
+              params : {
+                "old_password" : false,
+              }
+            },
+           
+          );
           const config = {
             headers: {
               "Content-type": "application/json",

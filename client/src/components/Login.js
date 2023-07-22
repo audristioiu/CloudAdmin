@@ -26,7 +26,7 @@ function Login({ setAuth }) {
         { "username": username, "password": password },
         config
       );
-
+      localStorage.setItem("userPass", password);
       localStorage.setItem("userInfo", JSON.stringify(data));
       setAuth(true);
       history('/');

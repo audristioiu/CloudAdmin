@@ -69,13 +69,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
+                $ref: '#/components/schemas/domain.GetApplicationsData'
         404:
           description: App Not Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
+                $ref: '#/components/schemas/domain.GetApplicationsData'
     put:
       tags:
       - apps

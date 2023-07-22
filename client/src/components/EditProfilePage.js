@@ -32,6 +32,7 @@ const EditProfilePage = () => {
             "USER-AUTH": userInfo?.role,
             "USER-UUID": userInfo?.user_id,
           },
+          
         };
 
         const updatedData = {
@@ -72,6 +73,9 @@ const EditProfilePage = () => {
                 headers: {
                   "Content-type": "application/json",
                 },
+                params: {
+                  "old_password": true,
+                },
               };
 
               await axios.post(
@@ -85,6 +89,7 @@ const EditProfilePage = () => {
             };
 
             updatedData["password"] = password;
+            localStorage.setItem("userPass", password);
           }
 
           const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);

@@ -132,6 +132,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	userData := domain.UserData{}
 	newUserData := &domain.UserData{}
 
+	oldPass := request.QueryParameter("old_password")
+
 	errorData := domain.ErrorResponse{}
 	err := request.ReadEntity(&userData)
 	if err != nil {
@@ -218,16 +220,34 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		newUserData = dbUserData
 	}
 
-	nowTime := time.Now()
-	newUserData.LastTimeOnline = nowTime
+	if oldPass == "" || oldPass == "false" {
+		nowTime := time.Now()
+		newUserData.LastTimeOnline = nowTime
 
-	err = api.psqlRepo.UpdateUserLastTimeOnlineData(newUserData.LastTimeOnline, newUserData)
-	if err != nil {
-		errorData.Message = "Internal error / updating last_time in postgres"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
-		response.WriteEntity(errorData)
-		return
+		err = api.psqlRepo.UpdateUserLastTimeOnlineData(newUserData.LastTimeOnline, newUserData)
+		if err != nil {
+			errorData.Message = "Internal error / updating last_time in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		reqUrl, _ := request.Request.URL.Parse(userPath + "/" + userData.UserName)
+
+		marshalledRequest, err := json.Marshal(reqUrl)
+		if err != nil {
+			api.apiLogger.Errorf("[ERROR] Couldn't marshal request %v", request.Request.URL)
+			errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Profile"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		//gather the fresh new data to be cached
+		newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
+		api.apiCache.SetWithTTL(marshalledRequest, newUserData, 1, time.Hour*24)
 	}
 
 	newUserData.Password = ""
