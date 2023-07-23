@@ -1,7 +1,7 @@
-openapi: 3.0.1
+swagger: '2.0'
 info:
+  description: Cloud API which serves for schedulling apps
   title: Cloud Admin API
-  description: Cloud API which servers for schedulling apps
   contact:
     name: Alexandru-Mihai Cioplean, Alexandru Udristioiu
     email: alexandru.cioplean@gmail.com, udristioiualexandru@gmail.com
@@ -9,500 +9,454 @@ info:
     name: MIT
     url: http://mit.org
   version: 1.6.0
-tags:
-- name: users
-  description: Managing users
-- name: apps
-  description: Managing apps
 paths:
   /app:
     get:
+      consumes:
+        - application/json
+      produces:
+        - application/json
       tags:
-      - apps
+        - apps
       summary: Retrieves apps information by name
       operationId: GetAppsInfo
       parameters:
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: appnames
-        in: query
-        description: name of the apps
-        allowEmptyValue: true
-        style: form
-        explode: false
-        schema:
-          type: array
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
+          required: true
+        - type: string
+          description: role used for auth
+          name: USER-AUTH
+          in: header
+          required: true
+        - type: array
           items:
             type: string
-      - name: username
-        in: query
-        description: owner of the app
-        required: true
-        schema:
-          type: string
-      - name: filter
-        in: query
-        description: filter apps by name(keyword), description(keyword), is_running,
-          created/updated timestamp combined(?) or separate
-        allowEmptyValue: true
-        schema:
-          type: string
+          collectionFormat: csv
+          description: name of the apps
+          name: appnames
+          in: query
+          allowEmptyValue: true
+        - type: string
+          description: owner of the app
+          name: username
+          in: query
+          required: true
+        - type: string
+          description: filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(AND-u0026u0026,OR-||) or separate
+          name: filter
+          in: query
+          allowEmptyValue: true
       responses:
-        200:
+        '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.GetApplicationsData'
-        400:
+          schema:
+            $ref: '#/definitions/domain.GetApplicationsData'
+        '400':
           description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.GetApplicationsData'
-        404:
+          schema:
+            $ref: '#/definitions/domain.GetApplicationsData'
+        '404':
           description: App Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.GetApplicationsData'
+          schema:
+            $ref: '#/definitions/domain.GetApplicationsData'
     put:
+      consumes:
+        - application/json
+      produces:
+        - application/json
       tags:
-      - apps
+        - apps
       summary: Update app information
       operationId: UpdateApp
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: username
-        in: query
-        description: owner of the app
-        required: true
-        schema:
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/domain.ApplicationData'
-        required: true
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/domain.ApplicationData'
+        - type: string
+          description: role used for auth
+          name: USER-AUTH
+          in: header
+          required: true
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
+          required: true
+        - type: string
+          description: owner of the app
+          name: username
+          in: query
+          required: true
       responses:
-        200:
+        '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                type: string
-        400:
+          schema:
+            type: string
+        '400':
           description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-      x-codegen-request-body-name: body
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
     delete:
+      consumes:
+        - application/json
+      produces:
+        - application/json
       tags:
-      - apps
+        - apps
       summary: Deletes app
       operationId: DeleteApp
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: appname
-        in: query
-        description: name of the app you want to delete
-        required: true
-        schema:
-          type: string
-      - name: username
-        in: query
-        description: owner of the app
-        required: true
-        schema:
-          type: string
+        - type: string
+          description: role used for auth
+          name: USER-AUTH
+          in: header
+          required: true
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
+          required: true
+        - type: array
+          items:
+            type: string
+          collectionFormat: csv
+          description: name of the apps you want to delete
+          name: appname
+          in: query
+          required: true
+        - type: string
+          description: owner of the app
+          name: username
+          in: query
+          required: true
       responses:
-        200:
+        '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                type: string
-        400:
+          schema:
+            type: string
+        '400':
           description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-        403:
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        '403':
           description: User not allowed as admin
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-        404:
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        '404':
           description: User Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
   /login:
     post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
       tags:
-      - users
+        - users
       summary: Login user
       operationId: UserLogin
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/domain.UserData'
-        required: true
+      parameters:
+        - type: boolean
+          description: old pass for changing password
+          name: old_password
+          in: query
+          allowEmptyValue: true
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/domain.UserData'
       responses:
-        200:
+        '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.UserData'
-        400:
+          schema:
+            $ref: '#/definitions/domain.UserData'
+        '400':
           description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-        404:
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        '404':
           description: User Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-      x-codegen-request-body-name: body
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
   /register/app:
     post:
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
       tags:
-      - apps
+        - apps
       summary: Upload app to s3
       operationId: UploadApp
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: username
-        in: query
-        description: owner of the app
-        required: true
-        schema:
-          type: string
-      requestBody:
-        content:
-          multipart/form-data:
-            schema:
-              required:
-              - type
-              type : object
-              properties:
-                type:
-                  type: array
-                  description: zip archives which contains the code and description
-                    files(same name for both,description being txt)
-                  items:
-                    type: string
-                    format: binary
-        required: true
+        - type: string
+          description: role used for auth
+          name: USER-AUTH
+          in: header
+          required: true
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
+          required: true
+        - type: string
+          description: owner of the app
+          name: username
+          in: query
+          required: true
+        - type: array
+          items:
+            type: string
+          description: zip archive which contains the code and description files(same name for both,description being txt,order for every app is source_code,then description)
+          name: type
+          in: formData
+          required: true
       responses:
-        200:
+        '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                type: string
-        302:
+          schema:
+            type: string
+        '302':
           description: Already found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-        400:
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        '400':
           description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
   /register/user:
     post:
+      consumes:
+        - application/json
+      produces:
+        - application/json
       tags:
-      - users
+        - users
       summary: Register user
       operationId: UserRegister
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/domain.UserData'
-        required: true
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/domain.UserData'
       responses:
-        200:
+        '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                type: string
-        302:
+          schema:
+            type: string
+        '302':
           description: Already found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-        400:
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        '400':
           description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-      x-codegen-request-body-name: body
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
   /user:
     put:
+      consumes:
+        - application/json
+      produces:
+        - application/json
       tags:
-      - users
+        - users
       summary: Updates user profile
       operationId: UpdateUserProfile
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/domain.UserData'
-        required: true
+        - name: body
+          in: body
+          required: true
+          schema:
+            $ref: '#/definitions/domain.UserData'
+        - type: string
+          description: role used for auth
+          name: USER-AUTH
+          in: header
+          required: true
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
+          required: true
       responses:
-        200:
+        '200':
           description: OK
-          content:
-            application/json:
-              schema:
-                type: string
-        400:
+          schema:
+            type: string
+        '400':
           description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-      x-codegen-request-body-name: body
-  /user/{username}:
-    get:
-      tags:
-      - users
-      summary: Retrieves user profile
-      operationId: GetUserProfile
-      parameters:
-      - name: username
-        in: path
-        description: username of the account
-        required: true
-        schema:
-          type: string
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.UserData'
-        400:
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-        404:
-          description: User Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
     delete:
+      consumes:
+        - application/json
+      produces:
+        - application/json
       tags:
-      - users
+        - users
       summary: Deletes user
       operationId: DeleteUser
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: username
-        in: path
-        description: username of the account
-        required: true
-        schema:
-          type: string
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: string
-        400:
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-        404:
-          description: User Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/domain.ErrorResponse'
-components:
-  schemas:
-    domain.ApplicationData:
-      required:
-      - created_timestamp
-      - description
-      - is_running
-      - name
-      - updated_timestamp
-      type: object
-      properties:
-        created_timestamp:
-          type: string
-          format: date-time
-        description:
-          type: string
-        is_running:
-          type: string
-        name:
-          type: string
-        updated_timestamp:
-          type: string
-          format: date-time
-    domain.ErrorResponse:
-      required:
-      - message
-      - status_code
-      type: object
-      properties:
-        message:
-          type: string
-        status_code:
-          type: integer
-          format: int32
-    domain.GetApplicationsData:
-      required:
-      - Errors
-      - Response
-      type: object
-      properties:
-        Errors:
-          type: array
-          items:
-            $ref: '#/components/schemas/domain.ErrorResponse'
-        Response:
-          type: array
-          items:
-            $ref: '#/components/schemas/domain.ApplicationData'
-    domain.UserData:
-      required:
-      - username
-      type: object
-      properties:
-        applications:
-          type: array
+        - type: string
+          description: role used for auth
+          name: USER-AUTH
+          in: header
+          required: true
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
+          required: true
+        - type: array
           items:
             type: string
-        birth_date:
+          collectionFormat: csv
+          description: username of the account
+          name: username
+          in: query
+          required: true
+      responses:
+        '200':
+          description: OK
+          schema:
+            type: string
+        '400':
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        '404':
+          description: User Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+  /user/{username}:
+    get:
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      tags:
+        - users
+      summary: Retrieves user profile
+      operationId: GetUserProfile
+      parameters:
+        - type: string
+          description: username of the account
+          name: username
+          in: path
+          required: true
+        - type: string
+          description: role used for auth
+          name: USER-AUTH
+          in: header
+          required: true
+        - type: string
+          description: user unique id
+          name: USER-UUID
+          in: header
+          required: true
+      responses:
+        '200':
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.UserData'
+        '400':
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+        '404':
+          description: User Not Found
+          schema:
+            $ref: '#/definitions/domain.ErrorResponse'
+definitions:
+  domain.ApplicationData:
+    required:
+      - created_timestamp
+      - updated_timestamp
+      - name
+      - description
+      - is_running
+    properties:
+      created_timestamp:
+        type: string
+        format: date-time
+      description:
+        type: string
+      is_running:
+        type: string
+      name:
+        type: string
+      updated_timestamp:
+        type: string
+        format: date-time
+  domain.ErrorResponse:
+    required:
+      - message
+      - status_code
+    properties:
+      message:
+        type: string
+      status_code:
+        type: integer
+        format: int32
+  domain.GetApplicationsData:
+    required:
+      - Response
+      - Errors
+    properties:
+      Errors:
+        type: array
+        items:
+          $ref: '#/definitions/domain.ErrorResponse'
+      Response:
+        type: array
+        items:
+          $ref: '#/definitions/domain.ApplicationData'
+  domain.UserData:
+    required:
+      - username
+      - nr_deployed_apps
+    properties:
+      applications:
+        type: array
+        items:
           type: string
-        city_address:
-          type: string
-        email:
-          type: string
-        full_name:
-          type: string
-        joined_date:
-          type: string
-          format: date-time
-        last_time_online:
-          type: string
-          format: date-time
-        password:
-          type: string
-        role:
-          type: string
-        user_id:
-          type: string
-        username:
-          type: string
-        want_notify:
-          type: string
+      birth_date:
+        type: string
+      email:
+        type: string
+      full_name:
+        type: string
+      job_role:
+        type: string
+      joined_date:
+        type: string
+        format: date-time
+      last_time_online:
+        type: string
+        format: date-time
+      nr_deployed_apps:
+        type: integer
+        format: int32
+      password:
+        type: string
+      role:
+        type: string
+      user_id:
+        type: string
+      username:
+        type: string
+      want_notify:
+        type: string
+tags:
+  - description: Managing users
+    name: users
+  - description: Managing apps
+    name: apps
