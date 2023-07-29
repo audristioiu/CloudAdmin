@@ -2,10 +2,17 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import user_photo from '../user.png';
 import './Profile.css';
+import {Agent} from 'https';
+import certs from '../Certs/certs';
+
+
+
+
+
 
 const ProfilePage = () => {
   const [jobRole, setJobRole] = useState('');
-  const [nrAppsDeployed , setNrAppsDeployed] = useState(0);
+  const [nrAppsDeployed, setNrAppsDeployed] = useState(0);
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -15,30 +22,40 @@ const ProfilePage = () => {
   const [userEmail, setUserEmail] = useState('')
   const [errorMessage, setErrorMessage] = useState('');
 
+
+
+
   useEffect(() => {
     const fetchDetails = async () => {
       try {
+
+        const agent = new Agent({
+          cert: certs.certFile,
+          key: certs.keyFile,
+        })
         const userInfo = JSON.parse(localStorage.getItem('userInfo'));
         const username = userInfo?.username;
         const password = localStorage.getItem('userPass')
 
         if (username) {
-          
+
 
           //trigger last time online update
           await axios.post(
-            "http://localhost:8080/login",
+            "https://localhost:443/login",
             { "username": username, "password": password },
             {
               headers: {
                 "Content-type": "application/json",
               },
-              params : {
-                "old_password" : false,
-              }
+              params: {
+                "old_password": false,
+              },
             },
-           
+            { httpsAgent : agent },
           );
+
+          console.log(userInfo)
           const config = {
             headers: {
               "Content-type": "application/json",
@@ -47,7 +64,7 @@ const ProfilePage = () => {
             },
           };
 
-          const response = await axios.get(`http://localhost:8080/user/${username}`, config);
+          const response = await axios.get(`https://localhost:443/user/${username}`, config, { httpsAgent : agent },);
           const userJobRole = response.data?.job_role;
           const userNrAppsDeployed = response.data?.nr_deployed_apps
           const birth = response.data?.birth_date;

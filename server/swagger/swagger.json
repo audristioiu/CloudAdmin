@@ -8,10 +8,10 @@
       "email": "alexandru.cioplean@gmail.com, udristioiualexandru@gmail.com"
     },
     "license": {
-      "name": "MIT",
-      "url": "http://mit.org"
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "version": "1.6.0"
+    "version": "1.7.0"
   },
   "tags": [
     {
@@ -167,7 +167,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/domain.QueryResponse"
                 }
               }
             }
@@ -235,7 +235,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/domain.QueryResponse"
                 }
               }
             }
@@ -402,7 +402,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/domain.QueryResponse"
                 }
               }
             }
@@ -453,7 +453,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/domain.QueryResponse"
                 }
               }
             }
@@ -525,7 +525,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/domain.QueryResponse"
                 }
               }
             }
@@ -654,7 +654,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/domain.QueryResponse"
                 }
               }
             }
@@ -796,6 +796,24 @@
             "type": "string"
           },
           "want_notify": {
+            "type": "string"
+          }
+        }
+      },
+      "domain.QueryResponse": {
+        "required": [
+          "resources_affected",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "resources_affected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
             "type": "string"
           }
         }

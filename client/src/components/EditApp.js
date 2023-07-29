@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from 'axios';
+import {Agent} from 'https';
+import certs from '../Certs/certs.js';
 
 function EditApp() {
 
@@ -40,6 +42,10 @@ function EditApp() {
     
           const userInfo = JSON.parse(localStorage.getItem('userInfo'));
           const username = userInfo?.username;
+          const agent = new Agent({
+            cert: certs.certFile,
+            key: certs.keyFile,
+          })
     
           const config = {
             headers: {
@@ -52,10 +58,11 @@ function EditApp() {
             }
           };
     
-          await axios.put(`http://localhost:8080/app`, {
+          await axios.put(`https://localhost:443/app`, {
             "name" : appName,
             "description" : appDescription,
-          }, config);
+          }, config,
+          {httpsAgent : agent},);
     
           // Clear the form fields and display a success message
           setAppDescr('');

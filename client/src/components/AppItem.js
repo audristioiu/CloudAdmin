@@ -38,7 +38,7 @@ function AppItem(app) {
       </span>
 
       <span>IsRunning
-        {appRunningState == "true" ? (
+        {appRunningState === "true" ? (
           <div class="led-box">
             <div class="led-green"></div>
             <p>Running</p>

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
+import {Agent} from 'https';
+import certs from '../Certs/certs.js';
 
 //expiry date pe login?
 function Login({ setAuth }) {
@@ -21,10 +23,16 @@ function Login({ setAuth }) {
         },
       };
 
+      const agent = new Agent({
+        cert: certs.certFile,
+        key: certs.keyFile,
+      })
+
       const { data } = await axios.post(
-        "http://localhost:8080/login",
+        "https://localhost:443/login",
         { "username": username, "password": password },
-        config
+        config,
+        {httpAgent : agent},
       );
       localStorage.setItem("userPass", password);
       localStorage.setItem("userInfo", JSON.stringify(data));

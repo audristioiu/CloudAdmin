@@ -20,6 +20,8 @@ var (
 	cachedRequests = make(map[string][]string, 0)
 	//filters that can be used for GetAppsInfo
 	getAppsFilters = []string{"name", "kname", "description", "created_timestamp", "updated_timestamp"}
+	//default number of deployed apps for a new registered user
+	defaultNrDeployedApps int = 0
 )
 
 // AdminAuthenticate verifies role and user_id for admin
@@ -109,12 +111,21 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
+	userRetrievedData, _ = api.psqlRepo.GetUserDataWithEmail(userData.Email)
+	if userRetrievedData != nil {
+		api.apiLogger.Errorf("[ERROR] Email %v already used", userData.Email)
+		errorData.Message = "Bad Request/Email already used"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	nowTime := time.Now()
-	userData.JoinedDate = nowTime
-	userData.LastTimeOnline = nowTime
+	userData.JoinedDate = &nowTime
+	userData.LastTimeOnline = &nowTime
 	userData.Applications = []string{}
-	userData.NrDeployedApps = 0
+	userData.NrDeployedApps = &defaultNrDeployedApps
 
 	err = api.psqlRepo.InsertUserData(&userData)
 	if err != nil {
@@ -124,7 +135,11 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
-	response.Write([]byte("User registered succesfully"))
+
+	registerResponse := domain.QueryResponse{}
+	registerResponse.Message = "User registered succesfully"
+	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, userData.UserName)
+	response.WriteEntity(registerResponse)
 }
 
 // UserLogin verifies user credentials
@@ -222,9 +237,9 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 	if oldPass == "" || oldPass == "false" {
 		nowTime := time.Now()
-		newUserData.LastTimeOnline = nowTime
+		newUserData.LastTimeOnline = &nowTime
 
-		err = api.psqlRepo.UpdateUserLastTimeOnlineData(newUserData.LastTimeOnline, newUserData)
+		err = api.psqlRepo.UpdateUserLastTimeOnlineData(*newUserData.LastTimeOnline, newUserData)
 		if err != nil {
 			errorData.Message = "Internal error / updating last_time in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
@@ -251,7 +266,14 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	}
 
 	newUserData.Password = ""
-
+	newUserData.Applications = []string{}
+	newUserData.BirthDate = ""
+	newUserData.Email = ""
+	newUserData.JobRole = ""
+	newUserData.JobRole = ""
+	newUserData.JoinedDate = nil
+	newUserData.LastTimeOnline = nil
+	newUserData.NrDeployedApps = nil
 	response.WriteEntity(newUserData)
 }
 
@@ -381,7 +403,10 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
 	api.apiCache.SetWithTTL(marshalledRequest, newUserData, 1, time.Hour*24)
 
-	response.Write([]byte("User updated succesfully"))
+	registerResponse := domain.QueryResponse{}
+	registerResponse.Message = "User updated succesfully"
+	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, userData.UserName)
+	response.WriteEntity(registerResponse)
 }
 
 // DeleteUser deletes user
@@ -464,13 +489,18 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		}
 	}
 
-	response.Write([]byte("User deleted succesfully"))
+	registerResponse := domain.QueryResponse{}
+	registerResponse.Message = "Users deleted succesfully"
+	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, listUsersName...)
+	response.WriteEntity(registerResponse)
 }
 
 // UploadApp uploads app to s3
 func (api *API) UploadApp(request *restful.Request, response *restful.Response) {
 
 	errorData := domain.ErrorResponse{}
+
+	appsUploaded := make([]string, 0)
 
 	username := request.QueryParameter("username")
 	if username == "" {
@@ -612,6 +642,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					return
 				}
 
+				appsUploaded = append(appsUploaded, appData.Name)
+
 				err = api.psqlRepo.InsertAppData(&appData)
 				if err != nil {
 					errorData.Message = "Internal error/ insert app data in postgres"
@@ -651,7 +683,10 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	}
 	cachedRequests[username] = make([]string, 0)
 
-	response.Write([]byte("App uploaded succesfully"))
+	registerResponse := domain.QueryResponse{}
+	registerResponse.Message = "Apps uploaded succesfully"
+	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, appsUploaded...)
+	response.WriteEntity(registerResponse)
 }
 
 // GetAppsInfo retrieves apps information
@@ -872,6 +907,9 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	response.Write([]byte("App updated succesfully"))
+	registerResponse := domain.QueryResponse{}
+	registerResponse.Message = "App updated succesfully"
+	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, appData.Name)
 }
 
 // DeleteApp deletes app
@@ -918,5 +956,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 	cachedRequests[username] = make([]string, 0)
 
-	response.Write([]byte("App deleted succesfully"))
+	registerResponse := domain.QueryResponse{}
+	registerResponse.Message = "Apps deleted succesfully"
+	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, listAppNames...)
 }

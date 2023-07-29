@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AppItem from './AppItem';
 import './MyApps.css';
+import {Agent} from 'https';
+import certs from '../Certs/certs.js';
 
 function MyApps() {
   const [apps, setApps] = useState([]);
@@ -39,7 +41,10 @@ function MyApps() {
         },
       };
 
-      
+      const agent = new Agent({
+        cert: certs.certFile,
+        key: certs.keyFile,
+      })
 
       const formData = new FormData();
       for(var i=0;i<selectedFiles.length;i++){
@@ -47,7 +52,7 @@ function MyApps() {
       }
 
       try {
-        axios.post('http://localhost:8080/register/app', formData, config_app);
+        axios.post('https://localhost:443/register/app', formData, config_app, {httpsAgent : agent},);
       } catch (error) {
         setErrorMessage("Failed to upload app. /" + error.response.data.message );
       }
@@ -73,7 +78,13 @@ function MyApps() {
     };
 
     try {
-      const response = await axios.get(`http://localhost:8080/user/${username}`, config);
+      const agent = new Agent({
+        // (NOTE: this will disable client verification)
+        rejectUnauthorized : false,
+        cert: certs.certFile,
+        key: certs.keyFile,
+      })
+      const response = await axios.get(`https://localhost:443/user/${username}`, config, {httpsAgent:agent},);
       const my_apps = response.data?.applications;
       if (my_apps !== undefined) {
         const query_my_apps = my_apps.join();
@@ -129,7 +140,7 @@ function MyApps() {
           };
         }
   
-        const response_apps = await axios.get('http://localhost:8080/app', config_app);
+        const response_apps = await axios.get('https://localhost:443/app', config_app, {httpsAgent : agent},);
         setApps(response_apps.data.Response);
       }
      

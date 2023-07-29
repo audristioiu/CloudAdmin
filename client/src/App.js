@@ -1,10 +1,11 @@
 import { useEffect, useState, React } from 'react';
-import { 
+import {
   BrowserRouter,
   Routes,
   Route,
   Navigate
 } from 'react-router-dom';
+import Navbar from './components/Navbar';
 import Login from './components/Login';
 import Register from './components/Register';
 import Home from './components/Home';
@@ -23,22 +24,35 @@ function App() {
     setIsAuthenticated(value);
   };
 
-  useEffect(()=>{
+  useEffect(() => {
     localStorage.setItem("auth", JSON.stringify(isAuthenticated));
   }, [isAuthenticated]);
 
+  //fix pentru navbar
   return (
     <BrowserRouter>
       <Routes>
-        <Route path='/login' element={<Login setAuth={setAuth}/>}/>
-        <Route path='/register' element={<Register />}/>
-        <Route path='/' element={isAuthenticated ? <ProfilePage /> : <Navigate to="/main" replace />}/>
-        <Route path='/home' element={<Home />}/>
-        <Route path='/profile' element={<ProfilePage />}/>
-        <Route path='/editprofile' element={<EditProfilePage />}/>
-        <Route path='/main' element={<Main />}/>
-        <Route path='/myapps' element={<MyApps />}/>
-        <Route path='/editapp' element={<EditApp />}/>
+        <Route path='/login' element={<Login setAuth={setAuth} />} />
+        <Route path='/register' element={<Register />} />
+        <Route path='/' element={isAuthenticated ? <>
+          <Navbar />
+          <Home />
+        </> : <Navigate to="/main" replace />} />
+        <Route path='/home' element={<>
+          <Navbar />
+          <Home />
+        </>} />
+        <Route path='/profile' element={<>
+          <Navbar />
+          <ProfilePage />
+        </>} />
+        <Route path='/editprofile' element={<EditProfilePage />} />
+        <Route path='/main' element={<Main />} />
+        <Route path='/myapps' element={<>
+          <Navbar />
+          <MyApps />
+        </>} />
+        <Route path='/editapp' element={<EditApp />} />
       </Routes>
     </BrowserRouter>
   );

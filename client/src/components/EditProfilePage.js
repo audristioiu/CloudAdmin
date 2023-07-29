@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import user_photo from '../user.png';
+import {Agent} from 'https';
+import certs from '../Certs/certs.js';
 
 const EditProfilePage = () => {
   const [jobRole, setJobRole] = useState('');
@@ -24,6 +26,11 @@ const EditProfilePage = () => {
     try {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       const username = userInfo?.username;
+
+      const agent = new Agent({
+        cert: certs.certFile,
+        key: certs.keyFile,
+      })
 
       if (username) {
         const config = {
@@ -79,9 +86,10 @@ const EditProfilePage = () => {
               };
 
               await axios.post(
-                "http://localhost:8080/login",
+                "https://localhost:443/login",
                 { "username": username, "password": oldPassword },
-                config
+                config,
+                {httpsAgent : agent},
               );
             } catch (error) {
               setErrorMessage("Wrong old password / " + error.response.data.message);
@@ -92,13 +100,13 @@ const EditProfilePage = () => {
             localStorage.setItem("userPass", password);
           }
 
-          const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);
+          const response = await axios.put(`https://localhost:443/user/`, updatedData, config, {httpsAgent : agent},);
           if (response.status === 200) {
             // Profile updated successfully, navigate back to profile page
             navigate('/profile');
           }
         } else {
-          const response = await axios.put(`http://localhost:8080/user/`, updatedData, config);
+          const response = await axios.put(`https://localhost:443/user/`, updatedData, config, {httpsAgent : agent},);
           if (response.status === 200) {
             // Profile updated successfully, navigate back to profile page
             navigate('/profile');

@@ -85,6 +85,7 @@ func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) 
 	return &userData, nil
 }
 
+// GetUserDataWithUUID retrieves user using UUID for authorization from PostgreSql table
 func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, error) {
 	userData := domain.UserData{}
 	selectStatement := "SELECT username,user_id,role, applications FROM users where user_id=$1"
@@ -93,6 +94,21 @@ func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, e
 	err := row.Scan(&userData.UserName, &userData.UserID, &userData.Role, &userData.Applications)
 	if err != nil {
 		p.psqlLogger.Errorf("[ERROR] could not retrieve user using uuid with error : %v\n", err)
+		return nil, err
+	}
+	p.psqlLogger.Printf("Successfuly retrieved user : %+v", userData.UserName)
+	return &userData, nil
+}
+
+// GetUserDataWitEmail retrieves user using Email for authorization from PostgreSql table
+func (p *PostgreSqlRepo) GetUserDataWithEmail(email string) (*domain.UserData, error) {
+	userData := domain.UserData{}
+	selectStatement := "SELECT username,user_id,role, applications FROM users where email=$1"
+
+	row := p.conn.QueryRow(p.ctx, selectStatement, email)
+	err := row.Scan(&userData.UserName, &userData.UserID, &userData.Role, &userData.Applications)
+	if err != nil {
+		p.psqlLogger.Errorf("[ERROR] could not retrieve user using email with error : %v\n", err)
 		return nil, err
 	}
 	p.psqlLogger.Printf("Successfuly retrieved user : %+v", userData.UserName)

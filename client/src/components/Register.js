@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
+import {Agent} from 'https';
+import certs from '../Certs/certs';
 
 function Register() {
   const [username, setUsername] = useState('');
@@ -49,11 +51,15 @@ function Register() {
             "Content-type": "application/json",
           },
         };
-
+        const agent = new Agent({
+          cert: certs.certFile,
+          key: certs.keyFile,
+        })
        await axios.post(
-          "http://localhost:8080/register/user",
+          "https://localhost:443/register/user",
           { "username": username, "password": password, "email" : userEmail },
-          config
+          config,
+          {httpsAgent : agent},
         );
 
         history('/login');

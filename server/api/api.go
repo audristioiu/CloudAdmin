@@ -51,7 +51,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			To(api.UserRegister).
-			Returns(http.StatusOK, "OK", "User registered succesfully").
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusFound, "Already found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 
@@ -98,7 +98,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.UpdateUserProfile).
-			Returns(http.StatusOK, "OK", "User updated succesfully").
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 	ws.Route(
 		ws.
@@ -112,7 +112,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.AdminAuthenticate).
 			To(api.DeleteUser).
-			Returns(http.StatusOK, "OK", "User deleted succesfully").
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 
@@ -131,7 +131,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes("multipart/form-data").
 			Filter(api.BasicAuthenticate).
 			To(api.UploadApp).
-			Returns(http.StatusOK, "OK", "App registered succesfully").
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusFound, "Already found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 
@@ -168,7 +168,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.UpdateApp).
-			Returns(http.StatusOK, "OK", "App updated succesfully").
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 	ws.Route(
 		ws.
@@ -183,7 +183,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.AdminAuthenticate).
 			To(api.DeleteApp).
-			Returns(http.StatusOK, "OK", "App deleted succesfully").
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusForbidden, "User not allowed as admin", domain.ErrorResponse{}))
