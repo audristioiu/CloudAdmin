@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype/zeronull"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sirupsen/logrus"
 )
@@ -216,8 +217,7 @@ func (p *PostgreSqlRepo) DeleteUserData(username string) error {
 func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 	newApplicationData := domain.ApplicationData{}
 	insertStatement := "INSERT INTO apps (name, description, is_running, created_timestamp, updated_timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING name"
-
-	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, appData.Description, appData.IsRunning, appData.CreatedTimestamp, appData.UpdatedTimestamp)
+	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, zeronull.Text(appData.Description), appData.IsRunning, appData.CreatedTimestamp, appData.UpdatedTimestamp)
 	err := row.Scan(&newApplicationData.Name)
 	if err != nil {
 		p.psqlLogger.Errorf("[ERROR] could not insert app with error : %v\n", err)
@@ -240,7 +240,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 		return nil, fmt.Errorf("could not parse fql filter")
 	}
 	if len(filters) > 0 && len(filters[0]) >= 3 {
-		selectStatement := "SELECT * FROM apps where ("
+		selectStatement := "SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp FROM apps where ("
 		for i, filterParams := range filters {
 			if len(filterParams) == 3 {
 				paramID := helpers.GetRandomInt()
@@ -258,10 +258,20 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 				} else if filterParams[0] == "description" {
 					descriptionPostgresID := filterParams[0] + strconv.Itoa(paramID)
 					if filterParams[1] == "!=" {
-						selectStatement += filterParams[0] + " NOT ILIKE @" + descriptionPostgresID
+						if filterParams[2] == "NULL" {
+							selectStatement += "(" + filterParams[0] + " NOT ILIKE @" + descriptionPostgresID + " OR description IS NOT NULL)"
+						} else {
+							selectStatement += filterParams[0] + " NOT ILIKE @" + descriptionPostgresID
+						}
+
 						filterArguments[descriptionPostgresID] = "%" + filterParams[2] + "%"
 					} else {
-						selectStatement += filterParams[0] + " ILIKE @" + descriptionPostgresID
+						if filterParams[2] == "NULL" {
+							selectStatement += "(" + filterParams[0] + " ILIKE @" + descriptionPostgresID + " OR description IS NULL)"
+						} else {
+							selectStatement += filterParams[0] + " ILIKE @" + descriptionPostgresID
+						}
+
 						filterArguments[descriptionPostgresID] = "%" + filterParams[2] + "%"
 					}
 
@@ -296,13 +306,15 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 				if filterParams[0] == "&&" {
 					selectStatement += " AND "
 				} else if filterParams[0] == "||" {
-					selectStatement += " OR "
+					selectStatement += " AND name=@app_name) OR ("
+					filterArguments["app_name"] = appname
 				}
 
 			}
 			if i != len(filters)-1 && len(filterParams) == 0 {
-				selectStatement += ") AND name=@app_name"
-				filterArguments["app_name"] = appname
+				selectStatement += " AND name=@app_name1)"
+
+				filterArguments["app_name1"] = appname
 				break
 			}
 
@@ -315,7 +327,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 		}
 
 	} else {
-		selectStatement = "SELECT * FROM apps where name=$1"
+		selectStatement = "SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp FROM apps where name=$1"
 		p.psqlLogger.Println(selectStatement)
 		rows, err = p.conn.Query(p.ctx, selectStatement, appname)
 		if err != nil {

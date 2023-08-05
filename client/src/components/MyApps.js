@@ -10,6 +10,7 @@ function MyApps() {
   const [errorMessage, setErrorMessage] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [typeInput, setTypeInput] = useState('');
+  const [sortQueryInput, setSortQueryInput] = useState('')
   const [timestampInput, setTimestampInput] = useState('');
   const [timestampOn, setTimeStampOn] = useState(false);
   const timeRanges = {
@@ -58,7 +59,7 @@ function MyApps() {
       }
     }
   };
-  //TODO filtre update ciudat (actualizare sau ceva)
+  //TODO filtre update ciudat (actualizare sau ceva) si sort nu se updateaza automat
   const fetchApps = async () => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
     const username = userInfo?.username;
@@ -135,9 +136,19 @@ function MyApps() {
             ...config_app,
             params: {
               ...config_app.params,
-              filter: typeInput + '<=' + timeRanges[timestampInput],
+              filter: typeInput + '>=' + timeRanges[timestampInput],
             },
           };
+        }
+
+        if (sortQueryInput.length !== 0) {
+          config_app = {
+            ...config_app,
+            params: {
+              ...config_app.params,
+              sort: sortQueryInput
+            }
+          }
         }
   
         const response_apps = await axios.get('https://localhost:443/app', config_app, {httpsAgent : agent},);
@@ -153,7 +164,7 @@ function MyApps() {
   useEffect(() => {
    
     fetchApps();
-  }, [searchInput, typeInput, timestampInput]);
+  }, [searchInput, typeInput, timestampInput, sortQueryInput]);
 
   const renderApps = () => {
     if (apps) {
@@ -195,7 +206,17 @@ function MyApps() {
             <option value="90 days">90 days</option>
           </select>
         </label>
-}
+}        <label>
+          Sorting Types:
+          <select value={sortQueryInput} onChange={(e) => setSortQueryInput(e.target.value)}>
+            <option value="name|asc">Sort names ascending</option>
+            <option value="name|desc">Sort names descending</option>
+            <option value="created_timestamp|asc">Sort by Created Timestamp ascending</option>
+            <option value="created_timestamp|desc">Sort by Created Timestamp descending</option>
+            <option value="updated_timestamp|asc">Sort by Last Updated ascending</option>
+            <option value="updated_timestamp|desc">Sort by Last Updated descending</option>
+          </select>
+        </label>
         <button type="button" className='button-3' onClick={fetchApps}>
           Submit
         </button>

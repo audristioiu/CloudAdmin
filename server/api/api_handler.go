@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	"github.com/emicklei/go-restful/v3"
+	"golang.org/x/exp/slices"
 )
 
 var (
@@ -20,6 +21,10 @@ var (
 	cachedRequests = make(map[string][]string, 0)
 	//filters that can be used for GetAppsInfo
 	getAppsFilters = []string{"name", "kname", "description", "created_timestamp", "updated_timestamp"}
+	// sort fields that can be used for GetAppsInfo
+	getAppsSortFields = []string{"name", "created_timestamp", "updated_timestamp"}
+	//sort directions
+	sortDirections = []string{"asc", "desc"}
 	//default number of deployed apps for a new registered user
 	defaultNrDeployedApps int = 0
 )
@@ -539,7 +544,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		return
 
 	}
-	formFilesName := request.Request.MultipartForm.File["type"]
+	formFilesName := request.Request.MultipartForm.File["file"]
 	if len(formFilesName) == 0 {
 		api.apiLogger.Errorf("[ERROR] Couldn't form file")
 		errorData.Message = "Internal error/ could not form file"
@@ -620,7 +625,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				} else {
 					appData.Name = r.File[i-1].Name
 				}
-
 				appData.Description = string(descr)
 
 				appData.IsRunning = "false"
@@ -664,7 +668,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			} else {
 				//upload in s3
 				api.apiLogger.Println("upload s3")
-				api.apiLogger.Errorf("%v\n", string(descr))
+				api.apiLogger.Printf("%v\n", string(descr))
 
 			}
 
@@ -756,7 +760,36 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 				response.WriteEntity(errorData)
 				return
 			}
+		}
+		sortParams := make([]string, 0)
 
+		sortQuery := request.QueryParameter("sort")
+		if sortQuery != "" {
+			sortParams = strings.Split(sortQuery, "|")
+			if len(sortParams) != 2 {
+				api.apiLogger.Errorf("[ERROR] Invalid sort query : %v", sortParams)
+				errorData.Message = "Bad Request /Invalid sort query"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
+			if !slices.Contains(getAppsSortFields, sortParams[0]) {
+				api.apiLogger.Errorf("[ERROR] Invalid sort field in query : %v", sortParams)
+				errorData.Message = "Bad Request /Unknown sort field"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
+			if !slices.Contains(sortDirections, sortParams[1]) {
+				api.apiLogger.Errorf("[ERROR] Invalid sort direction in query : %v", sortParams)
+				errorData.Message = "Bad Request /Unknown sort direction"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
 		}
 
 		if appnames == "" {
@@ -810,10 +843,17 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			return
 		}
 
-		response.WriteEntity(appsInfo)
+		if len(sortParams) == 2 {
+			api.apiLogger.Infof("sorting by %+v", sortParams)
+			appsInfo.Response = helpers.SortApps(appsInfo.Response, sortParams[0], sortParams[1])
+		}
 
-		api.apiCache.SetWithTTL(marshalledRequest, appsInfo, 1, time.Hour*24)
-		cachedRequests[username] = append(cachedRequests[username], string(marshalledRequest))
+		response.WriteEntity(appsInfo)
+		if len(appsInfo.Response) > 0 {
+			api.apiCache.SetWithTTL(marshalledRequest, appsInfo, 1, time.Hour*24)
+			cachedRequests[username] = append(cachedRequests[username], string(marshalledRequest))
+		}
+
 		return
 	} else {
 		appsData := appsDataCache.(domain.GetApplicationsData)
@@ -959,4 +999,24 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	registerResponse := domain.QueryResponse{}
 	registerResponse.Message = "Apps deleted succesfully"
 	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, listAppNames...)
+}
+
+// StartProfiler starts the cpu profiler
+func (api *API) StartProfiler(request *restful.Request, response *restful.Response) {
+	if api.profiler.Cpufile != nil {
+		io.WriteString(response.ResponseWriter, "[restful] CPU profiling already running")
+		return
+	}
+	api.profiler.StartProfiling()
+	io.WriteString(response.ResponseWriter, "[restful] CPU profiling started, writing on:"+api.profiler.Cpuprofile)
+}
+
+// StopProfiler stops the cpu profiler
+func (api *API) StopProfiler(request *restful.Request, response *restful.Response) {
+	if api.profiler.Cpufile == nil {
+		io.WriteString(response.ResponseWriter, "[restful] CPU profiling not active")
+		return
+	}
+	api.profiler.StopProfiling()
+	io.WriteString(response.ResponseWriter, "[restful] CPU profiling stopped, closing:"+api.profiler.Cpuprofile)
 }

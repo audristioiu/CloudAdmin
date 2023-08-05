@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 
 	fql "github.com/ganigeorgiev/fexpr"
@@ -92,6 +93,45 @@ func Unique(s domain.GetApplicationsData) domain.GetApplicationsData {
 		}
 	}
 	return result
+}
+
+func SortApps(apps []*domain.ApplicationData, sortBy, sortDir string) []*domain.ApplicationData {
+	switch sortBy {
+	case "name":
+		if sortDir == "asc" {
+			sort.SliceStable(apps, func(i, j int) bool {
+				return apps[i].Name < apps[j].Name
+			})
+		} else {
+			sort.SliceStable(apps, func(i, j int) bool {
+				return apps[i].Name > apps[j].Name
+			})
+		}
+
+	case "created_timestamp":
+		if sortDir == "asc" {
+			sort.SliceStable(apps, func(i, j int) bool {
+				return apps[i].CreatedTimestamp.String() < apps[j].CreatedTimestamp.String()
+			})
+		} else {
+			sort.SliceStable(apps, func(i, j int) bool {
+				return apps[i].CreatedTimestamp.String() >= apps[j].CreatedTimestamp.String()
+			})
+		}
+
+	case "updated_timestamp":
+		if sortDir == "asc" {
+			sort.SliceStable(apps, func(i, j int) bool {
+				return apps[i].UpdatedTimestamp.String() <= apps[j].UpdatedTimestamp.String()
+			})
+		} else {
+			sort.SliceStable(apps, func(i, j int) bool {
+				return apps[i].UpdatedTimestamp.String() >= apps[j].UpdatedTimestamp.String()
+			})
+		}
+
+	}
+	return apps
 }
 
 // ParseFQLFilter returns filters in slice of slices of strings

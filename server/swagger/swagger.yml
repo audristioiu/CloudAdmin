@@ -52,7 +52,13 @@ paths:
             type: string
         - name: filter
           in: query
-          description: filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(?) or separate
+          description: filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(AND-&&,OR-||) or separate
+          allowEmptyValue: true
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: sort applications by name,created_timestamp or updated_timestamp
           allowEmptyValue: true
           schema:
             type: string

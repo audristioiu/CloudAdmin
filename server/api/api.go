@@ -19,21 +19,23 @@ const (
 	appPath      = "/app"
 )
 
-// API represents the object used for the api, api handlers and contains context and storage + local cache
+// API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service
 type API struct {
 	ctx       context.Context
 	psqlRepo  *repositories.PostgreSqlRepo
 	apiCache  *ristretto.Cache
 	apiLogger *logrus.Logger
+	profiler  *repositories.ProfilingService
 }
 
 // NewAPI returns an API object
-func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *logrus.Logger) *API {
+func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *logrus.Logger, cpuProfiler *repositories.ProfilingService) *API {
 	return &API{
 		ctx:       ctx,
 		psqlRepo:  postgresRepo,
 		apiCache:  cache,
 		apiLogger: logger,
+		profiler:  cpuProfiler,
 	}
 }
 
@@ -146,6 +148,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.QueryParameter("filter",
 				"filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(AND-&&,OR-||) or separate").
 				DataType("string").AllowEmptyValue(true)).
+			Param(ws.QueryParameter("sort", "sort applications by name,created_timestamp or updated_timestamp").DataType("string").AllowEmptyValue(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
@@ -187,5 +190,11 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusForbidden, "User not allowed as admin", domain.ErrorResponse{}))
+
+	//activate profiler endpoints only if it is initialized
+	if api.profiler.Cpuprofile != "" {
+		ws.Route(ws.GET("/profiler/start").To(api.StartProfiler))
+		ws.Route(ws.GET("/profiler/stop").To(api.StopProfiler))
+	}
 
 }

@@ -81,11 +81,19 @@ func (s *Service) StartWebService() {
 		log.Fatalf("[FATAL] Error in starting postgres service")
 		return
 	}
+	log.Debugln("Postgres Repo initialized")
 
-	log.Debugln("Postgres Repo initalized")
+	var profilerRepo *repositories.ProfilingService
+	activateCPUProfiler := os.Getenv("ACTIVATE_CPU_PROFILER")
+	if activateCPUProfiler == "true" {
+		profilerRepo = repositories.NewProfileService("profile_cpu.prof", log)
+		log.Debugln("Profiling Repo initialized")
+	} else {
+		profilerRepo = repositories.NewProfileService("", log)
+	}
 
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache, log)
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
