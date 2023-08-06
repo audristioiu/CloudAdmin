@@ -134,12 +134,17 @@ func SortApps(apps []*domain.ApplicationData, sortBy, sortDir string) []*domain.
 	return apps
 }
 
+/*
+example of combined filters
+description=NULL&&is_running="false"||kname="test"&&created_timestamp<"1day"
+(description=NULL && is_running="false")||(kname="test" && description="integer")
+*/
+
 // ParseFQLFilter returns filters in slice of slices of strings
 func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
 	s := fql.NewScanner(strings.NewReader(fqlString))
 
-	listFilters := make([][]string, 10)
-
+	listFilters := make([][]string, 20)
 	idx := 0
 
 	listFilters[idx] = make([]string, 0)
@@ -149,16 +154,61 @@ func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
 			logger.Debug("End of parsing")
 			break
 		}
+
 		if err != nil {
 			logger.Errorf("error in scanning : %v", err)
 			return nil
 		}
-		if t.Type == fql.TokenWS || (t.Type == fql.TokenNumber && t.Literal != "NULL") || (t.Type == fql.TokenText && t.Literal == "NULL") {
+		if t.Type == fql.TokenWS || (t.Type == fql.TokenText && t.Literal == "NULL") ||
+			(t.Type == fql.TokenIdentifier && !slices.Contains(GetAppsFilters, t.Literal) && t.Literal != "NULL") {
 			logger.Errorf("invalid fql value")
 			return nil
 		}
-		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || (t.Type == fql.TokenNumber && t.Literal == "NULL") {
-			listFilters[idx] = append(listFilters[idx], t.Literal)
+		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || t.Type == fql.TokenGroup {
+			if t.Type == fql.TokenGroup {
+				for _, literal := range strings.Split(t.Literal, " ") {
+					if literal == "&&" || literal == "||" {
+						idx = idx + 1
+						listFilters[idx] = append(listFilters[idx], literal)
+						idx = idx + 1
+					} else {
+						var separatedLiteral []string
+						var separator string
+						if strings.Contains(literal, "!=") {
+							separatedLiteral = strings.Split(literal, "=")
+							separator = "!="
+						} else if strings.Contains(literal, ">=") {
+							separatedLiteral = strings.Split(literal, ">=")
+							separator = ">="
+						} else if strings.Contains(literal, "<=") {
+							separatedLiteral = strings.Split(literal, "<=")
+							separator = "<="
+						} else if strings.Contains(literal, "=") {
+							separatedLiteral = strings.Split(literal, "=")
+							separator = "="
+						} else if strings.Contains(literal, ">") {
+							separatedLiteral = strings.Split(literal, ">")
+							separator = ">"
+							fmt.Println(separatedLiteral)
+						} else if strings.Contains(literal, "<") {
+							separatedLiteral = strings.Split(literal, "<")
+							separator = "<"
+						}
+
+						listFilters[idx] = append(listFilters[idx], separatedLiteral[0])
+						listFilters[idx] = append(listFilters[idx], separator)
+						listFilters[idx] = append(listFilters[idx], separatedLiteral[1])
+					}
+
+				}
+
+			} else {
+				if t.Literal == "||" && len(listFilters[idx]) == 3 {
+					idx = idx + 1
+				}
+				listFilters[idx] = append(listFilters[idx], t.Literal)
+			}
+
 			if t.Type == fql.TokenText || t.Literal == "NULL" || t.Literal == "&&" || t.Literal == "||" {
 				idx = idx + 1
 			}

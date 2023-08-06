@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -243,6 +244,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 		selectStatement := "SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp FROM apps where ("
 		for i, filterParams := range filters {
 			if len(filterParams) == 3 {
+				filterParams[2] = strings.ReplaceAll(filterParams[2], `"`, "")
 				paramID := helpers.GetRandomInt()
 				if filterParams[0] == "kname" {
 
@@ -306,13 +308,12 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 				if filterParams[0] == "&&" {
 					selectStatement += " AND "
 				} else if filterParams[0] == "||" {
-					selectStatement += " AND name=@app_name) OR ("
-					filterArguments["app_name"] = appname
+					selectStatement += " OR "
 				}
 
 			}
 			if i != len(filters)-1 && len(filterParams) == 0 {
-				selectStatement += " AND name=@app_name1)"
+				selectStatement += ") AND name=@app_name1"
 
 				filterArguments["app_name1"] = appname
 				break

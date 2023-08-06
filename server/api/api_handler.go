@@ -19,14 +19,6 @@ import (
 var (
 	//map of users with their specific cached requests as value
 	cachedRequests = make(map[string][]string, 0)
-	//filters that can be used for GetAppsInfo
-	getAppsFilters = []string{"name", "kname", "description", "created_timestamp", "updated_timestamp"}
-	// sort fields that can be used for GetAppsInfo
-	getAppsSortFields = []string{"name", "created_timestamp", "updated_timestamp"}
-	//sort directions
-	sortDirections = []string{"asc", "desc"}
-	//default number of deployed apps for a new registered user
-	defaultNrDeployedApps int = 0
 )
 
 // AdminAuthenticate verifies role and user_id for admin
@@ -130,7 +122,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	userData.JoinedDate = &nowTime
 	userData.LastTimeOnline = &nowTime
 	userData.Applications = []string{}
-	userData.NrDeployedApps = &defaultNrDeployedApps
+	userData.NrDeployedApps = &helpers.DefaultNrDeployedApps
 
 	err = api.psqlRepo.InsertUserData(&userData)
 	if err != nil {
@@ -747,7 +739,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 
 		if filter != "" {
 			filterFlag := 0
-			for _, appFilter := range getAppsFilters {
+			for _, appFilter := range helpers.GetAppsFilters {
 				if strings.Contains(filter, appFilter) {
 					filterFlag = 1
 				}
@@ -774,7 +766,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 				response.WriteEntity(errorData)
 				return
 			}
-			if !slices.Contains(getAppsSortFields, sortParams[0]) {
+			if !slices.Contains(helpers.GetAppsSortFields, sortParams[0]) {
 				api.apiLogger.Errorf("[ERROR] Invalid sort field in query : %v", sortParams)
 				errorData.Message = "Bad Request /Unknown sort field"
 				errorData.StatusCode = http.StatusBadRequest
@@ -782,7 +774,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 				response.WriteEntity(errorData)
 				return
 			}
-			if !slices.Contains(sortDirections, sortParams[1]) {
+			if !slices.Contains(helpers.SortDirections, sortParams[1]) {
 				api.apiLogger.Errorf("[ERROR] Invalid sort direction in query : %v", sortParams)
 				errorData.Message = "Bad Request /Unknown sort direction"
 				errorData.StatusCode = http.StatusBadRequest
