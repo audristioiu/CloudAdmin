@@ -189,7 +189,6 @@ func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
 						} else if strings.Contains(literal, ">") {
 							separatedLiteral = strings.Split(literal, ">")
 							separator = ">"
-							fmt.Println(separatedLiteral)
 						} else if strings.Contains(literal, "<") {
 							separatedLiteral = strings.Split(literal, "<")
 							separator = "<"
