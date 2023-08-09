@@ -300,7 +300,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 
 				}
 			} else if len(filterParams) == 2 || len(filterParams) > 4 {
-				p.psqlLogger.Errorf("[ERROR] Invalid filter")
+				p.psqlLogger.Errorf("[ERROR] Invalid filter %+v", filterParams)
 				return nil, fmt.Errorf("invalid fql filter")
 			}
 

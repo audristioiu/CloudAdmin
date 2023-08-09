@@ -161,7 +161,7 @@ func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
 		}
 		if t.Type == fql.TokenWS || (t.Type == fql.TokenText && t.Literal == "NULL") ||
 			(t.Type == fql.TokenIdentifier && !slices.Contains(GetAppsFilters, t.Literal) && t.Literal != "NULL") {
-			logger.Errorf("invalid fql value")
+			logger.Errorf("invalid fql value %+v", t.Literal)
 			return nil
 		}
 		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || t.Type == fql.TokenGroup {
