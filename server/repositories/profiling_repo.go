@@ -4,18 +4,18 @@ import (
 	"os"
 	"runtime/pprof"
 
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // ProfilingService represents a WebService that can start/stop a CPU profile and write results to a file
 type ProfilingService struct {
 	Cpuprofile string   // the output filename to write profile results, e.g. myservice.prof
 	Cpufile    *os.File // if not nil, then profiling is active
-	CpuLogger  *logrus.Logger
+	CpuLogger  *zap.Logger
 }
 
 // NewProfileService creates a new profile
-func NewProfileService(outputFilename string, logger *logrus.Logger) *ProfilingService {
+func NewProfileService(outputFilename string, logger *zap.Logger) *ProfilingService {
 	return &ProfilingService{
 		Cpuprofile: outputFilename,
 		CpuLogger:  logger,
@@ -26,7 +26,7 @@ func NewProfileService(outputFilename string, logger *logrus.Logger) *ProfilingS
 func (p *ProfilingService) StartProfiling() {
 	cpufile, err := os.Create(p.Cpuprofile)
 	if err != nil {
-		p.CpuLogger.Fatal(err)
+		p.CpuLogger.Fatal("could not create file", zap.Error(err))
 		return
 	}
 

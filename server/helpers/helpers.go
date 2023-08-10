@@ -5,14 +5,13 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
 	"math/big"
 	"sort"
 	"strings"
 
 	fql "github.com/ganigeorgiev/fexpr"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
 
@@ -141,7 +140,7 @@ description=NULL&&is_running="false"||kname="test"&&created_timestamp<"1day"
 */
 
 // ParseFQLFilter returns filters in slice of slices of strings
-func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
+func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 	s := fql.NewScanner(strings.NewReader(fqlString))
 
 	listFilters := make([][]string, 20)
@@ -156,12 +155,12 @@ func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
 		}
 
 		if err != nil {
-			logger.Errorf("error in scanning : %v", err)
+			logger.Error("error in scanning", zap.Error(err))
 			return nil
 		}
 		if t.Type == fql.TokenWS || (t.Type == fql.TokenText && t.Literal == "NULL") ||
 			(t.Type == fql.TokenIdentifier && !slices.Contains(GetAppsFilters, t.Literal) && t.Literal != "NULL") {
-			logger.Errorf("invalid fql value %+v", t.Literal)
+			logger.Error("invalid fql value", zap.String("literal", t.Literal))
 			return nil
 		}
 		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || t.Type == fql.TokenGroup {
@@ -216,6 +215,6 @@ func ParseFQLFilter(fqlString string, logger *logrus.Logger) [][]string {
 
 	}
 
-	fmt.Println(listFilters)
+	logger.Info("got list of filters", zap.Any("filter list", listFilters))
 	return listFilters
 }

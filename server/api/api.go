@@ -9,7 +9,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const (
@@ -24,12 +24,12 @@ type API struct {
 	ctx       context.Context
 	psqlRepo  *repositories.PostgreSqlRepo
 	apiCache  *ristretto.Cache
-	apiLogger *logrus.Logger
+	apiLogger *zap.Logger
 	profiler  *repositories.ProfilingService
 }
 
 // NewAPI returns an API object
-func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *logrus.Logger, cpuProfiler *repositories.ProfilingService) *API {
+func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger, cpuProfiler *repositories.ProfilingService) *API {
 	return &API{
 		ctx:       ctx,
 		psqlRepo:  postgresRepo,

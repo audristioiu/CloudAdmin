@@ -8,13 +8,12 @@ import (
 	"net/http"
 	"os"
 
-	runtime "github.com/banzaicloud/logrus-runtime-formatter"
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-openapi/spec"
 	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // Service describes the structure used for starting the web service
@@ -31,18 +30,11 @@ func asJSON(v interface{}) string {
 	return string(data)
 }
 
-// StartWebService initializez loggger,restful and swagger api, postgres and s3 repo, local cache,docker and kubernetes clients
+// StartWebService initializez logger,restful and swagger api, postgres and s3 repo, local cache,docker and kubernetes clients
 func (s *Service) StartWebService() {
-	log := logrus.New()
-	formatter := runtime.Formatter{ChildFormatter: &logrus.TextFormatter{
-		FullTimestamp:          true,
-		DisableLevelTruncation: true,
-	}}
-	formatter.Line = true
-	log.SetFormatter(&formatter)
-	log.SetOutput(os.Stdout)
-	log.SetLevel(logrus.TraceLevel)
-	log.SetReportCaller(true)
+
+	log, _ := zap.NewDevelopment()
+	defer log.Sync()
 
 	ws := new(restful.WebService)
 
@@ -50,11 +42,11 @@ func (s *Service) StartWebService() {
 
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatalf("[FATAL] Error loading environment variables file with error %v", err)
+		log.Fatal("[FATAL] Error loading environment variables file with error", zap.Error(err))
 		return
 	}
 
-	log.Debugln("Env variables are loaded")
+	log.Debug("Env variables are loaded")
 
 	//initialize local cache for get info endpoints
 	cache, err := ristretto.NewCache(&ristretto.Config{
@@ -63,11 +55,11 @@ func (s *Service) StartWebService() {
 		BufferItems: 64,      // Number of keys per Get buffer.
 	})
 	if err != nil {
-		log.Fatalf("[FATAL] Error intializing ristretto Cache with error %v", err)
+		log.Fatal("[FATAL] Error intializing ristretto Cache with error", zap.Error(err))
 		return
 	}
 
-	log.Debugln("Local Ristretto Cache initalized")
+	log.Debug("Local Ristretto Cache initalized")
 
 	psqlUser := os.Getenv("POSTGRES_USER")
 	psqlPass := os.Getenv("POSTGRES_PASSWORD")
@@ -78,16 +70,16 @@ func (s *Service) StartWebService() {
 	// initialize repos
 	psqlRepo := repositories.NewPostgreSqlRepo(ctx, psqlUser, psqlPass, psqlHost, psqlDB, psqlPort, log)
 	if psqlRepo == nil {
-		log.Fatalf("[FATAL] Error in starting postgres service")
+		log.Fatal("[FATAL] Error in starting postgres service")
 		return
 	}
-	log.Debugln("Postgres Repo initialized")
+	log.Debug("Postgres Repo initialized")
 
 	var profilerRepo *repositories.ProfilingService
 	activateCPUProfiler := os.Getenv("ACTIVATE_CPU_PROFILER")
 	if activateCPUProfiler == "true" {
 		profilerRepo = repositories.NewProfileService("profile_cpu.prof", log)
-		log.Debugln("Profiling Repo initialized")
+		log.Debug("Profiling Repo initialized")
 	} else {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
@@ -103,7 +95,7 @@ func (s *Service) StartWebService() {
 		APIPath:                       "/apidocs.json",
 		PostBuildSwaggerObjectHandler: enrichSwaggerObject}
 	actual := restfulspec.BuildSwagger(config)
-	log.Println(asJSON(actual))
+	log.Info(asJSON(actual))
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(config))
 
 	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("/Users/udris/Desktop/CloudAdmin/swagger-ui/dist"))))
@@ -117,10 +109,10 @@ func (s *Service) StartWebService() {
 		Container:      restful.DefaultContainer}
 	restful.DefaultContainer.Filter(cors.Filter)
 
-	log.Printf("Started api service on port 443")
+	log.Info("Started api service on port 443")
 	err = http.ListenAndServeTLS(":443", "cert/cert.crt", "cert/cert.key", nil)
 	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
+		log.Fatal("ListenAndServe: ", zap.Error(err))
 	}
 }
 

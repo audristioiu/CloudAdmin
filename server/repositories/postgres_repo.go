@@ -13,30 +13,30 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype/zeronull"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // PostgresSqlRepo represents info about PostgreSql
 type PostgreSqlRepo struct {
 	ctx        context.Context
 	conn       *pgxpool.Pool
-	psqlLogger *logrus.Logger
+	psqlLogger *zap.Logger
 }
 
 // NewPostgreSqlRepo returns a new PostgreSql repo
-func NewPostgreSqlRepo(ctx context.Context, username, password, host, databaseName string, port int, logger *logrus.Logger) *PostgreSqlRepo {
+func NewPostgreSqlRepo(ctx context.Context, username, password, host, databaseName string, port int, logger *zap.Logger) *PostgreSqlRepo {
 	url := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", username, password, host, port, databaseName)
 
 	dbPool, err := pgxpool.New(ctx, url)
 	if err != nil {
-		logger.Printf("[ERROR] could not connect to database : %v\n", err)
+		logger.Error(" could not connect to database", zap.Error(err))
 		return nil
 	}
 
 	// check connection
 	err = dbPool.Ping(ctx)
 	if err != nil {
-		logger.Printf("[ERROR] could not ping : %v\n", err)
+		logger.Error(" could not ping", zap.Error(err))
 		return nil
 	}
 
@@ -63,10 +63,10 @@ func (p *PostgreSqlRepo) InsertUserData(userData *domain.UserData) error {
 		userData.WantNotify, userData.Applications, userData.UserID, userData.Role)
 	err := row.Scan(&newUserData.UserName)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not insert data with error : %v\n", err)
+		p.psqlLogger.Error(" could not insert data", zap.Error(err))
 		return err
 	}
-	p.psqlLogger.Printf("Successfuly inserted user : %+v", newUserData.UserName)
+	p.psqlLogger.Info("Successfuly inserted user", zap.String("user_name", newUserData.UserName))
 	return nil
 }
 
@@ -80,10 +80,10 @@ func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) 
 		&userData.NrDeployedApps, &userData.JobRole, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
 		&userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not retrieve user with error : %v\n", err)
+		p.psqlLogger.Error(" could not retrieve user", zap.Error(err))
 		return nil, err
 	}
-	p.psqlLogger.Printf("Successfuly retrieved user : %+v", userData)
+	p.psqlLogger.Info("Successfuly retrieved user", zap.Any("user_data", userData))
 	return &userData, nil
 }
 
@@ -95,10 +95,10 @@ func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, e
 	row := p.conn.QueryRow(p.ctx, selectStatement, userID)
 	err := row.Scan(&userData.UserName, &userData.UserID, &userData.Role, &userData.Applications)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not retrieve user using uuid with error : %v\n", err)
+		p.psqlLogger.Error(" could not retrieve user using uuid", zap.Error(err))
 		return nil, err
 	}
-	p.psqlLogger.Printf("Successfuly retrieved user : %+v", userData.UserName)
+	p.psqlLogger.Info("Successfuly retrieved user", zap.String("user_name", userData.UserName))
 	return &userData, nil
 }
 
@@ -110,10 +110,10 @@ func (p *PostgreSqlRepo) GetUserDataWithEmail(email string) (*domain.UserData, e
 	row := p.conn.QueryRow(p.ctx, selectStatement, email)
 	err := row.Scan(&userData.UserName, &userData.UserID, &userData.Role, &userData.Applications)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not retrieve user using email with error : %v\n", err)
+		p.psqlLogger.Error(" could not retrieve user using email", zap.Error(err))
 		return nil, err
 	}
-	p.psqlLogger.Printf("Successfuly retrieved user : %+v", userData.UserName)
+	p.psqlLogger.Info("Successfuly retrieved user", zap.String("user_name", userData.UserName))
 	return &userData, nil
 }
 
@@ -135,14 +135,14 @@ func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 	row, err := p.conn.Exec(p.ctx, updateStatement, userData.NrDeployedApps, userData.JobRole, userData.Email,
 		userData.WantNotify, userData.Password, userData.BirthDate, userData.FullName, userData.UserName)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not update user with error : %v\n", err)
+		p.psqlLogger.Error(" could not update user", zap.Error(err))
 		return err
 	}
 	if row.RowsAffected() != 1 {
-		p.psqlLogger.Errorf("[ERROR] no row found to update")
+		p.psqlLogger.Error(" no row found to update")
 		return errors.New("no row found to update")
 	}
-	p.psqlLogger.Printf("Successfuly updated user : %+v", userData.UserName)
+	p.psqlLogger.Info("Successfuly updated user", zap.String("user_name", userData.UserName))
 	return nil
 }
 
@@ -152,14 +152,14 @@ func (p *PostgreSqlRepo) UpdateUserLastTimeOnlineData(lastTimestamp time.Time, u
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, lastTimestamp, userData.UserName)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not update user last time online with error : %v\n", err)
+		p.psqlLogger.Error(" could not update user last time online", zap.Error(err))
 		return err
 	}
 	if row.RowsAffected() != 1 {
-		p.psqlLogger.Errorf("[ERROR] no row found to update")
+		p.psqlLogger.Error(" no row found to update")
 		return errors.New("no row found to update")
 	}
-	p.psqlLogger.Printf("Successfuly updated user last timestamp with : %v", lastTimestamp.String())
+	p.psqlLogger.Info("Successfuly updated user last timestamp", zap.String("user_last_timestamp", lastTimestamp.String()))
 	return nil
 }
 
@@ -169,14 +169,14 @@ func (p *PostgreSqlRepo) UpdateUserRoleData(role, userID string, userData *domai
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, role, userID, userData.UserName)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not update user role with error : %v\n", err)
+		p.psqlLogger.Error(" could not update user role\n", zap.Error(err))
 		return err
 	}
 	if row.RowsAffected() != 1 {
-		p.psqlLogger.Errorf("[ERROR] no row found to update")
+		p.psqlLogger.Error(" no row found to update")
 		return errors.New("no row found to update")
 	}
-	p.psqlLogger.Printf("Successfuly updated user role with : %v", role)
+	p.psqlLogger.Info("Successfuly updated user role", zap.String("user_role", role))
 	return nil
 }
 
@@ -186,14 +186,14 @@ func (p *PostgreSqlRepo) UpdateUserAppsData(appName, userName string) error {
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userName)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not update user: %v with the new app : %v  with error : %v\n", userName, appName, err)
+		p.psqlLogger.Error(" could not update user with the new app", zap.String("user_name", userName), zap.String("app_name", appName), zap.Error(err))
 		return err
 	}
 	if row.RowsAffected() != 1 {
-		p.psqlLogger.Errorf("[ERROR] no row found to update")
+		p.psqlLogger.Error(" no row found to update")
 		return errors.New("no row found to update")
 	}
-	p.psqlLogger.Printf("Successfuly updated user apps with : %+v", appName)
+	p.psqlLogger.Info("Successfuly updated user apps", zap.String("updated_app", appName))
 	return nil
 }
 
@@ -203,14 +203,14 @@ func (p *PostgreSqlRepo) DeleteUserData(username string) error {
 
 	row, err := p.conn.Exec(p.ctx, deleteStatement, username)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not delete data with error : %v\n", err)
+		p.psqlLogger.Error(" could not delete data", zap.Error(err))
 		return err
 	}
 	if row.RowsAffected() != 1 {
-		p.psqlLogger.Errorf("[ERROR] no row found to delete")
+		p.psqlLogger.Error(" no row found to delete")
 		return errors.New("no row found to delete")
 	}
-	p.psqlLogger.Printf("Successfuly deleted user : %v", username)
+	p.psqlLogger.Info("Successfuly deleted user", zap.String("deleted_user", username))
 	return nil
 }
 
@@ -221,10 +221,10 @@ func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, zeronull.Text(appData.Description), appData.IsRunning, appData.CreatedTimestamp, appData.UpdatedTimestamp)
 	err := row.Scan(&newApplicationData.Name)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not insert app with error : %v\n", err)
+		p.psqlLogger.Error(" could not insert app", zap.Error(err))
 		return err
 	}
-	p.psqlLogger.Printf("Successfuly inserted app: %+v", newApplicationData.Name)
+	p.psqlLogger.Info("Successfuly inserted app", zap.String("new_app", newApplicationData.Name))
 	return nil
 }
 
@@ -300,7 +300,7 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 
 				}
 			} else if len(filterParams) == 2 || len(filterParams) > 4 {
-				p.psqlLogger.Errorf("[ERROR] Invalid filter %+v", filterParams)
+				p.psqlLogger.Error(" Invalid filter", zap.Any("filter_params", filterParams))
 				return nil, fmt.Errorf("invalid fql filter")
 			}
 
@@ -320,19 +320,19 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 			}
 
 		}
-		p.psqlLogger.Println(selectStatement)
+		p.psqlLogger.Info(selectStatement)
 		rows, err = p.conn.Query(p.ctx, selectStatement, filterArguments)
 		if err != nil {
-			p.psqlLogger.Errorf("[ERROR] could not retrieve app with error : %v\n", err)
+			p.psqlLogger.Error(" could not retrieve app", zap.Error(err))
 			return nil, err
 		}
 
 	} else {
 		selectStatement = "SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp FROM apps where name=$1"
-		p.psqlLogger.Println(selectStatement)
+		p.psqlLogger.Info(selectStatement)
 		rows, err = p.conn.Query(p.ctx, selectStatement, appname)
 		if err != nil {
-			p.psqlLogger.Errorf("[ERROR] could not retrieve app with error : %v\n", err)
+			p.psqlLogger.Error(" could not retrieve appn", zap.Error(err))
 			return nil, err
 		}
 	}
@@ -342,13 +342,13 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning,
 			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp)
 		if err != nil {
-			p.psqlLogger.Errorf("[ERROR] could not scan app with error : %v\n", err)
+			p.psqlLogger.Error(" could not scan app", zap.Error(err))
 			return nil, err
 		}
 		applicationsData = append(applicationsData, applicationData)
 	}
 
-	p.psqlLogger.Printf("Successfuly retrieved apps: %+v", applicationsData)
+	p.psqlLogger.Info("Successfuly retrieved apps", zap.Any("app_data", applicationsData))
 	return applicationsData, nil
 }
 
@@ -362,14 +362,14 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.UpdatedTimestamp, appData.Name)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not update app with error : %v\n", err)
+		p.psqlLogger.Error(" could not update app ", zap.Error(err))
 		return err
 	}
 	if row.RowsAffected() != 1 {
-		p.psqlLogger.Errorf("[ERROR] no row found to update")
+		p.psqlLogger.Error(" no row found to update")
 		return errors.New("no row found to update")
 	}
-	p.psqlLogger.Printf("Successfuly updated app: %+v", appData.Name)
+	p.psqlLogger.Info("Successfuly updated app", zap.String("updated_app", appData.Name))
 	return nil
 }
 
@@ -379,25 +379,25 @@ func (p *PostgreSqlRepo) DeleteAppData(appName, userName string) error {
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userName)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not remove app : %v from user : %v with error : %v\n", appName, userName, err)
+		p.psqlLogger.Error(" could not remove app from user", zap.String("app_name", appName), zap.String("user_name", userName), zap.Error(err))
 		return err
 	}
 	if row.RowsAffected() != 1 {
-		p.psqlLogger.Errorf("[ERROR] no row found to update")
+		p.psqlLogger.Error(" no row found to update")
 		return errors.New("no row found to update")
 	}
 	deleteStatement := "DELETE FROM apps WHERE name = $1"
 
 	row, err = p.conn.Exec(p.ctx, deleteStatement, appName)
 	if err != nil {
-		p.psqlLogger.Errorf("[ERROR] could not delete app :  %v  with error : %v\n", appName, err)
+		p.psqlLogger.Error(" could not delete app", zap.String("app_name", appName), zap.Error(err))
 		return err
 	}
 	if row.RowsAffected() != 1 {
-		p.psqlLogger.Errorf("[ERROR] no row found to delete")
+		p.psqlLogger.Error(" no row found to delete")
 		return errors.New("no row found to delete")
 	}
 
-	p.psqlLogger.Printf("Successfuly deleted user app : %+v", appName)
+	p.psqlLogger.Info("Successfuly deleted user app", zap.String("deleted_app", appName))
 	return nil
 }
