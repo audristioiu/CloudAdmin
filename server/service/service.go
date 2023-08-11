@@ -42,7 +42,7 @@ func (s *Service) StartWebService() {
 
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("[FATAL] Error loading environment variables file with error", zap.Error(err))
+		log.Fatal("Error loading environment variables file", zap.Error(err))
 		return
 	}
 
@@ -55,7 +55,7 @@ func (s *Service) StartWebService() {
 		BufferItems: 64,      // Number of keys per Get buffer.
 	})
 	if err != nil {
-		log.Fatal("[FATAL] Error intializing ristretto Cache with error", zap.Error(err))
+		log.Fatal("Error intializing ristretto Cache", zap.Error(err))
 		return
 	}
 

@@ -215,6 +215,6 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 
 	}
 
-	logger.Info("got list of filters", zap.Any("filter list", listFilters))
+	logger.Debug("got list of filters", zap.Any("filter list", listFilters))
 	return listFilters
 }
