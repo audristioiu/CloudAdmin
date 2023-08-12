@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
@@ -14,6 +15,7 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
+	"golang.org/x/net/http2"
 )
 
 // Service describes the structure used for starting the web service
@@ -109,6 +111,14 @@ func (s *Service) StartWebService() {
 		Container:      restful.DefaultContainer}
 	restful.DefaultContainer.Filter(cors.Filter)
 
+	server := &http.Server{
+		Addr:           ":443",
+		ReadTimeout:    1 * time.Minute,
+		WriteTimeout:   1 * time.Minute,
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	http2.ConfigureServer(server, &http2.Server{})
 	log.Info("Started api service on port 443")
 	err = http.ListenAndServeTLS(":443", "cert/cert.crt", "cert/cert.key", nil)
 	if err != nil {
