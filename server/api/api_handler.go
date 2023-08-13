@@ -639,6 +639,27 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					return
 				}
 
+				indexFile := strings.Index(r.File[i].Name, ".")
+				indexApp := strings.Index(appData.Name, ".")
+				if indexFile == -1 || indexApp == -1 {
+					api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+r.File[i].Name))
+					errorData.Message = "Bad Request/ Wrong archive format"
+					errorData.StatusCode = http.StatusBadRequest
+					response.WriteHeader(http.StatusBadRequest)
+					response.WriteEntity(errorData)
+					return
+				}
+				trimmedFileName := r.File[i].Name[:indexFile]
+				trimmedAppName := appData.Name[:indexFile]
+				if trimmedFileName != trimmedAppName {
+					api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
+					errorData.Message = "Bad Request/ Wrong archive format"
+					errorData.StatusCode = http.StatusBadRequest
+					response.WriteHeader(http.StatusBadRequest)
+					response.WriteEntity(errorData)
+					return
+				}
+
 				appsUploaded = append(appsUploaded, appData.Name)
 
 				err = api.psqlRepo.InsertAppData(&appData)
@@ -799,7 +820,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			if err != nil {
 				if strings.Contains(err.Error(), "fql") {
 					api.apiLogger.Error(" Invalid fql filter for app", zap.String("app_name", appName))
-					errorData.Message = "Invalid fql filter"
+					errorData.Message = "Bad Request / Invalid fql filter"
 					errorData.StatusCode = http.StatusBadRequest
 					appsInfo.Errors = append(appsInfo.Errors, errorData)
 				} else {
