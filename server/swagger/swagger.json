@@ -11,7 +11,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "version": "1.7.0"
+    "version": "1.8.0"
   },
   "tags": [
     {
@@ -29,7 +29,7 @@
         "tags": [
           "apps"
         ],
-        "summary": "Retrieves apps information by name",
+        "summary": "Retrieve apps information by name",
         "operationId": "GetAppsInfo",
         "parameters": [
           {
@@ -190,6 +190,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "User/Apps Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                }
+              }
+            }
           }
         },
         "x-codegen-request-body-name": "body"
@@ -198,7 +208,7 @@
         "tags": [
           "apps"
         ],
-        "summary": "Deletes app",
+        "summary": "Delete app",
         "operationId": "DeleteApp",
         "parameters": [
           {
@@ -270,7 +280,7 @@
             }
           },
           "404": {
-            "description": "User Not Found",
+            "description": "User/Apps Not Found",
             "content": {
               "application/json": {
                 "schema": {
@@ -548,6 +558,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                }
+              }
+            }
           }
         },
         "x-codegen-request-body-name": "body"
@@ -558,7 +578,7 @@
         "tags": [
           "users"
         ],
-        "summary": "Retrieves user profile",
+        "summary": "Retrieve user profile",
         "operationId": "GetUserProfile",
         "parameters": [
           {
@@ -626,7 +646,7 @@
         "tags": [
           "users"
         ],
-        "summary": "Deletes user",
+        "summary": "Delete user",
         "operationId": "DeleteUser",
         "parameters": [
           {
@@ -670,6 +690,16 @@
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "User not allowed as admin",
             "content": {
               "application/json": {
                 "schema": {

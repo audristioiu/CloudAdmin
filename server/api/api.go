@@ -74,7 +74,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 	ws.Route(
 		ws.
 			GET(userPath+"/{username}").
-			Doc("Retrieves user profile").
+			Doc("Retrieve user profile").
 			Param(ws.PathParameter("username", "username of the account").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
@@ -90,7 +90,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 	ws.Route(
 		ws.
 			PUT(userPath).
-			Doc("Updates user profile").
+			Doc("Update user profile").
 			Reads(domain.UserData{}).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
@@ -101,11 +101,12 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Filter(api.BasicAuthenticate).
 			To(api.UpdateUserProfile).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 	ws.Route(
 		ws.
 			DELETE(userPath).
-			Doc("Deletes user").
+			Doc("Delete user").
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("username", "username of the account").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
@@ -116,7 +117,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			To(api.DeleteUser).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
-			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusForbidden, "User not allowed as admin", domain.ErrorResponse{}))
 
 	tags = []string{"apps"}
 	ws.Route(
@@ -140,7 +142,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 	ws.Route(
 		ws.
 			GET(appPath).
-			Doc("Retrieves apps information by name").
+			Doc("Retrieve apps information by name").
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("appnames", "name of the apps").DataType("string").AllowEmptyValue(true).AllowMultiple(true)).
@@ -172,6 +174,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Filter(api.BasicAuthenticate).
 			To(api.UpdateApp).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 	ws.Route(
 		ws.
@@ -187,7 +190,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Filter(api.AdminAuthenticate).
 			To(api.DeleteApp).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
-			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusForbidden, "User not allowed as admin", domain.ErrorResponse{}))
 
