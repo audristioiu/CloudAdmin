@@ -120,7 +120,7 @@ func (s *Service) StartWebService() {
 
 	http2.ConfigureServer(server, &http2.Server{})
 	log.Info("Started api service on port 443")
-	err = http.ListenAndServeTLS(":443", "cert/cert.crt", "cert/cert.key", nil)
+	err = server.ListenAndServeTLS("cert/cert.crt", "cert/cert.key")
 	if err != nil {
 		log.Fatal("ListenAndServe: ", zap.Error(err))
 	}

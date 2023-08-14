@@ -60,15 +60,24 @@ func CheckUser(userData *domain.UserData, role string) bool {
 
 }
 
-// CheckAppsExists validates that the list of applications appear in user apps
-func CheckAppsExist(applications []string, appsData []*domain.ApplicationData) bool {
-	if len(applications) == 0 {
+// GetAppsName returns a slice of names of ApplicationData array
+func GetAppsName(applications []*domain.ApplicationData) []string {
+	result := make([]string, 0)
+	for _, app := range applications {
+		result = append(result, app.Name)
+	}
+	return result
+}
+
+// CheckAppsExists validates that the list of applications appears in user apps
+func CheckAppsExist(applications []string, appsData []string) bool {
+	if len(applications) == 0 || len(appsData) == 0 {
 		return false
 	}
 
 	for _, app := range appsData {
 
-		if !slices.Contains(applications, app.Name) {
+		if !slices.Contains(applications, app) {
 			return false
 		}
 	}

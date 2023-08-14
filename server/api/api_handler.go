@@ -30,7 +30,7 @@ func (api *API) AdminAuthenticate(request *restful.Request, response *restful.Re
 
 	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
 	if err != nil || !helpers.CheckUser(userData, authHeader) || userData.UserName != "admin" {
-		api.apiLogger.Error(" User id " + userIDHeader + " not authorized")
+		api.apiLogger.Error(" User id not authorized", zap.String("user_id", userIDHeader))
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + userIDHeader + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
@@ -48,7 +48,7 @@ func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Re
 	userIDHeader := request.HeaderParameter("USER-UUID")
 	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
 	if err != nil || !helpers.CheckUser(userData, authHeader) {
-		api.apiLogger.Error(" User id " + userIDHeader + " not authorized")
+		api.apiLogger.Error(" User id not authorized", zap.String("user_id", userIDHeader))
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + userIDHeader + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
@@ -305,7 +305,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 
 		userData, err := api.psqlRepo.GetUserData(username)
 		if err != nil {
-			api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+			api.apiLogger.Error(" User not found", zap.String("user_name", username))
 			errorData.Message = "User not found"
 			errorData.StatusCode = http.StatusNotFound
 			response.WriteHeader(http.StatusNotFound)
@@ -325,7 +325,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 
 		userData := userDataCache.(*domain.UserData)
 
-		api.apiLogger.Error(" Found in cache", zap.String("user_name", userData.UserName))
+		api.apiLogger.Debug(" Found in cache", zap.String("user_name", userData.UserName))
 
 		userData.Password = ""
 		userData.Role = ""
@@ -379,11 +379,20 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 
 	err = api.psqlRepo.UpdateUserData(&userData)
 	if err != nil {
-		errorData.Message = "Internal error / updating user data in postgres"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
-		response.WriteEntity(errorData)
-		return
+		if strings.Contains(err.Error(), "no row found") {
+			errorData.Message = "User not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		} else {
+			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
 	}
 	reqUrl, _ := request.Request.URL.Parse(request.Request.URL.String() + "/" + userData.UserName)
 
@@ -413,7 +422,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 	usersName := request.QueryParameter("usernames")
 	if usersName == "" {
 		api.apiLogger.Error(" Couldn't read usernames query parameter")
-		errorData.Message = "Bad Request/ empty username"
+		errorData.Message = "Bad Request/ empty usernames"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
@@ -436,11 +445,20 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 			response.WriteEntity(errorData)
 			return
 		}
+
+		var userErr error
 		userApps := make([]string, 0)
 		userData := &domain.UserData{}
 		userDataCache, userFound := api.apiCache.Get(marshalledRequest)
 		if !userFound {
-			userData, _ = api.psqlRepo.GetUserData(username)
+			userData, userErr = api.psqlRepo.GetUserData(username)
+			if userErr != nil {
+				errorData.Message = "User not found"
+				errorData.StatusCode = http.StatusNotFound
+				response.WriteHeader(http.StatusNotFound)
+				response.WriteEntity(errorData)
+				return
+			}
 
 		} else {
 			userData = userDataCache.(*domain.UserData)
@@ -478,12 +496,21 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 
 		err = api.psqlRepo.DeleteUserData(strings.TrimSpace(username))
 		if err != nil {
-			api.apiLogger.Error(" User not found", zap.String("user_name", username))
-			errorData.Message = "User not found"
-			errorData.StatusCode = http.StatusNotFound
-			response.WriteHeader(http.StatusNotFound)
-			response.WriteEntity(errorData)
-			return
+			if strings.Contains(err.Error(), "no row found") {
+				api.apiLogger.Error(" User not found", zap.String("user_name", username))
+				errorData.Message = "User not found"
+				errorData.StatusCode = http.StatusNotFound
+				response.WriteHeader(http.StatusNotFound)
+				response.WriteEntity(errorData)
+				return
+			} else {
+				errorData.Message = "Internal error / delete user data in postgres"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
 		}
 	}
 
@@ -512,7 +539,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 	userData, err := api.psqlRepo.GetUserData(username)
 	if err != nil {
-		api.apiLogger.Error(" User id" + username + " not found")
+		api.apiLogger.Error(" User id not found", zap.String("user_name", username))
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
 		response.WriteHeader(http.StatusNotFound)
@@ -528,7 +555,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		flag = false
 	}
 	if !flag {
-		api.apiLogger.Error(" User" + username + " not authorized")
+		api.apiLogger.Error(" User not authorized", zap.String("user_name", username))
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
@@ -540,9 +567,9 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	formFilesName := request.Request.MultipartForm.File["file"]
 	if len(formFilesName) == 0 {
 		api.apiLogger.Error(" Couldn't form file")
-		errorData.Message = "Internal error/ could not form file"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
+		errorData.Message = "Bad Request/ Empty form"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -550,7 +577,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		// Create a new file in the uploads directory
 		f, err := os.OpenFile(fileName.Filename, os.O_WRONLY|os.O_CREATE, 0666)
 		if err != nil {
-			api.apiLogger.Error(" Couldn't open new file")
+			api.apiLogger.Error(" Couldn't open new file", zap.Error(err))
 			errorData.Message = "Internal error/ could not open new file"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
@@ -560,7 +587,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 		openFormFile, err := fileName.Open()
 		if err != nil {
-			api.apiLogger.Error(" Couldn't open form file")
+			api.apiLogger.Error(" Couldn't open form file", zap.Error(err))
 			errorData.Message = "Internal error/ could not open file"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
@@ -622,7 +649,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 				appData.IsRunning = "false"
 				appsRetrievedData, err := api.psqlRepo.GetAppsData(appData.Name, "")
-
 				if err != nil {
 					errorData.Message = "Internal error / get app in postgres"
 					errorData.StatusCode = http.StatusInternalServerError
@@ -747,7 +773,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 
 		userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
 		if err != nil || !helpers.CheckUser(userData, authHeader) {
-			api.apiLogger.Error(" User id " + userIDHeader + " not authorized")
+			api.apiLogger.Error(" User id not authorized", zap.String("user_id", userIDHeader))
 			response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 			errorData.Message = "User " + userIDHeader + " is Not Authorized"
 			errorData.StatusCode = http.StatusForbidden
@@ -834,7 +860,6 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			}
 			if len(appsData) == 0 {
 				api.apiLogger.Debug(" no apps found")
-
 				errorData.Message = "App " + appName + " not found"
 				errorData.StatusCode = http.StatusNotFound
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
@@ -846,19 +871,18 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		if len(appsInfo.Response) > 1 {
 			appsInfo = helpers.Unique(appsInfo)
 		}
-
-		if !helpers.CheckAppsExist(userData.Applications, appsInfo.Response) {
-			api.apiLogger.Error(" User " + username + " not authorized")
-			response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-			errorData.Message = "User " + username + " is Not Authorized"
-			errorData.StatusCode = http.StatusForbidden
-			response.WriteHeader(http.StatusForbidden)
+		appsName := helpers.GetAppsName(appsInfo.Response)
+		if !helpers.CheckAppsExist(userData.Applications, appsName) {
+			api.apiLogger.Error("Apps not found", zap.Any("apps", appsName))
+			errorData.Message = "Apps not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
 			response.WriteEntity(errorData)
 			return
 		}
 
 		if len(sortParams) == 2 {
-			api.apiLogger.Info("sorting by ", zap.Any("sort_query", sortParams))
+			api.apiLogger.Debug("sorting by ", zap.Any("sort_query", sortParams))
 			appsInfo.Response = helpers.SortApps(appsInfo.Response, sortParams[0], sortParams[1])
 		}
 
@@ -903,14 +927,12 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	userUUID := request.HeaderParameter("USER-UUID")
-	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	userData, err := api.psqlRepo.GetUserData(username)
 	if err != nil {
-		api.apiLogger.Error(" User id" + userUUID + " not authorized")
-		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-		errorData.Message = "User " + userUUID + " is Not Authorized"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteHeader(http.StatusForbidden)
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -919,11 +941,11 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 
 	userData.UserName = username
 
-	if !helpers.CheckUser(userData, userData.Role) {
+	if !helpers.CheckUser(userData, userData.Role) || userData.UserName != username {
 		flag = false
 	}
 	if !flag {
-		api.apiLogger.Error(" User " + username + " not authorized")
+		api.apiLogger.Error(" User not authorized", zap.String("user_name", username))
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
 		errorData.StatusCode = http.StatusForbidden
@@ -932,12 +954,11 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	if !helpers.CheckAppsExist(userData.Applications, []*domain.ApplicationData{&appData}) {
-		api.apiLogger.Error(" User " + username + " not authorized")
-		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-		errorData.Message = "User " + username + " is Not Authorized"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteHeader(http.StatusForbidden)
+	if !helpers.CheckAppsExist(userData.Applications, []string{appData.Name}) {
+		api.apiLogger.Error("Apps not found", zap.String("app_name", appData.Name))
+		errorData.Message = "Apps not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -947,11 +968,21 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 
 	err = api.psqlRepo.UpdateAppData(&appData)
 	if err != nil {
-		errorData.Message = "Internal error / updating app data in postgres"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
-		response.WriteEntity(errorData)
-		return
+		if strings.Contains(err.Error(), "no row found") {
+			api.apiLogger.Error(" App  not found", zap.String("app_name", appData.Name))
+			errorData.Message = "App not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		} else {
+			errorData.Message = "Internal error / updating app data in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
 	}
 
 	//clear all the cache for that specific user
@@ -991,17 +1022,46 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+
 	listAppNames := strings.Split(appnames, ",")
+
+	if !helpers.CheckAppsExist(userData.Applications, listAppNames) {
+		api.apiLogger.Error("Apps not found", zap.Any("apps", listAppNames))
+		errorData.Message = "Apps not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+
+	}
 	for _, appName := range listAppNames {
 		err := api.psqlRepo.DeleteAppData(strings.TrimSpace(appName), username)
 		if err != nil {
-			api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
-			errorData.Message = "App not found"
-			errorData.StatusCode = http.StatusNotFound
-			response.WriteHeader(http.StatusNotFound)
-			response.WriteEntity(errorData)
-			return
+			if strings.Contains(err.Error(), "no row found") {
+				api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
+				errorData.Message = "App not found"
+				errorData.StatusCode = http.StatusNotFound
+				response.WriteHeader(http.StatusNotFound)
+				response.WriteEntity(errorData)
+				return
+			} else {
+				errorData.Message = "Internal Error / Delete app"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
 		}
+
 	}
 
 	//clear all the cache for that specific user
