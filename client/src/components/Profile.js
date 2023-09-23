@@ -18,7 +18,7 @@ const ProfilePage = () => {
   const [birthDate, setBirthDate] = useState('');
   const [joinedDate, setJoinedDate] = useState('');
   const [lastTimeOnline, setLastTimeOnline] = useState('');
-  const [wantNotify, setWantNotify] = useState('');
+  const [wantNotify, setWantNotify] = useState(false);
   const [userEmail, setUserEmail] = useState('')
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -82,7 +82,7 @@ const ProfilePage = () => {
           setJoinedDate(joined_date.toUTCString());
           setLastTimeOnline(last_online.toUTCString());
           setFullName(full_name);
-          setWantNotify(want_notify);
+          setWantNotify(String(want_notify))
           setUserEmail(email);
         }
       } catch (error) {

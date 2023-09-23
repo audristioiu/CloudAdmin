@@ -59,6 +59,42 @@ function MyApps() {
       }
     }
   };
+
+  const handleUploadComplexArchive = () => {
+    const selectedFiles = document.getElementById('input').files;
+    if (selectedFiles) {
+      const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+      const username = userInfo?.username;
+
+      const config_app = {
+        headers: {
+          'Content-type': 'multipart/form-data',
+          'USER-AUTH': userInfo?.role,
+          'USER-UUID': userInfo?.user_id,
+        },
+        params: {
+          username: username,
+          is_complex: true
+        },
+      };
+
+      const agent = new Agent({
+        cert: certs.certFile,
+        key: certs.keyFile,
+      })
+
+      const formData = new FormData();
+      for(var i=0;i<selectedFiles.length;i++){
+        formData.append("file", selectedFiles[i]);
+      }
+
+      try {
+        axios.post('https://localhost:443/register/app', formData, config_app, {httpsAgent : agent},);
+      } catch (error) {
+        setErrorMessage("Failed to upload app. /" + error.response.data.message );
+      }
+    }
+  };
   //TODO filtre update ciudat (actualizare sau ceva) si sort nu se updateaza automat
   const fetchApps = async () => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -227,7 +263,11 @@ function MyApps() {
         <button type="button" className='button-3' onClick={handleUploadArchive}>
           SubmitArchive
         </button>
+        <button type="button" className='button-3' onClick={handleUploadComplexArchive}>
+          SubmitComplexArchive
+        </button>
       </div>
+      
       {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>
     

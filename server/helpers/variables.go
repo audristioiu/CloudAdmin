@@ -9,4 +9,12 @@ var (
 	SortDirections = []string{"asc", "desc"}
 	//default number of deployed apps for a new registered user
 	DefaultNrDeployedApps int = 0
+	mapCodeExtension          = map[string]string{
+		"c":    "c",
+		"cpp":  "c++",
+		"py":   "python",
+		"js":   "nodejs",
+		"java": "java",
+		"go":   "golang",
+	}
 )

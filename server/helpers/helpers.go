@@ -5,9 +5,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"math/big"
-	"sort"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	fql "github.com/ganigeorgiev/fexpr"
 	"github.com/google/uuid"
@@ -103,45 +108,6 @@ func Unique(s domain.GetApplicationsData) domain.GetApplicationsData {
 	return result
 }
 
-func SortApps(apps []*domain.ApplicationData, sortBy, sortDir string) []*domain.ApplicationData {
-	switch sortBy {
-	case "name":
-		if sortDir == "asc" {
-			sort.SliceStable(apps, func(i, j int) bool {
-				return apps[i].Name < apps[j].Name
-			})
-		} else {
-			sort.SliceStable(apps, func(i, j int) bool {
-				return apps[i].Name > apps[j].Name
-			})
-		}
-
-	case "created_timestamp":
-		if sortDir == "asc" {
-			sort.SliceStable(apps, func(i, j int) bool {
-				return apps[i].CreatedTimestamp.String() < apps[j].CreatedTimestamp.String()
-			})
-		} else {
-			sort.SliceStable(apps, func(i, j int) bool {
-				return apps[i].CreatedTimestamp.String() >= apps[j].CreatedTimestamp.String()
-			})
-		}
-
-	case "updated_timestamp":
-		if sortDir == "asc" {
-			sort.SliceStable(apps, func(i, j int) bool {
-				return apps[i].UpdatedTimestamp.String() <= apps[j].UpdatedTimestamp.String()
-			})
-		} else {
-			sort.SliceStable(apps, func(i, j int) bool {
-				return apps[i].UpdatedTimestamp.String() >= apps[j].UpdatedTimestamp.String()
-			})
-		}
-
-	}
-	return apps
-}
-
 /*
 example of combined filters
 description=NULL&&is_running="false"||kname="test"&&created_timestamp<"1day"
@@ -226,4 +192,517 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 
 	logger.Debug("got list of filters", zap.Any("filter list", listFilters))
 	return listFilters
+}
+
+// WriteDockerFile writes parameters for Dockerfile
+func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logger *zap.Logger) error {
+	var sb strings.Builder
+	_, err := sb.WriteString("FROM " + dockProperties.From)
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+
+	_, err = sb.WriteString("\n")
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+
+	_, err = sb.WriteString("WORKDIR " + dockProperties.Workdir)
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+
+	_, err = sb.WriteString("\n")
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+
+	_, err = sb.WriteString("COPY " + dockProperties.Copy)
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+
+	_, err = sb.WriteString("\n")
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+	_, err = sb.WriteString("RUN " + dockProperties.Run)
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+
+	_, err = sb.WriteString("\n")
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+
+	if len(dockProperties.Cmd) > 0 {
+		_, err = sb.WriteString("CMD " + "[")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		for i, cmdArg := range dockProperties.Cmd {
+			_, err = sb.WriteString(fmt.Sprintf("\"%s\"", cmdArg))
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+
+			if i != len(dockProperties.Cmd)-1 {
+				_, err = sb.WriteString(",")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+
+			} else {
+				_, err = sb.WriteString("]\n")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+
+				break
+			}
+		}
+	}
+
+	if len(dockProperties.Shell) > 0 {
+		_, err = sb.WriteString("SHELL " + "[")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		for i, shellArg := range dockProperties.Shell {
+			_, err = sb.WriteString(fmt.Sprintf("\"%s\"", shellArg))
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+			if i != len(dockProperties.Shell)-1 {
+				_, err = sb.WriteString(",")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+			} else {
+				_, err = sb.WriteString("]\n")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+				break
+			}
+		}
+	}
+
+	if len(dockProperties.Volume) > 0 {
+		_, err = sb.WriteString("VOLUME " + "[")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		for i, volArg := range dockProperties.Volume {
+			_, err = sb.WriteString(fmt.Sprintf("\"%s\"", volArg))
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+			if i != len(dockProperties.Volume)-1 {
+				_, err = sb.WriteString(",")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+			} else {
+				_, err = sb.WriteString("]\n")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+				break
+			}
+		}
+	}
+
+	if len(dockProperties.EntryPoint) > 0 {
+		_, err = sb.WriteString("ENTRYPOINT " + "[")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		for i, entryPointArg := range dockProperties.EntryPoint {
+			_, err = sb.WriteString(fmt.Sprintf("\"%s\"", entryPointArg))
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+			if i != len(dockProperties.EntryPoint)-1 {
+				_, err = sb.WriteString(",")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+			} else {
+				_, err = sb.WriteString("]\n")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+				break
+			}
+		}
+	}
+
+	if dockProperties.User != "" {
+		_, err = sb.WriteString("USER " + dockProperties.User)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+	if dockProperties.Arg != "" {
+		_, err = sb.WriteString("ARG " + dockProperties.Arg)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+	if dockProperties.Label != "" {
+		_, err = sb.WriteString("LABEL " + dockProperties.Label)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+	if dockProperties.Env != "" {
+		_, err = sb.WriteString("ENV " + dockProperties.Env)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+	if dockProperties.ExposePort > 0 {
+		_, err = sb.WriteString("EXPOSE " + strconv.Itoa(dockProperties.ExposePort))
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+
+	_, err = dockerFile.Write([]byte(sb.String()))
+	if err != nil {
+		logger.Error("could not writeString", zap.Error(err))
+		return err
+	}
+	return nil
+}
+
+// GenerateDockerFile returns name of the dockerfile created using app info
+func GenerateDockerFile(appData domain.ApplicationData, logger *zap.Logger) (string, error) {
+
+	dockFile, err := os.CreateTemp("", "Dockerfile_test")
+	if err != nil {
+		logger.Error("could not create temp file", zap.Error(err))
+		return "", err
+	}
+
+	appName := appData.Name
+	extension := strings.Split(appName, ".")[1]
+
+	switch mapCodeExtension[extension] {
+	//todo rework dockerfiles
+	case "nodejs":
+		{
+			dockProps := domain.DockerFile{
+				From:    "node18-alpine",
+				Workdir: "/app",
+				Copy:    appName + " /app",
+				// EntryPoint: []string{"top", "-b"},
+				// Volume:     []string{"/myvol"},
+				Run: "yarn install --production",
+				Cmd: []string{"node", appName},
+				//Shell:      []string{"powershell", "-command"},
+				// User:       "Patrick",
+				// Arg:        "CONT_IMG_VER",
+				// Label:      "com.example.label-with-value=\"foo\"",
+				// Env:        "COMT_IMG_VER=hello",
+				// ExposePort: 3000,
+			}
+
+			err := WriteDockerFile(dockFile, dockProps, logger)
+			if err != nil {
+				return "", err
+			}
+
+		}
+	case "golang":
+		{
+			newCMD := []string{"go", "run"}
+			newCMD = append(newCMD, appData.FlagArguments, appName, appData.ParamArguments)
+			dockProps := domain.DockerFile{
+				From:    "golang:1.21",
+				Workdir: "/src",
+				Copy:    appName + " /src",
+				// EntryPoint: []string{"top", "-b"},
+				// Volume:     []string{"/myvol"},
+				Run: "mkdir /src",
+				Cmd: newCMD,
+				// Shell:      []string{"powershell", "-command"},
+				// User:       "Patrick",
+				// Arg:        "CONT_IMG_VER",
+				// Label:      "com.example.label-with-value=\"foo\"",
+				// Env:        "COMT_IMG_VER=hello",
+				// ExposePort: 3000,
+			}
+
+			err := WriteDockerFile(dockFile, dockProps, logger)
+			if err != nil {
+				return "", err
+			}
+
+		}
+
+	case "python":
+		{
+
+			newCMD := []string{"python"}
+			newCMD = append(newCMD, appData.FlagArguments, appName, appData.ParamArguments)
+			dockProps := domain.DockerFile{
+				From:    "python:3.10-slim",
+				Workdir: "/app",
+				Copy:    appName + " /app",
+				// EntryPoint: []string{"top", "-b"},
+				// Volume:     []string{"/myvol"},
+				Run: "pip install -r requirements.txt",
+				Cmd: newCMD,
+				//Shell:      []string{"powershell", "-command"},
+				// User:       "Patrick",
+				// Arg:        "CONT_IMG_VER",
+				// Label:      "com.example.label-with-value=\"foo\"",
+				// Env:        "COMT_IMG_VER=hello",
+				// ExposePort: 3000,
+			}
+
+			err := WriteDockerFile(dockFile, dockProps, logger)
+			if err != nil {
+				return "", err
+			}
+
+		}
+	case "java":
+		{
+			execName := strings.Split(appName, ".")[0]
+			newCMD := []string{"java"}
+			newCMD = append(newCMD, appData.FlagArguments, execName, appData.ParamArguments)
+			dockProps := domain.DockerFile{
+				From:    "alpine:latest",
+				Workdir: "/app",
+				Copy:    "--chown=nobody " + appName + " /app",
+				// EntryPoint: []string{"top", "-b"},
+				// Volume:     []string{"/myvol"},
+				Run: "apk update && \\ \n apk fetch openjdk8 && \\ \n apk add --no-cache openjdk8 \\ \n mkdir app && \\ \n chown nobody. /app && \\ \n javac " + appName,
+				Cmd: newCMD,
+				//Shell:      []string{"powershell", "-command"},
+				User: "nobdy",
+				//Arg:        "CONT_IMG_VER",
+				//Label:      "com.example.label-with-value=\"foo\"",
+				Env: "JAVA_HOME=/usr/lib/jvm/java-1.8-openjdk;PATH=\"$JAVA_HOME/bin:${PATH}",
+				//ExposePort: 3000,
+			}
+
+			err := WriteDockerFile(dockFile, dockProps, logger)
+			if err != nil {
+				return "", err
+			}
+
+		}
+	case "c":
+		{
+			var newRun string
+
+			newCMD := make([]string, 0)
+			execName := strings.Split(appName, ".")[0]
+			if appData.ParamArguments != "" {
+				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
+			} else {
+				newCMD = append(newCMD, "./"+execName)
+			}
+			if appData.FlagArguments != "" {
+				newRun = "addgroup -S dockergroup && \\ \n adduser -S dockeruser -G dockergroup && \\ \n apk add --no-cache build-base && \\ \n  mkdir /src && \\ \n gcc -o " + execName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
+			} else {
+				newRun = "addgroup -S dockergroup && \\ \n adduser -S dockeruser -G dockergroup && \\ \n apk add --no-cache build-base && \\ \n  mkdir /src && \\ \n gcc -o " + execName + " " + strings.Join(appData.SubgroupFiles, " ")
+			}
+
+			dockProps := domain.DockerFile{
+				From:    "alpine:latest",
+				Workdir: "/src",
+				Copy:    appName + " /src",
+				// EntryPoint: []string{"top", "-b"},
+				// Volume:     []string{"/myvol"},
+				Run: newRun,
+				Cmd: newCMD,
+				// Shell:      []string{"powershell", "-command"},
+				User: "dockeruser",
+				// Arg:        "CONT_IMG_VER",
+				// Label:      "com.example.label-with-value=\"foo\"",
+				// Env:        "COMT_IMG_VER=hello",
+				// ExposePort: 3000,
+			}
+
+			err := WriteDockerFile(dockFile, dockProps, logger)
+			if err != nil {
+				return "", err
+			}
+
+		}
+	case "c++":
+		{
+			var newRun string
+
+			newCMD := make([]string, 0)
+			execName := strings.Split(appName, ".")[0]
+			if appData.ParamArguments != "" {
+				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
+			} else {
+				newCMD = append(newCMD, "./"+execName)
+			}
+			if appData.FlagArguments != "" {
+				newRun = "addgroup -S dockergroup && \\ \n adduser -S dockeruser -G dockergroup && \\ \n apk add --no-cache build-base && \\ \n  mkdir /src && \\ \n g++ -o " + execName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
+			} else {
+				newRun = "addgroup -S dockergroup && \\ \n adduser -S dockeruser -G dockergroup && \\ \n apk add --no-cache build-base && \\ \n  mkdir /src && \\ \n g++ -o " + execName + " " + strings.Join(appData.SubgroupFiles, " ")
+			}
+			dockProps := domain.DockerFile{
+				From:    "alpine:latest",
+				Workdir: "/src",
+				Copy:    "/src/main.cpp /src",
+				// EntryPoint: []string{"top", "-b"},
+				// Volume:     []string{"/myvol"},
+				Run: newRun,
+				Cmd: newCMD,
+				// Shell:      []string{"powershell", "-command"},
+				User: "dockeruser",
+				// Arg:        "CONT_IMG_VER",
+				// Label:      "com.example.label-with-value=\"foo\"",
+				// Env:        "COMT_IMG_VER=hello",
+				// ExposePort: 3000,
+			}
+
+			err := WriteDockerFile(dockFile, dockProps, logger)
+			if err != nil {
+				return "", err
+			}
+
+		}
+	default:
+		{
+			return "", fmt.Errorf("unsupported extension")
+		}
+	}
+	defer dockFile.Close()
+	return dockFile.Name(), nil
+}
+
+// CreateFilesFromDir returns ApplicationData struct for main app and subgroup apps
+func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.ApplicationData, subApps []*domain.ApplicationData, fileTxt string, err error) {
+	pathFiles := make([]string, 0)
+	err = filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			logger.Error("error in filepath Walk function", zap.Error(err))
+			return err
+		}
+		if !info.IsDir() {
+			pathFiles = append(pathFiles, path)
+		}
+
+		fmt.Printf("dir: %v: name: %s\n", info.IsDir(), path)
+		return nil
+	})
+	if err != nil {
+		logger.Error("error in filepath Walk", zap.Error(err))
+		return domain.ApplicationData{}, nil, "", err
+	}
+
+	appsData := make([]*domain.ApplicationData, 0)
+	appsDescription := ""
+	mainAppData := domain.ApplicationData{}
+	appTxt := ""
+	for _, path := range pathFiles {
+		file, err := os.ReadFile(path)
+		if err != nil {
+			logger.Error(" Couldn't read io.Reader with error : ", zap.Error(err))
+			return domain.ApplicationData{}, nil, "", err
+		}
+		appData := domain.ApplicationData{}
+		descr := string(file)
+		if strings.Contains(path, ".txt") {
+			appsDescription = descr
+			appTxt = strings.Split(path, "/")[1]
+
+		} else {
+			//+ write in s3
+			nowTime := time.Now()
+			appData.CreatedTimestamp = nowTime
+			appData.UpdatedTimestamp = nowTime
+			appData.IsRunning = false
+			appData.FlagArguments = ""
+			appData.ParamArguments = ""
+			appData.IsMain = false
+			appData.SubgroupFiles = []string{}
+			appData.Description = appsDescription
+			appData.Name = strings.Split(path, "/")[1]
+
+			regexCompiler, _ := regexp.Compile("main.")
+			if regexCompiler.MatchString(descr) {
+				mainAppData.CreatedTimestamp = appData.CreatedTimestamp
+				mainAppData.UpdatedTimestamp = appData.UpdatedTimestamp
+				mainAppData.IsRunning = false
+				mainAppData.FlagArguments = ""
+				mainAppData.ParamArguments = ""
+				mainAppData.IsMain = true
+				mainAppData.SubgroupFiles = []string{}
+				mainAppData.Description = appsDescription
+				mainAppData.Name = strings.Split(path, "/")[1]
+			} else {
+				appsData = append(appsData, &appData)
+			}
+		}
+	}
+
+	return mainApp, appsData, appTxt, nil
 }

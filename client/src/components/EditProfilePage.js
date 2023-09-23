@@ -9,7 +9,7 @@ const EditProfilePage = () => {
   const [jobRole, setJobRole] = useState('');
   const [fullName, setFullName] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [wantNotify, setWantNotify] = useState('');
+  const [wantNotify, setWantNotify] = useState(false);
   const [password, setPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -48,7 +48,7 @@ const EditProfilePage = () => {
           "full_name": fullName,
           "job_role": jobRole,
           "birth_date": birthDate,
-          "want_notify": wantNotify.toString(),
+          "want_notify": wantNotify,
           "nr_deployed_apps": userInfo?.nr_deployed_apps,
         };
 

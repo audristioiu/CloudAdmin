@@ -8,7 +8,7 @@ info:
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
-  version: 1.8.0
+  version: 1.9.0
 tags:
   - name: users
     description: Managing users
@@ -251,6 +251,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: is_complex
+          in: query
+          description: flag for complex app split in multi source files
+          required: false
+          schema:
+            type: boolean
       requestBody:
         content:
           multipart/form-data:
@@ -472,9 +478,21 @@ components:
         description:
           type: string
         is_running:
+          type: boolean
+        owner:
           type: string
         name:
           type: string
+        flag_arguments:
+          type: array
+          items:
+            type: string
+        param_arguments:
+          type: array
+          items:
+            type: string
+        is_main:
+          type: boolean
         updated_timestamp:
           type: string
           format: date-time
@@ -535,7 +553,7 @@ components:
         username:
           type: string
         want_notify:
-          type: string
+          type: boolean
     domain.QueryResponse:
       required:
         - resources_affected

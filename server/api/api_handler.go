@@ -5,9 +5,11 @@ import (
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -123,7 +125,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	userData.JoinedDate = &nowTime
 	userData.LastTimeOnline = &nowTime
 	userData.Applications = []string{}
-	userData.NrDeployedApps = &helpers.DefaultNrDeployedApps
+	userData.NrDeployedApps = helpers.DefaultNrDeployedApps
 
 	err = api.psqlRepo.InsertUserData(&userData)
 	if err != nil {
@@ -260,7 +262,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 		//gather the fresh new data to be cached
 		newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
-		api.apiCache.SetWithTTL(marshalledRequest, newUserData, 1, time.Hour*24)
+		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 	}
 
 	newUserData.Password = ""
@@ -271,7 +273,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	newUserData.JobRole = ""
 	newUserData.JoinedDate = nil
 	newUserData.LastTimeOnline = nil
-	newUserData.NrDeployedApps = nil
+	newUserData.NrDeployedApps = 0
 	response.WriteEntity(newUserData)
 }
 
@@ -318,7 +320,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		userData.UserID = ""
 		response.WriteEntity(userData)
 		// If not in cache, set it
-		api.apiCache.SetWithTTL(marshalledRequest, userData, 1, time.Hour*24)
+		api.apiCache.SetWithTTL(string(marshalledRequest), userData, 1, time.Hour*24)
 		cachedRequests[username] = append(cachedRequests[username], string(marshalledRequest))
 
 	} else {
@@ -408,7 +410,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 
 	//gather the fresh new data to be cached
 	newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
-	api.apiCache.SetWithTTL(marshalledRequest, newUserData, 1, time.Hour*24)
+	api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 	registerResponse := domain.QueryResponse{}
 	registerResponse.Message = "User updated succesfully"
@@ -514,14 +516,17 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		}
 	}
 
-	registerResponse := domain.QueryResponse{}
-	registerResponse.Message = "Users deleted succesfully"
-	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, listUsersName...)
-	response.WriteEntity(registerResponse)
+	deleteResponse := domain.QueryResponse{}
+	deleteResponse.Message = "Users deleted succesfully"
+	deleteResponse.ResourcesAffected = append(deleteResponse.ResourcesAffected, listUsersName...)
+	response.WriteEntity(deleteResponse)
 }
 
 // UploadApp uploads app to s3
 func (api *API) UploadApp(request *restful.Request, response *restful.Response) {
+
+	allApps, _ := api.psqlRepo.GetAllApps()
+	allAppsNames := helpers.GetAppsName(allApps)
 
 	errorData := domain.ErrorResponse{}
 
@@ -573,122 +578,146 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
-	for _, fileName := range formFilesName {
-		// Create a new file in the uploads directory
-		f, err := os.OpenFile(fileName.Filename, os.O_WRONLY|os.O_CREATE, 0666)
-		if err != nil {
-			api.apiLogger.Error(" Couldn't open new file", zap.Error(err))
-			errorData.Message = "Internal error/ could not open new file"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
 
-		openFormFile, err := fileName.Open()
-		if err != nil {
-			api.apiLogger.Error(" Couldn't open form file", zap.Error(err))
-			errorData.Message = "Internal error/ could not open file"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
-
-		// Copy the contents of the file to the new file
-		_, err = io.Copy(f, openFormFile)
-		if err != nil {
-			api.apiLogger.Error(" Couldn't copy file", zap.Error(err))
-			errorData.Message = "Internal error/ could not copy file"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
-
-		r, err := zip.OpenReader(fileName.Filename)
-		if err != nil {
-			api.apiLogger.Error(" Couldn't open zipReader", zap.Error(err))
-			errorData.Message = "Internal error/ could not open zipReader"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-		}
-
-		// Iterate through the files in the archive,
-		// printing some of their contents.
-		for i, f := range r.File {
-			appData := domain.ApplicationData{}
-
-			nowTime := time.Now()
-			appData.CreatedTimestamp = nowTime
-			appData.UpdatedTimestamp = nowTime
-
-			api.apiLogger.Debug("Writting information for file :\n", zap.String("file_name", f.Name))
-			rc, err := f.Open()
+	isComplex := request.QueryParameter("is_complex")
+	if isComplex == "true" {
+		appsData := make([]*domain.ApplicationData, 0)
+		appsDescription := ""
+		appTxt := ""
+		mainAppData := domain.ApplicationData{}
+		for _, fileName := range formFilesName {
+			// Create a new file in the uploads directory
+			f, err := os.OpenFile(fileName.Filename, os.O_WRONLY|os.O_CREATE, 0666)
 			if err != nil {
-				api.apiLogger.Error("failed to open file", zap.Error(err))
-			}
-			descr, err1 := io.ReadAll(rc)
-			if err1 != nil {
-				api.apiLogger.Error(" Couldn't read io.Reader with error : ", zap.Error(err1))
-				errorData.Message = "Internal Error/  Couldn't read io.Reader"
+				api.apiLogger.Error(" Couldn't open new file", zap.Error(err))
+				errorData.Message = "Internal error/ could not open new file"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
 				return
 			}
-			defer rc.Close()
-			if strings.Contains(f.Name, ".txt") {
-				if i%2 == 0 {
-					appData.Name = r.File[i+1].Name
-				} else {
-					appData.Name = r.File[i-1].Name
-				}
-				appData.Description = string(descr)
 
-				appData.IsRunning = "false"
-				appsRetrievedData, err := api.psqlRepo.GetAppsData(appData.Name, "")
+			openFormFile, err := fileName.Open()
+			if err != nil {
+				api.apiLogger.Error(" Couldn't open form file", zap.Error(err))
+				errorData.Message = "Internal error/ could not open file"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			// Copy the contents of the file to the new file
+			_, err = io.Copy(f, openFormFile)
+			if err != nil {
+				api.apiLogger.Error(" Couldn't copy file", zap.Error(err))
+				errorData.Message = "Internal error/ could not copy file"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			r, err := zip.OpenReader(fileName.Filename)
+			if err != nil {
+				api.apiLogger.Error(" Couldn't open zipReader", zap.Error(err))
+				errorData.Message = "Internal error/ could not open zipReader"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+			}
+
+			// Iterate through the files in the archive,
+			// printing some of their contents.
+			for i, f := range r.File {
+				appData := domain.ApplicationData{}
+
+				api.apiLogger.Debug("Writting information for file :\n", zap.String("file_name", f.Name))
+				rc, err := f.Open()
 				if err != nil {
-					errorData.Message = "Internal error / get app in postgres"
+					api.apiLogger.Error("failed to open file", zap.Error(err))
+					errorData.Message = "Internal Error/ Failed to open file"
 					errorData.StatusCode = http.StatusInternalServerError
 					response.WriteHeader(http.StatusInternalServerError)
 					response.WriteEntity(errorData)
 					return
 				}
-				if len(appsRetrievedData) != 0 {
-					api.apiLogger.Error(" App  already exists", zap.String("app_name", appData.Name))
+				descr, err1 := io.ReadAll(rc)
+				if err1 != nil {
+					api.apiLogger.Error(" Couldn't read io.Reader with error : ", zap.Error(err1))
+					errorData.Message = "Internal Error/  Couldn't read io.Reader"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				defer rc.Close()
+				if strings.Contains(f.Name, ".txt") {
+					if i%2 == 0 {
+						appTxt = r.File[i+1].Name
+					} else {
+						appTxt = r.File[i-1].Name
+					}
+					appsDescription = string(descr)
+					fmt.Println(appTxt)
+					fmt.Println(appsDescription)
+
+				} else {
+					//+ write in s3
+					nowTime := time.Now()
+					appData.CreatedTimestamp = nowTime
+					appData.UpdatedTimestamp = nowTime
+					appData.IsRunning = false
+					appData.FlagArguments = ""
+					appData.ParamArguments = ""
+					appData.IsMain = false
+					appData.SubgroupFiles = []string{}
+					appData.Description = appsDescription
+					appData.Name = f.Name
+					appData.Owner = username
+					regexCompiler, err := regexp.Compile("main")
+					if err != nil {
+						api.apiLogger.Error(" Couldn't compile regex ", zap.Error(err))
+						errorData.Message = "Internal Error/  Couldn't compile regex"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+					}
+					if regexCompiler.MatchString(string(descr)) {
+						mainAppData.CreatedTimestamp = appData.CreatedTimestamp
+						mainAppData.UpdatedTimestamp = appData.UpdatedTimestamp
+						mainAppData.IsRunning = false
+						mainAppData.FlagArguments = ""
+						mainAppData.ParamArguments = ""
+						mainAppData.IsMain = true
+						mainAppData.SubgroupFiles = []string{}
+						mainAppData.Description = appsDescription
+						mainAppData.Name = f.Name
+						mainAppData.Owner = username
+					} else {
+						api.apiLogger.Info("got sub apps", zap.Any("sub_app", appData.Name))
+						appsData = append(appsData, &appData)
+					}
+				}
+
+			}
+			subGroupMainFiles := make([]string, 0)
+
+			for _, app := range appsData {
+
+				if slices.Contains(allAppsNames, app.Name) {
+					api.apiLogger.Error(" App  already exists", zap.String("app_name", app.Name))
 					errorData.Message = "App already exists"
 					errorData.StatusCode = http.StatusFound
 					response.WriteHeader(http.StatusFound)
 					response.WriteEntity(errorData)
 					return
 				}
-
-				indexFile := strings.Index(r.File[i].Name, ".")
-				indexApp := strings.Index(appData.Name, ".")
-				if indexFile == -1 || indexApp == -1 {
-					api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+r.File[i].Name))
-					errorData.Message = "Bad Request/ Wrong archive format"
-					errorData.StatusCode = http.StatusBadRequest
-					response.WriteHeader(http.StatusBadRequest)
-					response.WriteEntity(errorData)
-					return
-				}
-				trimmedFileName := r.File[i].Name[:indexFile]
-				trimmedAppName := appData.Name[:indexFile]
-				if trimmedFileName != trimmedAppName {
-					api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
-					errorData.Message = "Bad Request/ Wrong archive format"
-					errorData.StatusCode = http.StatusBadRequest
-					response.WriteHeader(http.StatusBadRequest)
-					response.WriteEntity(errorData)
-					return
-				}
-
-				appsUploaded = append(appsUploaded, appData.Name)
-
-				err = api.psqlRepo.InsertAppData(&appData)
+				subGroupMainFiles = append(subGroupMainFiles, app.Name)
+				appsUploaded = append(appsUploaded, app.Name)
+				app.Description = appsDescription
+				app.SubgroupFiles = append(app.SubgroupFiles, mainAppData.Name)
+				err = api.psqlRepo.InsertAppData(app)
 				if err != nil {
 					errorData.Message = "Internal error/ insert app data in postgres"
 					errorData.StatusCode = http.StatusInternalServerError
@@ -697,7 +726,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					return
 				}
 
-				err = api.psqlRepo.UpdateUserAppsData(appData.Name, username)
+				err = api.psqlRepo.UpdateUserAppsData(app.Name, username)
 				if err != nil {
 					errorData.Message = "Internal error/ update user apps in postgres"
 					errorData.StatusCode = http.StatusInternalServerError
@@ -705,20 +734,303 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteEntity(errorData)
 					return
 				}
-			} else {
-				//upload in s3
-				api.apiLogger.Info("upload s3")
-				api.apiLogger.Info(string(descr))
 
 			}
 
-		}
+			if slices.Contains(userData.Applications, mainAppData.Name) {
+				api.apiLogger.Error(" App  already exists", zap.String("app_name", mainAppData.Name))
+				errorData.Message = "App already exists"
+				errorData.StatusCode = http.StatusFound
+				response.WriteHeader(http.StatusFound)
+				response.WriteEntity(errorData)
+				return
+			}
 
-		//Close handlers and delete temp files
-		openFormFile.Close()
-		f.Close()
-		r.Close()
-		os.Remove(fileName.Filename)
+			subGroupMainFiles = append(subGroupMainFiles, mainAppData.Name)
+			appsUploaded = append(appsUploaded, mainAppData.Name)
+			mainAppData.Description = appsDescription
+			mainAppData.SubgroupFiles = append(mainAppData.SubgroupFiles, subGroupMainFiles...)
+			err = api.psqlRepo.InsertAppData(&mainAppData)
+			if err != nil {
+				errorData.Message = "Internal error/ insert main app data in postgres"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			err = api.psqlRepo.UpdateUserAppsData(mainAppData.Name, username)
+			if err != nil {
+				errorData.Message = "Internal error/ update user apps in postgres"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			//Close handlers and delete temp files
+			openFormFile.Close()
+			f.Close()
+			r.Close()
+			os.Remove(fileName.Filename)
+		}
+	} else {
+
+		for _, fileName := range formFilesName {
+			// Create a new file in the uploads directory
+			f, err := os.OpenFile(fileName.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+			if err != nil {
+				api.apiLogger.Error(" Couldn't open new file", zap.Error(err))
+				errorData.Message = "Internal error/ could not open new file"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			openFormFile, err := fileName.Open()
+			if err != nil {
+				api.apiLogger.Error(" Couldn't open form file", zap.Error(err))
+				errorData.Message = "Internal error/ could not open file"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			// Copy the contents of the file to the new file
+			_, err = io.Copy(f, openFormFile)
+			if err != nil {
+				api.apiLogger.Error(" Couldn't copy file", zap.Error(err))
+				errorData.Message = "Internal error/ could not copy file"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			r, err := zip.OpenReader(fileName.Filename)
+			if err != nil {
+				api.apiLogger.Error(" Couldn't open zipReader", zap.Error(err))
+				errorData.Message = "Internal error/ could not open zipReader"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+			}
+
+			// Iterate through the files in the archive,
+			// printing some of their contents.
+			for i, f := range r.File {
+				appData := domain.ApplicationData{}
+				nowTime := time.Now()
+				appData.CreatedTimestamp = nowTime
+				appData.UpdatedTimestamp = nowTime
+
+				api.apiLogger.Debug("Writting information for file :\n", zap.String("file_name", f.Name))
+				rc, err := f.Open()
+				if err != nil {
+					api.apiLogger.Error("failed to open file", zap.Error(err))
+					errorData.Message = "Internal Error/ Failed to open file"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+
+				if f.FileInfo().IsDir() {
+					err = os.MkdirAll(f.Name, 0777)
+					if err != nil {
+						api.apiLogger.Error("failed to create dir", zap.Error(err))
+						errorData.Message = "Internal Error/ Failed to create dir"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+					}
+
+					mainAppData, subApps, appTxt, err := helpers.CreateFilesFromDir(f.Name, api.apiLogger)
+					if err != nil {
+						api.apiLogger.Error("failed to create files from dir", zap.Error(err))
+						errorData.Message = "Internal Error/ Failed to create files from dir"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+					}
+
+					subGroupMainFiles := make([]string, 0)
+
+					for _, app := range subApps {
+
+						if slices.Contains(allAppsNames, app.Name) {
+							api.apiLogger.Error(" App  already exists", zap.String("app_name", app.Name))
+							errorData.Message = "App already exists"
+							errorData.StatusCode = http.StatusFound
+							response.WriteHeader(http.StatusFound)
+							response.WriteEntity(errorData)
+							return
+						}
+						subGroupMainFiles = append(subGroupMainFiles, app.Name)
+						appsUploaded = append(appsUploaded, app.Name)
+						app.SubgroupFiles = append(app.SubgroupFiles, mainAppData.Name)
+						err = api.psqlRepo.InsertAppData(app)
+						if err != nil {
+							errorData.Message = "Internal error/ insert app data in postgres"
+							errorData.StatusCode = http.StatusInternalServerError
+							response.WriteHeader(http.StatusInternalServerError)
+							response.WriteEntity(errorData)
+							return
+						}
+
+						err = api.psqlRepo.UpdateUserAppsData(app.Name, username)
+						if err != nil {
+							errorData.Message = "Internal error/ update user apps in postgres"
+							errorData.StatusCode = http.StatusInternalServerError
+							response.WriteHeader(http.StatusInternalServerError)
+							response.WriteEntity(errorData)
+							return
+						}
+
+					}
+
+					if slices.Contains(allAppsNames, mainAppData.Name) {
+						api.apiLogger.Error(" App  already exists", zap.String("app_name", mainAppData.Name))
+						errorData.Message = "App already exists"
+						errorData.StatusCode = http.StatusFound
+						response.WriteHeader(http.StatusFound)
+						response.WriteEntity(errorData)
+						return
+					}
+
+					indexFile := strings.Index(appTxt, ".")
+					indexApp := strings.Index(mainAppData.Name, ".")
+					if indexFile == -1 || indexApp == -1 {
+						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
+						errorData.Message = "Bad Request/ Wrong archive format"
+						errorData.StatusCode = http.StatusBadRequest
+						response.WriteHeader(http.StatusBadRequest)
+						response.WriteEntity(errorData)
+						return
+					}
+					trimmedFileName := appTxt[:indexFile]
+					trimmedAppName := mainAppData.Name[:indexFile]
+					if trimmedFileName != trimmedAppName {
+						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
+						errorData.Message = "Bad Request/ Wrong archive format"
+						errorData.StatusCode = http.StatusBadRequest
+						response.WriteHeader(http.StatusBadRequest)
+						response.WriteEntity(errorData)
+						return
+					}
+					subGroupMainFiles = append(subGroupMainFiles, mainAppData.Name)
+					appsUploaded = append(appsUploaded, mainAppData.Name)
+					mainAppData.SubgroupFiles = append(subGroupMainFiles, subGroupMainFiles...)
+					err = api.psqlRepo.InsertAppData(&mainAppData)
+					if err != nil {
+						errorData.Message = "Internal error/ insert main app data in postgres"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+
+					err = api.psqlRepo.UpdateUserAppsData(mainAppData.Name, username)
+					if err != nil {
+						errorData.Message = "Internal error/ update user apps in postgres"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+				}
+
+				descr, err1 := io.ReadAll(rc)
+				if err1 != nil {
+					api.apiLogger.Error(" Couldn't read io.Reader with error : ", zap.Error(err1))
+					errorData.Message = "Internal Error/  Couldn't read io.Reader"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				defer rc.Close()
+				if strings.Contains(f.Name, ".txt") {
+					if i%2 == 0 {
+						appData.Name = r.File[i+1].Name
+					} else {
+						appData.Name = r.File[i-1].Name
+					}
+					appData.Description = string(descr)
+
+					appData.IsRunning = false
+					appData.FlagArguments = ""
+					appData.ParamArguments = ""
+					appData.IsMain = true
+					appData.SubgroupFiles = []string{}
+					appData.Owner = username
+
+					if slices.Contains(allAppsNames, appData.Name) {
+						api.apiLogger.Error(" App  already exists", zap.String("app_name", appData.Name))
+						errorData.Message = "App already exists"
+						errorData.StatusCode = http.StatusFound
+						response.WriteHeader(http.StatusFound)
+						response.WriteEntity(errorData)
+						return
+					}
+
+					indexFile := strings.Index(r.File[i].Name, ".")
+					indexApp := strings.Index(appData.Name, ".")
+					if indexFile == -1 || indexApp == -1 {
+						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
+						errorData.Message = "Bad Request/ Wrong archive format"
+						errorData.StatusCode = http.StatusBadRequest
+						response.WriteHeader(http.StatusBadRequest)
+						response.WriteEntity(errorData)
+						return
+					}
+					trimmedFileName := r.File[i].Name[:indexFile]
+					trimmedAppName := appData.Name[:indexFile]
+					if trimmedFileName != trimmedAppName {
+						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
+						errorData.Message = "Bad Request/ Wrong archive format"
+						errorData.StatusCode = http.StatusBadRequest
+						response.WriteHeader(http.StatusBadRequest)
+						response.WriteEntity(errorData)
+						return
+					}
+
+					appsUploaded = append(appsUploaded, appData.Name)
+
+					err = api.psqlRepo.InsertAppData(&appData)
+					if err != nil {
+						errorData.Message = "Internal error/ insert app data in postgres"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+
+					err = api.psqlRepo.UpdateUserAppsData(appData.Name, username)
+					if err != nil {
+						errorData.Message = "Internal error/ update user apps in postgres"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+				} else {
+					//upload in s3
+					api.apiLogger.Info("upload s3")
+					api.apiLogger.Info(string(descr))
+
+				}
+
+			}
+
+			//Close handlers and delete temp files
+			openFormFile.Close()
+			f.Close()
+			r.Close()
+			os.Remove(fileName.Filename)
+		}
 	}
 
 	//clear all the cache for that specific user
@@ -841,54 +1153,51 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		var appsInfo domain.GetApplicationsData
 		appsInfo.Response = make([]*domain.ApplicationData, 0)
 		appsInfo.Errors = make([]domain.ErrorResponse, 0)
-		for _, appName := range appNamesList {
-			appsData, err := api.psqlRepo.GetAppsData(strings.TrimSpace(appName), filter)
-			if err != nil {
-				if strings.Contains(err.Error(), "fql") {
-					api.apiLogger.Error(" Invalid fql filter for app", zap.String("app_name", appName))
-					errorData.Message = "Bad Request / Invalid fql filter"
-					errorData.StatusCode = http.StatusBadRequest
-					appsInfo.Errors = append(appsInfo.Errors, errorData)
-				} else {
-					api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
-					errorData.Message = "App " + appName + " not found"
-					errorData.StatusCode = http.StatusNotFound
-					appsInfo.Errors = append(appsInfo.Errors, errorData)
-				}
 
-				continue
-			}
-			if len(appsData) == 0 {
-				api.apiLogger.Debug(" no apps found")
-				errorData.Message = "App " + appName + " not found"
-				errorData.StatusCode = http.StatusNotFound
-				appsInfo.Errors = append(appsInfo.Errors, errorData)
-				continue
-			}
-			appsInfo.Response = append(appsInfo.Response, appsData...)
-
+		if len(sortParams) == 2 {
+			api.apiLogger.Debug("sorting by ", zap.Any("sort_query", sortParams))
 		}
+
+		appsData, err := api.psqlRepo.GetAppsData(username, filter, sortParams)
+		if err != nil {
+			if strings.Contains(err.Error(), "fql") {
+				api.apiLogger.Error(" Invalid fql filter for get apps", zap.Error(err))
+				errorData.Message = "Bad Request / Invalid fql filter"
+				errorData.StatusCode = http.StatusBadRequest
+				appsInfo.Errors = append(appsInfo.Errors, errorData)
+			}
+		}
+		if len(appsData) == 0 {
+			api.apiLogger.Debug(" no apps found")
+			errorData.Message = "No apps found"
+			errorData.StatusCode = http.StatusNotFound
+			appsInfo.Errors = append(appsInfo.Errors, errorData)
+		}
+
+		if len(appNamesList) > 0 {
+			for _, appData := range appsData {
+				if slices.Contains(appNamesList, appData.Name) {
+					appsInfo.Response = append(appsInfo.Response, appData)
+				}
+			}
+		} else {
+			appsInfo.Response = append(appsInfo.Response, appsData...)
+		}
+
 		if len(appsInfo.Response) > 1 {
 			appsInfo = helpers.Unique(appsInfo)
 		}
 		appsName := helpers.GetAppsName(appsInfo.Response)
 		if !helpers.CheckAppsExist(userData.Applications, appsName) {
-			api.apiLogger.Error("Apps not found", zap.Any("apps", appsName))
-			errorData.Message = "Apps not found"
-			errorData.StatusCode = http.StatusNotFound
-			response.WriteHeader(http.StatusNotFound)
-			response.WriteEntity(errorData)
-			return
-		}
-
-		if len(sortParams) == 2 {
-			api.apiLogger.Debug("sorting by ", zap.Any("sort_query", sortParams))
-			appsInfo.Response = helpers.SortApps(appsInfo.Response, sortParams[0], sortParams[1])
+			api.apiLogger.Error("User forbidden for apps", zap.Any("apps", appsName))
+			errorData.Message = "Forbidden User"
+			errorData.StatusCode = http.StatusForbidden
+			appsInfo.Errors = append(appsInfo.Errors, errorData)
 		}
 
 		response.WriteEntity(appsInfo)
 		if len(appsInfo.Response) > 0 {
-			api.apiCache.SetWithTTL(marshalledRequest, appsInfo, 1, time.Hour*24)
+			api.apiCache.SetWithTTL(string(marshalledRequest), appsInfo, 1, time.Hour*24)
 			cachedRequests[username] = append(cachedRequests[username], string(marshalledRequest))
 		}
 
@@ -991,7 +1300,6 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	}
 	cachedRequests[username] = make([]string, 0)
 
-	response.Write([]byte("App updated succesfully"))
 	registerResponse := domain.QueryResponse{}
 	registerResponse.Message = "App updated succesfully"
 	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, appData.Name)
@@ -1070,9 +1378,10 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 	cachedRequests[username] = make([]string, 0)
 
-	registerResponse := domain.QueryResponse{}
-	registerResponse.Message = "Apps deleted succesfully"
-	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, listAppNames...)
+	deleteResponse := domain.QueryResponse{}
+	deleteResponse.Message = "Apps deleted succesfully"
+	deleteResponse.ResourcesAffected = append(deleteResponse.ResourcesAffected, listAppNames...)
+	response.WriteEntity(deleteResponse)
 }
 
 // StartProfiler starts the cpu profiler

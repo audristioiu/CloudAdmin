@@ -123,10 +123,10 @@ func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 		userData.Password = helpers.HashPassword(userData.Password)
 	}
 	updateStatement := `UPDATE  users SET 
-						nr_deployed_apps= $1,
+						nr_deployed_apps=$1,
 						job_role = COALESCE(NULLIF($2,E''),job_role),
 						email=COALESCE(NULLIF($3,E''), email),
-						want_notify=COALESCE(NULLIF($4,E''), want_notify), 
+						want_notify=COALESCE(NULLIF($4,FALSE), want_notify), 
 						password=COALESCE(NULLIF($5,E''), password),
 						birth_date=COALESCE(NULLIF($6,E''), birth_date),
 						full_name=COALESCE(NULLIF($7,E''), full_name)
@@ -217,8 +217,12 @@ func (p *PostgreSqlRepo) DeleteUserData(username string) error {
 // InsertAppData inserts app in PostgreSql table
 func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 	newApplicationData := domain.ApplicationData{}
-	insertStatement := "INSERT INTO apps (name, description, is_running, created_timestamp, updated_timestamp) VALUES ($1, $2, $3, $4, $5) RETURNING name"
-	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, zeronull.Text(appData.Description), appData.IsRunning, appData.CreatedTimestamp, appData.UpdatedTimestamp)
+	insertStatement := `INSERT INTO apps (name, description, is_running, created_timestamp, updated_timestamp,flag_arguments, 
+						param_arguments,is_main,subgroup_files, owner) 
+						VALUES ($1, $2, $3, $4, $5, $6 ,$7, $8, $9, $10) 
+						RETURNING name`
+	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, zeronull.Text(appData.Description), appData.IsRunning, appData.CreatedTimestamp,
+		appData.UpdatedTimestamp, zeronull.Text(appData.FlagArguments), zeronull.Text(appData.ParamArguments), appData.IsMain, appData.SubgroupFiles, appData.Owner)
 	err := row.Scan(&newApplicationData.Name)
 	if err != nil {
 		p.psqlLogger.Error(" could not insert app", zap.Error(err))
@@ -228,8 +232,38 @@ func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 	return nil
 }
 
+// GetAllApps retrieves all apps from db
+func (p *PostgreSqlRepo) GetAllApps() ([]*domain.ApplicationData, error) {
+
+	applicationsData := make([]*domain.ApplicationData, 0)
+	selectStatement := `SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp, 
+	COALESCE(flag_arguments, '') as flag_arguments, 
+	COALESCE(param_arguments, '') as param_arguments,
+	is_main,subgroup_files,owner FROM apps`
+
+	rows, err := p.conn.Query(p.ctx, selectStatement)
+	if err != nil {
+		p.psqlLogger.Error(" could not retrieve appn", zap.Error(err))
+		return nil, err
+	}
+
+	for rows.Next() {
+		applicationData := &domain.ApplicationData{}
+		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning,
+			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp, &applicationData.FlagArguments, &applicationData.ParamArguments,
+			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner)
+		if err != nil {
+			p.psqlLogger.Error(" could not scan app", zap.Error(err))
+			return nil, err
+		}
+		applicationsData = append(applicationsData, applicationData)
+	}
+	return applicationsData, nil
+
+}
+
 // GetAppsData retrieves apps from PostgreSql table using fql filter
-func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domain.ApplicationData, error) {
+func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams []string) ([]*domain.ApplicationData, error) {
 	applicationsData := make([]*domain.ApplicationData, 0)
 	var selectStatement string
 	var err error
@@ -241,7 +275,10 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 		return nil, fmt.Errorf("could not parse fql filter")
 	}
 	if len(filters) > 0 && len(filters[0]) >= 3 {
-		selectStatement := "SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp FROM apps where ("
+		selectStatement := `SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp, 
+							COALESCE(flag_arguments, '') as flag_arguments, 
+							COALESCE(param_arguments, '') as param_arguments,
+							is_main,subgroup_files,owner FROM apps where (`
 		for i, filterParams := range filters {
 			if len(filterParams) == 3 {
 				filterParams[2] = strings.ReplaceAll(filterParams[2], `"`, "")
@@ -313,9 +350,11 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 
 			}
 			if i != len(filters)-1 && len(filterParams) == 0 {
-				selectStatement += ") AND name=@app_name1"
-
-				filterArguments["app_name1"] = appname
+				selectStatement += ") AND is_main=TRUE AND owner=@app_owner"
+				if len(sortParams) == 2 {
+					selectStatement += " ORDER BY " + sortParams[0] + " " + sortParams[1]
+				}
+				filterArguments["app_owner"] = owner
 				break
 			}
 
@@ -328,9 +367,15 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 		}
 
 	} else {
-		selectStatement = "SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp FROM apps where name=$1"
+		selectStatement = `SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp, 
+						COALESCE(flag_arguments, '') as flag_arguments, 
+						COALESCE(param_arguments, '') as param_arguments,
+						is_main,subgroup_files,owner FROM apps where is_main=TRUE and owner=$1 `
+		if len(sortParams) == 2 {
+			selectStatement += "ORDER BY " + sortParams[0] + " " + sortParams[1]
+		}
 		p.psqlLogger.Info(selectStatement)
-		rows, err = p.conn.Query(p.ctx, selectStatement, appname)
+		rows, err = p.conn.Query(p.ctx, selectStatement, owner)
 		if err != nil {
 			p.psqlLogger.Error(" could not retrieve appn", zap.Error(err))
 			return nil, err
@@ -340,7 +385,8 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 	for rows.Next() {
 		applicationData := &domain.ApplicationData{}
 		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning,
-			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp)
+			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp, &applicationData.FlagArguments, &applicationData.ParamArguments,
+			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner)
 		if err != nil {
 			p.psqlLogger.Error(" could not scan app", zap.Error(err))
 			return nil, err
@@ -356,11 +402,14 @@ func (p *PostgreSqlRepo) GetAppsData(appname, filterConditions string) ([]*domai
 func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 	updateStatement := `UPDATE  apps SET 
 						description=COALESCE(NULLIF($1,E''), description), 
-						is_running=COALESCE(NULLIF($2,E''), is_running),
-						updated_timestamp=$3 
-						WHERE name=$4`
+						is_running=COALESCE(NULLIF($2,FALSE), is_running),
+						updated_timestamp=$3,
+						flag_arguments=$4,
+						param_arguments=$5
+						WHERE name=$6`
 
-	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.UpdatedTimestamp, appData.Name)
+	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.UpdatedTimestamp,
+		appData.FlagArguments, appData.ParamArguments, appData.Name)
 	if err != nil {
 		p.psqlLogger.Error(" could not update app ", zap.Error(err))
 		return err

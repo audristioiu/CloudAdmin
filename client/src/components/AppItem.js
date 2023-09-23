@@ -5,7 +5,7 @@ import './MyApps.css';
 function AppItem(app) {
   const [appName, setAppName] = useState(app.app.name);
   const [appDescription, setAppDescr] = useState(app.app.description);
-  const [appRunningState, setAppRunning] = useState(app.app.is_running);
+  const [appRunningState, setAppRunning] = useState(String(app.app.is_running));
   const history = useNavigate();
 
   const editApp = () => {

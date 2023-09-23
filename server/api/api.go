@@ -128,6 +128,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("is_complex", "flag complex app split in multi source files").DataType("boolean").Required(false).AllowEmptyValue(false)).
 			Param(ws.FormParameter("type", "zip archive which contains the code and description files(same name for both,description being txt,order for every app is source_code,then description)").AllowMultiple(true).
 				DataType("file").Required(true).AllowMultiple(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
