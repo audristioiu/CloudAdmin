@@ -9,6 +9,8 @@ function EditApp() {
     const app = JSON.parse(localStorage.getItem("appInfo"));
     const [appName, setAppName] = useState(app.app_name);
     const [appDescription, setAppDescr] = useState("");
+    const [appFlagArguments, setAppFlags] = useState("");
+    const [appParamArguments, setAppParams] = useState("");
     const [errorMessage, setErrorMessage] = useState('');
     const [editMode, setEditMode] = useState(false);
     const [clicked, setClicked] = useState(true);
@@ -61,12 +63,16 @@ function EditApp() {
           await axios.put(`https://localhost:443/app`, {
             "name" : appName,
             "description" : appDescription,
+            "flag_arguments" : appFlagArguments,
+            "param_arguments": appParamArguments
           }, config,
           {httpsAgent : agent},);
     
           // Clear the form fields and display a success message
           setAppDescr('');
           setAppName('');
+          setAppFlags('');
+          setAppParams('');
           setClicked(true);
           setEditableMode(false);
           history("/myapps");
@@ -103,6 +109,31 @@ function EditApp() {
                     <label>Description</label>
                 
                 </div>)}
+                {editableMode && ( <div className="user-box">
+                    <input
+                        className='input-style app-description'
+                        type='textarea'
+                        value={appFlagArguments}
+                        onChange={(e) => setAppFlags(e.target.value)}
+                        required
+                    />
+
+                    <label>Flag Arguments</label>
+                
+                </div>)}
+                {editableMode && ( <div className="user-box">
+                    <input
+                        className='input-style app-description'
+                        type='textarea'
+                        value={appParamArguments}
+                        onChange={(e) => setAppParams(e.target.value)}
+                        required
+                    />
+
+                    <label>Param Arguments</label>
+                
+                </div>)}
+                
 
                 <a type="submit" style={{ visibility: clicked ? "visible" : "hidden" }} onClick={handleSubmit}>
                     <span></span>

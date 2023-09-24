@@ -17,6 +17,7 @@ const (
 	loginPath    = "/login"
 	userPath     = "/user"
 	appPath      = "/app"
+	schedulePath = "/schedule"
 )
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service
@@ -194,6 +195,26 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusForbidden, "User not allowed as admin", domain.ErrorResponse{}))
+
+	tags = []string{"schedule"}
+	ws.Route(
+		ws.
+			GET(schedulePath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("appname", "name of the apps you want to schedule").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("schedule_type", "type of schedulling").DataType("string").Required(true).AllowEmptyValue(false)).
+			Doc("Schedule apps").
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.ScheduleApps).
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
 
 	//activate profiler endpoints only if it is initialized
 	if api.profiler.Cpuprofile != "" {

@@ -434,8 +434,8 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 }
 
 // GenerateDockerFile returns name of the dockerfile created using app info
-func GenerateDockerFile(appData domain.ApplicationData, logger *zap.Logger) (string, error) {
-
+func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (string, error) {
+	//todo luat fisier de pe local(in viitor s3)
 	dockFile, err := os.CreateTemp("", "Dockerfile_test")
 	if err != nil {
 		logger.Error("could not create temp file", zap.Error(err))

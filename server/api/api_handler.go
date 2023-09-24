@@ -412,10 +412,10 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
 	api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
-	registerResponse := domain.QueryResponse{}
-	registerResponse.Message = "User updated succesfully"
-	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, userData.UserName)
-	response.WriteEntity(registerResponse)
+	updateResponse := domain.QueryResponse{}
+	updateResponse.Message = "User updated succesfully"
+	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
+	response.WriteEntity(updateResponse)
 }
 
 // DeleteUser deletes user
@@ -1165,6 +1165,12 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 				errorData.Message = "Bad Request / Invalid fql filter"
 				errorData.StatusCode = http.StatusBadRequest
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
+			} else {
+				api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
+				errorData.Message = "Internal error / retrieving apps"
+				errorData.StatusCode = http.StatusInternalServerError
+				appsInfo.Errors = append(appsInfo.Errors, errorData)
+
 			}
 		}
 		if len(appsData) == 0 {
@@ -1300,9 +1306,10 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	}
 	cachedRequests[username] = make([]string, 0)
 
-	registerResponse := domain.QueryResponse{}
-	registerResponse.Message = "App updated succesfully"
-	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, appData.Name)
+	updateResponse := domain.QueryResponse{}
+	updateResponse.Message = "App updated succesfully"
+	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, appData.Name)
+	response.WriteEntity(updateResponse)
 }
 
 // DeleteApp deletes app
@@ -1340,10 +1347,10 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	listAppNames := strings.Split(appnames, ",")
+	appNamesList := strings.Split(appnames, ",")
 
-	if !helpers.CheckAppsExist(userData.Applications, listAppNames) {
-		api.apiLogger.Error("Apps not found", zap.Any("apps", listAppNames))
+	if !helpers.CheckAppsExist(userData.Applications, appNamesList) {
+		api.apiLogger.Error("Apps not found", zap.Any("apps", appNamesList))
 		errorData.Message = "Apps not found"
 		errorData.StatusCode = http.StatusNotFound
 		response.WriteHeader(http.StatusNotFound)
@@ -1351,7 +1358,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		return
 
 	}
-	for _, appName := range listAppNames {
+	for _, appName := range appNamesList {
 		err := api.psqlRepo.DeleteAppData(strings.TrimSpace(appName), username)
 		if err != nil {
 			if strings.Contains(err.Error(), "no row found") {
@@ -1380,8 +1387,111 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 
 	deleteResponse := domain.QueryResponse{}
 	deleteResponse.Message = "Apps deleted succesfully"
-	deleteResponse.ResourcesAffected = append(deleteResponse.ResourcesAffected, listAppNames...)
+	deleteResponse.ResourcesAffected = append(deleteResponse.ResourcesAffected, appNamesList...)
 	response.WriteEntity(deleteResponse)
+}
+
+// ScheduleApps schedule apps
+func (api *API) ScheduleApps(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	appnames := request.QueryParameter("appnames")
+	if appnames == "" {
+		api.apiLogger.Error(" Couldn't read appname query parameter")
+		errorData.Message = "Bad Request/ empty appname"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appNamesList := strings.Split(appnames, ",")
+
+	if !helpers.CheckAppsExist(userData.Applications, appNamesList) {
+		api.apiLogger.Error("Apps not found", zap.Any("apps", appNamesList))
+		errorData.Message = "Apps not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+
+	}
+
+	scheduleType := request.QueryParameter("schedule_type")
+	if scheduleType == "" {
+		api.apiLogger.Error(" Couldn't read scheduleType query parameter")
+		errorData.Message = "Bad Request/ empty schedule type"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !slices.Contains(helpers.ScheduleTypes, scheduleType) {
+		api.apiLogger.Error("Invalid value for schedule type", zap.String("schedule_type", scheduleType))
+		errorData.Message = "Invalid value for schedule type"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	var appsInfo domain.GetApplicationsData
+	appsInfo.Response = make([]*domain.ApplicationData, 0)
+	appsInfo.Errors = make([]domain.ErrorResponse, 0)
+
+	appsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+	if err != nil {
+		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
+		errorData.Message = "Internal error / retrieving apps"
+		errorData.StatusCode = http.StatusInternalServerError
+		appsInfo.Errors = append(appsInfo.Errors, errorData)
+	}
+	if len(appNamesList) > 0 {
+		for _, appData := range appsData {
+			if slices.Contains(appNamesList, appData.Name) {
+				appsInfo.Response = append(appsInfo.Response, appData)
+			}
+		}
+	} else {
+		appsInfo.Response = append(appsInfo.Response, appsData...)
+	}
+
+	// for _, app := range appsInfo.Response {
+	// 	dockerFileName, err := helpers.GenerateDockerFile(app, api.apiLogger)
+	// 	if err != nil {
+	// 		api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
+	// 		errorData.Message = "Internal error / generating docker file"
+	// 		errorData.StatusCode = http.StatusInternalServerError
+	// 		response.WriteHeader(http.StatusInternalServerError)
+	// 		response.WriteEntity(errorData)
+	// 	}
+	// }
+
+	scheduleResponse := domain.QueryResponse{}
+	scheduleResponse.Message = "Apps scheduled succesfully"
+	scheduleResponse.ResourcesAffected = append(scheduleResponse.ResourcesAffected, appNamesList...)
+	response.WriteEntity(scheduleResponse)
+
 }
 
 // StartProfiler starts the cpu profiler

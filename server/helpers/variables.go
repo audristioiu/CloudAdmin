@@ -1,15 +1,17 @@
 package helpers
 
 var (
-	//filters that can be used for GetAppsInfo
+	// GetAppsFilters represents filters that can be used for GetAppsInfo
 	GetAppsFilters = []string{"name", "kname", "description", "created_timestamp", "updated_timestamp", "is_running"}
-	// sort fields that can be used for GetAppsInfo
+	// GetAppsSortFields represents sort fields that can be used for GetAppsInfo
 	GetAppsSortFields = []string{"name", "created_timestamp", "updated_timestamp"}
-	//sort directions
+	// SortDirections represents sort directions
 	SortDirections = []string{"asc", "desc"}
-	//default number of deployed apps for a new registered user
+	// DefaultNrDeployedApps represents default number of deployed apps for a new registered user
 	DefaultNrDeployedApps int = 0
-	mapCodeExtension          = map[string]string{
+	// ScheduleTypes represents allowed scheduling types
+	ScheduleTypes    = []string{"normal", "keda", "rr_sjf", "multi_qos"}
+	mapCodeExtension = map[string]string{
 		"c":    "c",
 		"cpp":  "c++",
 		"py":   "python",

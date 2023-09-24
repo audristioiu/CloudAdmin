@@ -45,7 +45,7 @@ type GetApplicationsData struct {
 	Errors   []ErrorResponse
 }
 
-// QueryResponse represents info for register/update/delete resources
+// QueryResponse represents info for register/update/delete/schedule resources
 type QueryResponse struct {
 	Message           string   `json:"message"`
 	ResourcesAffected []string `json:"resources_affected"`
