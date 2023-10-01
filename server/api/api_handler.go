@@ -480,6 +480,23 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 				response.WriteEntity(errorData)
 				return
 			}
+			execName := strings.Split(userApp, ".")[0]
+			err = api.dockerClient.ListContainersAndDelete(execName)
+			if err != nil {
+				errorData.Message = "Internal error/ failed to remove containers"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			err = api.dockerClient.ListImagesAndDelete(execName)
+			if err != nil {
+				errorData.Message = "Internal error/ failed to remove images"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
 		}
 
 		marshalledRequest, err = json.Marshal(request.Request.URL)
@@ -1381,6 +1398,23 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				return
 			}
 		}
+		execName := strings.Split(appName, ".")[0]
+		err = api.dockerClient.ListContainersAndDelete(execName)
+		if err != nil {
+			errorData.Message = "Internal error/ failed to remove containers"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		err = api.dockerClient.ListImagesAndDelete(execName)
+		if err != nil {
+			errorData.Message = "Internal error/ failed to remove images"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
 
 	}
 
@@ -1559,6 +1593,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			return
 		}
 		dirNames = append(dirNames, dirName)
+
 	}
 
 	for _, dir := range dirNames {
