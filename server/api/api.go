@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cloudadmin/clients"
 	"cloudadmin/domain"
 	"cloudadmin/repositories"
 	"context"
@@ -13,30 +14,34 @@ import (
 )
 
 const (
-	registerPath = "/register"
-	loginPath    = "/login"
-	userPath     = "/user"
-	appPath      = "/app"
-	schedulePath = "/schedule"
+	registerPath   = "/register"
+	loginPath      = "/login"
+	userPath       = "/user"
+	appPath        = "/app"
+	aggregatesPath = "/aggregates"
+	schedulePath   = "/schedule"
 )
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service
 type API struct {
-	ctx       context.Context
-	psqlRepo  *repositories.PostgreSqlRepo
-	apiCache  *ristretto.Cache
-	apiLogger *zap.Logger
-	profiler  *repositories.ProfilingService
+	ctx          context.Context
+	psqlRepo     *repositories.PostgreSqlRepo
+	apiCache     *ristretto.Cache
+	apiLogger    *zap.Logger
+	profiler     *repositories.ProfilingService
+	dockerClient *clients.DockerClient
 }
 
 // NewAPI returns an API object
-func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger, cpuProfiler *repositories.ProfilingService) *API {
+func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger,
+	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient) *API {
 	return &API{
-		ctx:       ctx,
-		psqlRepo:  postgresRepo,
-		apiCache:  cache,
-		apiLogger: logger,
-		profiler:  cpuProfiler,
+		ctx:          ctx,
+		psqlRepo:     postgresRepo,
+		apiCache:     cache,
+		apiLogger:    logger,
+		profiler:     cpuProfiler,
+		dockerClient: dockerClient,
 	}
 }
 
@@ -128,7 +133,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Doc("Upload app to s3").
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("is_complex", "flag complex app split in multi source files").DataType("boolean").Required(false).AllowEmptyValue(false)).
 			Param(ws.FormParameter("type", "zip archive which contains the code and description files(same name for both,description being txt,order for every app is source_code,then description)").AllowMultiple(true).
 				DataType("file").Required(true).AllowMultiple(true)).
@@ -144,11 +149,11 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 	ws.Route(
 		ws.
 			GET(appPath).
-			Doc("Retrieve apps information by name").
+			Doc("Retrieve apps information").
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("appnames", "name of the apps").DataType("string").AllowEmptyValue(true).AllowMultiple(true)).
-			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("filter",
 				"filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(AND-&&,OR-||) or separate").
 				DataType("string").AllowEmptyValue(true)).
@@ -162,6 +167,18 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Returns(http.StatusOK, "OK", domain.GetApplicationsData{}).
 			Returns(http.StatusNotFound, "App Not Found", domain.GetApplicationsData{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.GetApplicationsData{}))
+	ws.Route(
+		ws.
+			GET(appPath+aggregatesPath).
+			Doc("Retrieve aggregates about applications").
+			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			//Filter(api.BasicAuthenticate).
+			To(api.GetAppsAggregates).
+			Writes(domain.AppsAggregatesInfo{}).
+			Returns(http.StatusOK, "OK", domain.AppsAggregatesInfo{}))
 	ws.Route(
 		ws.
 			PUT(appPath).
@@ -184,7 +201,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("appname", "name of the apps you want to delete").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
-			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Doc("Deletes app").
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
@@ -202,8 +219,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			GET(schedulePath).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("appname", "name of the apps you want to schedule").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
-			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("appnames", "	").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
+			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("schedule_type", "type of schedulling").DataType("string").Required(true).AllowEmptyValue(false)).
 			Doc("Schedule apps").
 			Metadata(restfulspec.KeyOpenAPITags, tags).

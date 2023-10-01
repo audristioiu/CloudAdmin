@@ -39,10 +39,30 @@ type ErrorResponse struct {
 	StatusCode int    `json:"status_code"`
 }
 
+// GetAppInfo represents counts about apps aggregates
+type GetAppInfo struct {
+	MainAppsByOwnerCount    int64 `json:"main_apps_owner_count"`
+	MainAppsTotalCount      int64 `json:"main_apps_total_count"`
+	RunningAppsByOwnerCount int64 `json:"running_apps_owner_count"`
+	RunningAppsTotalCount   int64 `json:"running_apps_total_count"`
+}
+
+// AppsAggregatesInfo represents apps info for aggregates response
+type AppsAggregatesInfo struct {
+	QueryInfo GetAppInfo
+}
+
+// AppsMetaInfo represents meta info about apps
+type AppsMetaInfo struct {
+	Total          int `json:"total"`
+	ResourcesCount int `json:"resources_count"`
+}
+
 // GetApplicationsData represents get apps info
 type GetApplicationsData struct {
-	Response []*ApplicationData
-	Errors   []ErrorResponse
+	QueryInfo AppsMetaInfo
+	Response  []*ApplicationData
+	Errors    []ErrorResponse
 }
 
 // QueryResponse represents info for register/update/delete/schedule resources
@@ -56,9 +76,11 @@ type DockerFile struct {
 	From       string
 	Workdir    string
 	Copy       string
+	CopyArgs   []string
 	EntryPoint []string
 	Volume     []string
 	Run        string
+	RunApt     []string
 	Cmd        []string
 	Shell      []string
 	User       string

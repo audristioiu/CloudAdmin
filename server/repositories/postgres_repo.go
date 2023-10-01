@@ -243,7 +243,7 @@ func (p *PostgreSqlRepo) GetAllApps() ([]*domain.ApplicationData, error) {
 
 	rows, err := p.conn.Query(p.ctx, selectStatement)
 	if err != nil {
-		p.psqlLogger.Error(" could not retrieve appn", zap.Error(err))
+		p.psqlLogger.Error(" could not retrieve all apps", zap.Error(err))
 		return nil, err
 	}
 
@@ -262,8 +262,40 @@ func (p *PostgreSqlRepo) GetAllApps() ([]*domain.ApplicationData, error) {
 
 }
 
+// GetAppsCount retrieves apps count from db
+func (p *PostgreSqlRepo) GetAppsCount(owner string, countApp bool) (int, error) {
+	var totals int
+	psqlArguments := make(pgx.NamedArgs, 0)
+	selectStatement := "SELECT COUNT(*) FROM apps WHERE"
+	if owner != "" {
+		selectStatement += " owner=@app_owner AND is_main=TRUE"
+		if countApp {
+			selectStatement += " AND is_running=TRUE"
+		}
+		psqlArguments["app_owner"] = owner
+	} else {
+		if countApp {
+			selectStatement += " is_running=TRUE AND"
+		}
+		selectStatement += " is_main=TRUE"
+	}
+
+	row := p.conn.QueryRow(p.ctx, selectStatement, psqlArguments)
+	err := row.Scan(&totals)
+	if err != nil {
+		p.psqlLogger.Error(" could not retrieve apps count", zap.Error(err))
+		return 0, err
+	}
+
+	return totals, nil
+
+}
+
 // GetAppsData retrieves apps from PostgreSql table using fql filter
-func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams []string) ([]*domain.ApplicationData, error) {
+func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams []string) (int, int, []*domain.ApplicationData, error) {
+	totals, _ := p.GetAppsCount(owner, false)
+	resultsCount := 0
+
 	applicationsData := make([]*domain.ApplicationData, 0)
 	var selectStatement string
 	var err error
@@ -272,7 +304,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams 
 	//Parse fql filter
 	filters := helpers.ParseFQLFilter(filterConditions, p.psqlLogger)
 	if filters == nil {
-		return nil, fmt.Errorf("could not parse fql filter")
+		return 0, 0, nil, fmt.Errorf("could not parse fql filter")
 	}
 	if len(filters) > 0 && len(filters[0]) >= 3 {
 		selectStatement := `SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp, 
@@ -338,7 +370,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams 
 				}
 			} else if len(filterParams) == 2 || len(filterParams) > 4 {
 				p.psqlLogger.Error(" Invalid filter", zap.Any("filter_params", filterParams))
-				return nil, fmt.Errorf("invalid fql filter")
+				return 0, 0, nil, fmt.Errorf("invalid fql filter")
 			}
 
 			if i != len(filters)-1 && len(filterParams) == 1 {
@@ -363,7 +395,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams 
 		rows, err = p.conn.Query(p.ctx, selectStatement, filterArguments)
 		if err != nil {
 			p.psqlLogger.Error(" could not retrieve app", zap.Error(err))
-			return nil, err
+			return 0, 0, nil, err
 		}
 
 	} else {
@@ -378,7 +410,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams 
 		rows, err = p.conn.Query(p.ctx, selectStatement, owner)
 		if err != nil {
 			p.psqlLogger.Error(" could not retrieve appn", zap.Error(err))
-			return nil, err
+			return 0, 0, nil, err
 		}
 	}
 
@@ -389,13 +421,14 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams 
 			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner)
 		if err != nil {
 			p.psqlLogger.Error(" could not scan app", zap.Error(err))
-			return nil, err
+			return 0, 0, nil, err
 		}
 		applicationsData = append(applicationsData, applicationData)
 	}
 
 	p.psqlLogger.Info("Successfuly retrieved apps", zap.Any("app_data", applicationsData))
-	return applicationsData, nil
+	resultsCount = len(applicationsData)
+	return totals, resultsCount, applicationsData, nil
 }
 
 // UpdateAppData updates app from PostgreSql table

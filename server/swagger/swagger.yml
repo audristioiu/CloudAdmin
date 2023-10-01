@@ -8,12 +8,14 @@ info:
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
-  version: 1.9.0
+  version: 1.9.2
 tags:
   - name: users
     description: Managing users
   - name: apps
     description: Managing apps
+  - name: schdule
+    description: Schedulling apps
 paths:
   /app:
     get:
@@ -46,7 +48,7 @@ paths:
               type: string
         - name: username
           in: query
-          description: owner of the app
+          description: owner of the apps
           required: true
           schema:
             type: string
@@ -157,7 +159,7 @@ paths:
             type: string
         - name: username
           in: query
-          description: owner of the app
+          description: owner of the apps
           required: true
           schema:
             type: string
@@ -186,6 +188,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/domain.ErrorResponse'
+  /app/aggregates:
+    get:
+      tags:
+        - apps
+      summary: Retrieve aggregates about applications
+      operationId: GetAppsAggregates
+      parameters:
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/domain.AppsAggregatesInfo'
+        
   /login:
     post:
       tags:
@@ -247,7 +270,7 @@ paths:
             type: string
         - name: username
           in: query
-          description: owner of the app
+          description: owner of the apps
           required: true
           schema:
             type: string
@@ -323,6 +346,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/domain.ErrorResponse'
       x-codegen-request-body-name: body
+  /schedule:
+    get:
+      tags:
+        - schedule
+      summary: Schedule apps
+      operationId: ScheduleApps
+      parameters:
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
+        - name: appnames
+          in: query
+          description: name of the apps you want to schedule
+          required: true
+          allowEmptyValue: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
+        - name: schedule_type
+          in: query
+          description: type of schedulling
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/domain.QueryResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/domain.ErrorResponse'
+        '403':
+          description: User not allowed as admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/domain.ErrorResponse'
+        '404':
+          description: User/Apps Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/domain.ErrorResponse'
   /user:
     put:
       tags:
@@ -496,6 +584,45 @@ components:
         updated_timestamp:
           type: string
           format: date-time
+    domain.AppsAggregatesInfo:
+      required:
+        - QueryInfo
+      type: object
+      properties:
+        QueryInfo:
+          items:
+            $ref: '#/components/schemas/domain.GetAppInfo'
+    domain.AppsMetaInfo:
+      required:
+        - total
+        - resources_count
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int32
+        resources_count:
+          type: integer
+          format: int32
+    domain.GetAppInfo:
+      required:
+        - main_apps_owner_count
+        - main_apps_total_count
+        - running_apps_owner_count
+        - running_apps_total_count
+      properties:
+        main_apps_owner_count:
+          type: integer
+          format: int64
+        main_apps_total_count:
+          type: integer
+          format: int64
+        running_apps_owner_count:
+          type: integer
+          format: int64
+        running_apps_total_count:
+          type: integer
+          format: int64
     domain.ErrorResponse:
       required:
         - message
@@ -509,6 +636,7 @@ components:
           format: int32
     domain.GetApplicationsData:
       required:
+        - QueryInfo
         - Errors
         - Response
       type: object
@@ -517,6 +645,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/domain.ErrorResponse'
+        QueryInfo:
+          items:
+            $ref: '#/components/schemas/domain.AppsMetaInfo'
         Response:
           type: array
           items:

@@ -569,7 +569,10 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		return
 
 	}
-	formFilesName := request.Request.MultipartForm.File["file"]
+	multipartReader, _ := request.Request.MultipartReader()
+	multipartReadForm, _ := multipartReader.ReadForm(int64(1000000))
+
+	formFilesName := multipartReadForm.File["file"]
 	if len(formFilesName) == 0 {
 		api.apiLogger.Error(" Couldn't form file")
 		errorData.Message = "Bad Request/ Empty form"
@@ -586,6 +589,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		appTxt := ""
 		mainAppData := domain.ApplicationData{}
 		for _, fileName := range formFilesName {
+
 			// Create a new file in the uploads directory
 			f, err := os.OpenFile(fileName.Filename, os.O_WRONLY|os.O_CREATE, 0666)
 			if err != nil {
@@ -652,7 +656,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					return
 				}
 				defer rc.Close()
-				if strings.Contains(f.Name, ".txt") {
+				if strings.Contains(f.Name, ".txt") && f.Name != "requirements.txt" {
 					if i%2 == 0 {
 						appTxt = r.File[i+1].Name
 					} else {
@@ -922,7 +926,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 					subGroupMainFiles = append(subGroupMainFiles, mainAppData.Name)
 					appsUploaded = append(appsUploaded, mainAppData.Name)
-					mainAppData.SubgroupFiles = append(subGroupMainFiles, subGroupMainFiles...)
+					mainAppData.SubgroupFiles = append(mainAppData.SubgroupFiles, subGroupMainFiles...)
 					err = api.psqlRepo.InsertAppData(&mainAppData)
 					if err != nil {
 						errorData.Message = "Internal error/ insert main app data in postgres"
@@ -1158,7 +1162,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			api.apiLogger.Debug("sorting by ", zap.Any("sort_query", sortParams))
 		}
 
-		appsData, err := api.psqlRepo.GetAppsData(username, filter, sortParams)
+		total, resultsCount, appsData, err := api.psqlRepo.GetAppsData(username, filter, sortParams)
 		if err != nil {
 			if strings.Contains(err.Error(), "fql") {
 				api.apiLogger.Error(" Invalid fql filter for get apps", zap.Error(err))
@@ -1200,7 +1204,8 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			errorData.StatusCode = http.StatusForbidden
 			appsInfo.Errors = append(appsInfo.Errors, errorData)
 		}
-
+		appsInfo.QueryInfo.Total = total
+		appsInfo.QueryInfo.ResourcesCount = resultsCount
 		response.WriteEntity(appsInfo)
 		if len(appsInfo.Response) > 0 {
 			api.apiCache.SetWithTTL(string(marshalledRequest), appsInfo, 1, time.Hour*24)
@@ -1391,10 +1396,59 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	response.WriteEntity(deleteResponse)
 }
 
+func (api *API) GetAppsAggregates(request *restful.Request, response *restful.Response) {
+
+	errorData := domain.ErrorResponse{}
+	appInfo := domain.AppsAggregatesInfo{}
+
+	username := request.QueryParameter("username")
+
+	mainAppsOwnerCount, err := api.psqlRepo.GetAppsCount(username, false)
+	if err != nil {
+		errorData.Message = "Internal Error / Could not get main apps for owner " + username
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	runningAppsOwnerCount, err := api.psqlRepo.GetAppsCount(username, true)
+	if err != nil {
+		errorData.Message = "Internal Error / Could not get running apps for owner " + username
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	totalMainAppsCount, err := api.psqlRepo.GetAppsCount("", false)
+	if err != nil {
+		errorData.Message = "Internal Error / Could not get all main apps"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	totalRunningAppsCount, err := api.psqlRepo.GetAppsCount("", true)
+	if err != nil {
+		errorData.Message = "Internal Error / Could not get all running apps"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appInfo.QueryInfo.MainAppsByOwnerCount = int64(mainAppsOwnerCount)
+	appInfo.QueryInfo.RunningAppsByOwnerCount = int64(runningAppsOwnerCount)
+	appInfo.QueryInfo.MainAppsTotalCount = int64(totalMainAppsCount)
+	appInfo.QueryInfo.RunningAppsTotalCount = int64(totalRunningAppsCount)
+	response.WriteEntity(appInfo)
+
+}
+
 // ScheduleApps schedule apps
 func (api *API) ScheduleApps(request *restful.Request, response *restful.Response) {
 	errorData := domain.ErrorResponse{}
-
+	dirNames := make([]string, 0)
 	appnames := request.QueryParameter("appnames")
 	if appnames == "" {
 		api.apiLogger.Error(" Couldn't read appname query parameter")
@@ -1459,7 +1513,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	appsInfo.Response = make([]*domain.ApplicationData, 0)
 	appsInfo.Errors = make([]domain.ErrorResponse, 0)
 
-	appsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+	_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / retrieving apps"
@@ -1476,17 +1530,40 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		appsInfo.Response = append(appsInfo.Response, appsData...)
 	}
 
-	// for _, app := range appsInfo.Response {
-	// 	dockerFileName, err := helpers.GenerateDockerFile(app, api.apiLogger)
-	// 	if err != nil {
-	// 		api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
-	// 		errorData.Message = "Internal error / generating docker file"
-	// 		errorData.StatusCode = http.StatusInternalServerError
-	// 		response.WriteHeader(http.StatusInternalServerError)
-	// 		response.WriteEntity(errorData)
-	// 	}
-	// }
+	for _, app := range appsInfo.Response {
+		dirName := strings.Split(app.Name, ".")[0]
+		dirName, err := helpers.GenerateDockerFile(dirName, app, api.apiLogger)
+		if err != nil {
+			api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
+			errorData.Message = "Internal error / generating docker file"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
 
+		err = api.dockerClient.BuildImage(dirName)
+		if err != nil {
+			errorData.Message = "Internal error / building image"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		err = api.dockerClient.PushImage(dirName)
+		if err != nil {
+			errorData.Message = "Internal error / pushing image"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		dirNames = append(dirNames, dirName)
+	}
+
+	for _, dir := range dirNames {
+		os.RemoveAll(dir)
+	}
 	scheduleResponse := domain.QueryResponse{}
 	scheduleResponse.Message = "Apps scheduled succesfully"
 	scheduleResponse.ResourcesAffected = append(scheduleResponse.ResourcesAffected, appNamesList...)

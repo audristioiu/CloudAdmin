@@ -2,6 +2,7 @@ package service
 
 import (
 	"cloudadmin/api"
+	"cloudadmin/clients"
 	"cloudadmin/repositories"
 	"context"
 	"encoding/json"
@@ -86,8 +87,26 @@ func (s *Service) StartWebService() {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
 
+	// initialize clients for docker
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	defer cancel()
+
+	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+	dockerUsername := os.Getenv("DOCKER_USERNAME")
+	dockerPassword := os.Getenv("DOCKER_PASSWORD")
+	if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
+		log.Fatal("[FATAL] docker registry_id/username/pass not found")
+		return
+	}
+	dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
+	if dockerClient == nil {
+		log.Fatal("[FATAL] Error in creating docker client")
+		return
+	}
+
+	log.Debug("Docker client initialized")
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo)
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -113,8 +132,9 @@ func (s *Service) StartWebService() {
 
 	server := &http.Server{
 		Addr:           ":443",
-		ReadTimeout:    1 * time.Minute,
-		WriteTimeout:   1 * time.Minute,
+		ReadTimeout:    10 * time.Minute,
+		WriteTimeout:   10 * time.Minute,
+		IdleTimeout:    10 * time.Minute,
 		MaxHeaderBytes: 1 << 20,
 	}
 
@@ -144,7 +164,7 @@ func enrichSwaggerObject(swo *spec.Swagger) {
 					URL:  "http://mit.org",
 				},
 			},
-			Version: "1.8.0",
+			Version: "1.9.2",
 		},
 	}
 	swo.Tags = []spec.Tag{{TagProps: spec.TagProps{
@@ -152,5 +172,9 @@ func enrichSwaggerObject(swo *spec.Swagger) {
 		Description: "Managing users"}},
 		{TagProps: spec.TagProps{
 			Name:        "apps",
-			Description: "Managing apps"}}}
+			Description: "Managing apps"}},
+		{TagProps: spec.TagProps{
+			Name:        "schedule",
+			Description: "schedulling apps",
+		}}}
 }

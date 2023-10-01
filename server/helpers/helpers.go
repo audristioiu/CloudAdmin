@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -209,16 +210,19 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 		return err
 	}
 
-	_, err = sb.WriteString("WORKDIR " + dockProperties.Workdir)
-	if err != nil {
-		logger.Error("could not writeString", zap.Error(err))
-		return err
-	}
-
-	_, err = sb.WriteString("\n")
-	if err != nil {
-		logger.Error("could not writeString", zap.Error(err))
-		return err
+	if len(dockProperties.CopyArgs) > 0 {
+		for _, copyArg := range dockProperties.CopyArgs {
+			_, err = sb.WriteString("COPY " + copyArg)
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+			_, err = sb.WriteString("\n")
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+		}
 	}
 
 	_, err = sb.WriteString("COPY " + dockProperties.Copy)
@@ -232,7 +236,8 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 		logger.Error("could not writeString", zap.Error(err))
 		return err
 	}
-	_, err = sb.WriteString("RUN " + dockProperties.Run)
+
+	_, err = sb.WriteString("WORKDIR " + dockProperties.Workdir)
 	if err != nil {
 		logger.Error("could not writeString", zap.Error(err))
 		return err
@@ -242,6 +247,34 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 	if err != nil {
 		logger.Error("could not writeString", zap.Error(err))
 		return err
+	}
+
+	if len(dockProperties.RunApt) > 0 {
+		for _, aptCmd := range dockProperties.RunApt {
+			_, err = sb.WriteString("RUN " + aptCmd)
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+			_, err = sb.WriteString("\n")
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+		}
+	}
+	if dockProperties.Run != "" {
+		_, err = sb.WriteString("RUN " + dockProperties.Run)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
 	}
 
 	if len(dockProperties.Cmd) > 0 {
@@ -425,7 +458,7 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 		}
 	}
 
-	_, err = dockerFile.Write([]byte(sb.String()))
+	_, err = dockerFile.Write([]byte(sb.String()[:len(sb.String())-1]))
 	if err != nil {
 		logger.Error("could not writeString", zap.Error(err))
 		return err
@@ -433,10 +466,48 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 	return nil
 }
 
+// todo remove
+func copy(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
+}
+
 // GenerateDockerFile returns name of the dockerfile created using app info
-func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (string, error) {
-	//todo luat fisier de pe local(in viitor s3)
-	dockFile, err := os.CreateTemp("", "Dockerfile_test")
+func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger *zap.Logger) (string, error) {
+
+	var packageJs []string
+	var runJs, runPy string
+	hasPkg := false
+	hasReqs := false
+	//todo luat fisier de pe local(in viitor s3) si scris la locatie
+	err := os.Mkdir(dirName, 0666)
+	if err != nil {
+		logger.Error("failed to create directory", zap.Error(err))
+		return "", err
+	}
+	path := `C:\Users\udris\Desktop\`
+	copy(path+appData.Name, filepath.Join(dirName, filepath.Base(appData.Name)))
+	dockFile, err := os.Create(filepath.Join(dirName, filepath.Base("Dockerfile")))
 	if err != nil {
 		logger.Error("could not create temp file", zap.Error(err))
 		return "", err
@@ -444,25 +515,32 @@ func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (st
 
 	appName := appData.Name
 	extension := strings.Split(appName, ".")[1]
-
+	if extension == "js" && hasPkg {
+		copy(path+"package.json", filepath.Join(dirName, filepath.Base("package.json")))
+		copy(path+"package-lock.json", filepath.Join(dirName, filepath.Base("package-lock.json")))
+		packageJs = []string{"package.json package.json", "package-lock.json package-lock.json"}
+		runJs = "npm install"
+	}
+	if extension == "py" && hasReqs {
+		copy(path+"requirements.txt", filepath.Join(dirName, filepath.Base("requirements.txt")))
+		runPy = "pip install -r requirements.txt"
+	}
+	if extension == "go" {
+		copy(path+"go.mod", filepath.Join(dirName, filepath.Base("go.mod")))
+		copy(path+"go.sum", filepath.Join(dirName, filepath.Base("go.sum")))
+	}
 	switch mapCodeExtension[extension] {
 	//todo rework dockerfiles
 	case "nodejs":
 		{
+			execName := strings.Split(appName, ".")[0]
 			dockProps := domain.DockerFile{
-				From:    "node18-alpine",
-				Workdir: "/app",
-				Copy:    appName + " /app",
-				// EntryPoint: []string{"top", "-b"},
-				// Volume:     []string{"/myvol"},
-				Run: "yarn install --production",
-				Cmd: []string{"node", appName},
-				//Shell:      []string{"powershell", "-command"},
-				// User:       "Patrick",
-				// Arg:        "CONT_IMG_VER",
-				// Label:      "com.example.label-with-value=\"foo\"",
-				// Env:        "COMT_IMG_VER=hello",
-				// ExposePort: 3000,
+				From:     "node:latest",
+				Workdir:  "/" + execName + "/",
+				CopyArgs: packageJs,
+				Copy:     ". " + "/" + execName,
+				Run:      runJs,
+				Cmd:      []string{"node", appName},
 			}
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
@@ -473,22 +551,20 @@ func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (st
 		}
 	case "golang":
 		{
-			newCMD := []string{"go", "run"}
-			newCMD = append(newCMD, appData.FlagArguments, appName, appData.ParamArguments)
+			execName := strings.Split(appName, ".")[0]
+			newCMD := []string{"go", "run", appName}
+			if appData.FlagArguments != "" {
+				newCMD = append(newCMD, appData.FlagArguments)
+			}
+			if appData.ParamArguments != "" {
+				newCMD = append(newCMD, appData.ParamArguments)
+			}
 			dockProps := domain.DockerFile{
 				From:    "golang:1.21",
-				Workdir: "/src",
-				Copy:    appName + " /src",
-				// EntryPoint: []string{"top", "-b"},
-				// Volume:     []string{"/myvol"},
-				Run: "mkdir /src",
-				Cmd: newCMD,
-				// Shell:      []string{"powershell", "-command"},
-				// User:       "Patrick",
-				// Arg:        "CONT_IMG_VER",
-				// Label:      "com.example.label-with-value=\"foo\"",
-				// Env:        "COMT_IMG_VER=hello",
-				// ExposePort: 3000,
+				Workdir: "/" + execName + "/",
+				Copy:    ". /" + execName,
+				Run:     "go mod download",
+				Cmd:     newCMD,
 			}
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
@@ -500,23 +576,21 @@ func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (st
 
 	case "python":
 		{
-
-			newCMD := []string{"python"}
-			newCMD = append(newCMD, appData.FlagArguments, appName, appData.ParamArguments)
+			execName := strings.Split(appName, ".")[0]
+			newCMD := []string{"python", "-u"}
+			newCMD = append(newCMD, appName)
+			if appData.FlagArguments != "" {
+				newCMD = append(newCMD, appData.FlagArguments)
+			}
+			if appData.ParamArguments != "" {
+				newCMD = append(newCMD, appData.ParamArguments)
+			}
 			dockProps := domain.DockerFile{
 				From:    "python:3.10-slim",
-				Workdir: "/app",
-				Copy:    appName + " /app",
-				// EntryPoint: []string{"top", "-b"},
-				// Volume:     []string{"/myvol"},
-				Run: "pip install -r requirements.txt",
-				Cmd: newCMD,
-				//Shell:      []string{"powershell", "-command"},
-				// User:       "Patrick",
-				// Arg:        "CONT_IMG_VER",
-				// Label:      "com.example.label-with-value=\"foo\"",
-				// Env:        "COMT_IMG_VER=hello",
-				// ExposePort: 3000,
+				Workdir: "/" + execName + "/",
+				Copy:    ". /" + execName,
+				Run:     runPy,
+				Cmd:     newCMD,
 			}
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
@@ -529,21 +603,19 @@ func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (st
 		{
 			execName := strings.Split(appName, ".")[0]
 			newCMD := []string{"java"}
-			newCMD = append(newCMD, appData.FlagArguments, execName, appData.ParamArguments)
+			newCMD = append(newCMD, execName)
+			if appData.FlagArguments != "" {
+				newCMD = append(newCMD, appData.FlagArguments)
+			}
+			if appData.ParamArguments != "" {
+				newCMD = append(newCMD, appData.ParamArguments)
+			}
 			dockProps := domain.DockerFile{
-				From:    "alpine:latest",
-				Workdir: "/app",
-				Copy:    "--chown=nobody " + appName + " /app",
-				// EntryPoint: []string{"top", "-b"},
-				// Volume:     []string{"/myvol"},
-				Run: "apk update && \\ \n apk fetch openjdk8 && \\ \n apk add --no-cache openjdk8 \\ \n mkdir app && \\ \n chown nobody. /app && \\ \n javac " + appName,
-				Cmd: newCMD,
-				//Shell:      []string{"powershell", "-command"},
-				User: "nobdy",
-				//Arg:        "CONT_IMG_VER",
-				//Label:      "com.example.label-with-value=\"foo\"",
-				Env: "JAVA_HOME=/usr/lib/jvm/java-1.8-openjdk;PATH=\"$JAVA_HOME/bin:${PATH}",
-				//ExposePort: 3000,
+				From:    "openjdk:11-jdk-slim",
+				Workdir: "/" + execName + "/",
+				Copy:    ". /" + execName,
+				Run:     "javac " + appName,
+				Cmd:     newCMD,
 			}
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
@@ -564,25 +636,17 @@ func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (st
 				newCMD = append(newCMD, "./"+execName)
 			}
 			if appData.FlagArguments != "" {
-				newRun = "addgroup -S dockergroup && \\ \n adduser -S dockeruser -G dockergroup && \\ \n apk add --no-cache build-base && \\ \n  mkdir /src && \\ \n gcc -o " + execName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
+				newRun = "gcc -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
 			} else {
-				newRun = "addgroup -S dockergroup && \\ \n adduser -S dockeruser -G dockergroup && \\ \n apk add --no-cache build-base && \\ \n  mkdir /src && \\ \n gcc -o " + execName + " " + strings.Join(appData.SubgroupFiles, " ")
+				newRun = "gcc -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ")
 			}
 
 			dockProps := domain.DockerFile{
-				From:    "alpine:latest",
-				Workdir: "/src",
-				Copy:    appName + " /src",
-				// EntryPoint: []string{"top", "-b"},
-				// Volume:     []string{"/myvol"},
-				Run: newRun,
-				Cmd: newCMD,
-				// Shell:      []string{"powershell", "-command"},
-				User: "dockeruser",
-				// Arg:        "CONT_IMG_VER",
-				// Label:      "com.example.label-with-value=\"foo\"",
-				// Env:        "COMT_IMG_VER=hello",
-				// ExposePort: 3000,
+				From:    "gcc:latest",
+				Workdir: "/" + execName + "/",
+				Copy:    ". " + "/" + execName,
+				Run:     newRun,
+				Cmd:     newCMD,
 			}
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
@@ -603,24 +667,16 @@ func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (st
 				newCMD = append(newCMD, "./"+execName)
 			}
 			if appData.FlagArguments != "" {
-				newRun = "addgroup -S dockergroup && \\ \n adduser -S dockeruser -G dockergroup && \\ \n apk add --no-cache build-base && \\ \n  mkdir /src && \\ \n g++ -o " + execName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
+				newRun = "g++ -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
 			} else {
-				newRun = "addgroup -S dockergroup && \\ \n adduser -S dockeruser -G dockergroup && \\ \n apk add --no-cache build-base && \\ \n  mkdir /src && \\ \n g++ -o " + execName + " " + strings.Join(appData.SubgroupFiles, " ")
+				newRun = "g++ -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ")
 			}
 			dockProps := domain.DockerFile{
-				From:    "alpine:latest",
-				Workdir: "/src",
-				Copy:    "/src/main.cpp /src",
-				// EntryPoint: []string{"top", "-b"},
-				// Volume:     []string{"/myvol"},
-				Run: newRun,
-				Cmd: newCMD,
-				// Shell:      []string{"powershell", "-command"},
-				User: "dockeruser",
-				// Arg:        "CONT_IMG_VER",
-				// Label:      "com.example.label-with-value=\"foo\"",
-				// Env:        "COMT_IMG_VER=hello",
-				// ExposePort: 3000,
+				From:    "gcc:latest",
+				Workdir: "/" + execName + "/",
+				Copy:    ". " + "/" + execName,
+				Run:     newRun,
+				Cmd:     newCMD,
 			}
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
@@ -635,7 +691,7 @@ func GenerateDockerFile(appData *domain.ApplicationData, logger *zap.Logger) (st
 		}
 	}
 	defer dockFile.Close()
-	return dockFile.Name(), nil
+	return dirName, nil
 }
 
 // CreateFilesFromDir returns ApplicationData struct for main app and subgroup apps
@@ -670,7 +726,7 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 		}
 		appData := domain.ApplicationData{}
 		descr := string(file)
-		if strings.Contains(path, ".txt") {
+		if strings.Contains(path, ".txt") && !strings.Contains(path, "requirements.txt") {
 			appsDescription = descr
 			appTxt = strings.Split(path, "/")[1]
 
