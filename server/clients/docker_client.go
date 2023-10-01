@@ -159,7 +159,7 @@ func (dock *DockerClient) ListImagesAndDelete(dirName string) error {
 
 			_, err = dock.dockerClient.ImageRemove(dock.ctx, image.ID, types.ImageRemoveOptions{})
 			if err != nil {
-				dock.dockerLogger.Error("failed to stop container", zap.String("image_id", image.ID[:10]), zap.Error(err))
+				dock.dockerLogger.Error("failed to remove images", zap.String("image_id", image.ID[:10]), zap.Error(err))
 				return err
 			}
 
