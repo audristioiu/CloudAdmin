@@ -154,7 +154,6 @@ func (dock *DockerClient) ListImagesAndDelete(dirName string) error {
 		return err
 	}
 	for _, image := range images {
-		fmt.Printf("%+v\n", image)
 		if slices.Contains(image.RepoTags, imageName) {
 
 			_, err = dock.dockerClient.ImageRemove(dock.ctx, image.ID, types.ImageRemoveOptions{})
