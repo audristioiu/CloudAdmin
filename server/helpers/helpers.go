@@ -505,7 +505,8 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 		logger.Error("failed to create directory", zap.Error(err))
 		return "", err
 	}
-	path := `C:\Users\udris\Desktop\`
+	path, _ := os.Getwd()
+	path = strings.ReplaceAll(path, `CloudAdmin\server\`, "")
 	copy(path+appData.Name, filepath.Join(dirName, filepath.Base(appData.Name)))
 	dockFile, err := os.Create(filepath.Join(dirName, filepath.Base("Dockerfile")))
 	if err != nil {
