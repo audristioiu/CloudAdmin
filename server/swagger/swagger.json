@@ -23,7 +23,7 @@
       "description": "Managing apps"
     },
     {
-      "name": "schdule",
+      "name": "schedule",
       "description": "Schedulling apps"
     }
   ],
@@ -234,9 +234,9 @@
             }
           },
           {
-            "name": "appname",
+            "name": "appnames",
             "in": "query",
-            "description": "name of the app you want to delete",
+            "description": "name of the apps you want to delete",
             "required": true,
             "schema": {
               "type": "string"
@@ -602,6 +602,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "nr_replicas",
+            "in": "query",
+            "description": "nr of replicas(only for normal schedulling)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -637,6 +646,85 @@
           },
           "404": {
             "description": "User/Apps Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/getresults": {
+      "get": {
+        "tags": [
+          "schedule"
+        ],
+        "summary": "Get pod results",
+        "operationId": "GetPodResults",
+        "parameters": [
+          {
+            "name": "USER-AUTH",
+            "in": "header",
+            "description": "role used for auth",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "USER-UUID",
+            "in": "header",
+            "description": "user unique id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "description": "owner of the apps",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pod_name",
+            "in": "query",
+            "description": "pod name for which you want to get logs for",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.GetLogsFromPod"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User/Apps/Pod not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -915,6 +1003,21 @@
           "updated_timestamp": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "domain.GetLogsFromPod": {
+        "required": [
+          "print_message",
+          "app_name"
+        ],
+        "type": "object",
+        "properties": {
+          "print_message": {
+            "type": "string"
+          },
+          "app_name": {
+            "type": "string"
           }
         }
       },

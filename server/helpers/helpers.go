@@ -494,21 +494,23 @@ func copy(src, dst string) (int64, error) {
 
 // GenerateDockerFile returns name of the dockerfile created using app info
 func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger *zap.Logger) (string, error) {
-
+	mkDirName := dirName + "-" + strings.Split(appData.Name, ".")[1]
 	var packageJs []string
 	var runJs, runPy string
 	hasPkg := false
 	hasReqs := false
 	//todo luat fisier de pe local(in viitor s3) si scris la locatie
-	err := os.Mkdir(dirName, 0666)
+	err := os.Mkdir(mkDirName, 0666)
 	if err != nil {
 		logger.Error("failed to create directory", zap.Error(err))
 		return "", err
 	}
 	path, _ := os.Getwd()
-	path = strings.ReplaceAll(path, `CloudAdmin\server\`, "")
-	copy(path+appData.Name, filepath.Join(dirName, filepath.Base(appData.Name)))
-	dockFile, err := os.Create(filepath.Join(dirName, filepath.Base("Dockerfile")))
+	path = strings.ReplaceAll(path, "CloudAdmin", "")
+	path = strings.ReplaceAll(path, "server", "")
+	path = path[:len(path)-1]
+	copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
+	dockFile, err := os.Create(filepath.Join(mkDirName, filepath.Base("Dockerfile")))
 	if err != nil {
 		logger.Error("could not create temp file", zap.Error(err))
 		return "", err
@@ -517,21 +519,20 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 	appName := appData.Name
 	extension := strings.Split(appName, ".")[1]
 	if extension == "js" && hasPkg {
-		copy(path+"package.json", filepath.Join(dirName, filepath.Base("package.json")))
-		copy(path+"package-lock.json", filepath.Join(dirName, filepath.Base("package-lock.json")))
+		copy(path+"package.json", filepath.Join(mkDirName, filepath.Base("package.json")))
+		copy(path+"package-lock.json", filepath.Join(mkDirName, filepath.Base("package-lock.json")))
 		packageJs = []string{"package.json package.json", "package-lock.json package-lock.json"}
 		runJs = "npm install"
 	}
 	if extension == "py" && hasReqs {
-		copy(path+"requirements.txt", filepath.Join(dirName, filepath.Base("requirements.txt")))
+		copy(path+"requirements.txt", filepath.Join(mkDirName, filepath.Base("requirements.txt")))
 		runPy = "pip install -r requirements.txt"
 	}
 	if extension == "go" {
-		copy(path+"go.mod", filepath.Join(dirName, filepath.Base("go.mod")))
-		copy(path+"go.sum", filepath.Join(dirName, filepath.Base("go.sum")))
+		copy(path+"go.mod", filepath.Join(mkDirName, filepath.Base("go.mod")))
+		copy(path+"go.sum", filepath.Join(mkDirName, filepath.Base("go.sum")))
 	}
 	switch mapCodeExtension[extension] {
-	//todo rework dockerfiles
 	case "nodejs":
 		{
 			execName := strings.Split(appName, ".")[0]
@@ -692,7 +693,7 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 		}
 	}
 	defer dockFile.Close()
-	return dirName, nil
+	return mkDirName, nil
 }
 
 // CreateFilesFromDir returns ApplicationData struct for main app and subgroup apps

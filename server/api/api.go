@@ -14,15 +14,16 @@ import (
 )
 
 const (
-	registerPath   = "/register"
-	loginPath      = "/login"
-	userPath       = "/user"
-	appPath        = "/app"
-	aggregatesPath = "/aggregates"
-	schedulePath   = "/schedule"
+	registerPath     = "/register"
+	loginPath        = "/login"
+	userPath         = "/user"
+	appPath          = "/app"
+	aggregatesPath   = "/aggregates"
+	schedulePath     = "/schedule"
+	getPodResultPath = "/getresults"
 )
 
-// API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service
+// API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service + clients
 type API struct {
 	ctx          context.Context
 	psqlRepo     *repositories.PostgreSqlRepo
@@ -30,11 +31,12 @@ type API struct {
 	apiLogger    *zap.Logger
 	profiler     *repositories.ProfilingService
 	dockerClient *clients.DockerClient
+	kubeClient   *clients.KubernetesClient
 }
 
 // NewAPI returns an API object
 func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger,
-	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient) *API {
+	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient) *API {
 	return &API{
 		ctx:          ctx,
 		psqlRepo:     postgresRepo,
@@ -42,6 +44,7 @@ func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cach
 		apiLogger:    logger,
 		profiler:     cpuProfiler,
 		dockerClient: dockerClient,
+		kubeClient:   kubeClient,
 	}
 }
 
@@ -200,7 +203,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			DELETE(appPath).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("appname", "name of the apps you want to delete").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
+			Param(ws.QueryParameter("appnames", "name of the apps you want to delete").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Doc("Deletes app").
 			Metadata(restfulspec.KeyOpenAPITags, tags).
@@ -219,9 +222,10 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			GET(schedulePath).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("appnames", "	").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
+			Param(ws.QueryParameter("appnames", "name of the apps you want to delete").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("schedule_type", "type of schedulling").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("nr_replicas", "nr of replicas(only for normal schedulling)").DataType("int32")).
 			Doc("Schedule apps").
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
@@ -232,6 +236,22 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			GET(getPodResultPath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("pod_name", "pod name for which you want to get logs for").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Doc("Get pod results").
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.GetPodResults).
+			Returns(http.StatusOK, "OK", domain.GetLogsFromPod{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
 
 	//activate profiler endpoints only if it is initialized
 	if api.profiler.Cpuprofile != "" {

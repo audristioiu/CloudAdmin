@@ -71,6 +71,12 @@ type QueryResponse struct {
 	ResourcesAffected []string `json:"resources_affected"`
 }
 
+// GetLogsFromPod represents info about pod
+type GetLogsFromPod struct {
+	PrintMessage string `json:"print_message"`
+	AppName      string `json:"app_name"`
+}
+
 // DockerFile represents fields used to create a Dockerfile
 type DockerFile struct {
 	From       string

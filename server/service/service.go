@@ -5,7 +5,6 @@ import (
 	"cloudadmin/clients"
 	"cloudadmin/repositories"
 	"context"
-	"encoding/json"
 	"net/http"
 	"os"
 	"time"
@@ -26,11 +25,6 @@ type Service struct {
 // NewService returns a new service object
 func NewService() *Service {
 	return &Service{}
-}
-
-func asJSON(v interface{}) string {
-	data, _ := json.MarshalIndent(v, " ", " ")
-	return string(data)
 }
 
 // StartWebService initializez logger,restful and swagger api, postgres and s3 repo, local cache,docker and kubernetes clients
@@ -87,7 +81,15 @@ func (s *Service) StartWebService() {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
 
-	// initialize clients for docker
+	// initialize clients for kubernetes and docker
+	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
+	kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath)
+	if kubernetesClient == nil {
+		log.Fatal("[FATAL] Error in creating kubernetes client")
+		return
+	}
+	log.Debug("Kubernetes client initialized")
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
@@ -98,15 +100,16 @@ func (s *Service) StartWebService() {
 		log.Fatal("[FATAL] docker registry_id/username/pass not found")
 		return
 	}
+
 	dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
 	if dockerClient == nil {
 		log.Fatal("[FATAL] Error in creating docker client")
 		return
 	}
-
 	log.Debug("Docker client initialized")
+
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient)
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -115,8 +118,7 @@ func (s *Service) StartWebService() {
 		WebServices:                   restful.RegisteredWebServices(), // you control what services are visible
 		APIPath:                       "/apidocs.json",
 		PostBuildSwaggerObjectHandler: enrichSwaggerObject}
-	actual := restfulspec.BuildSwagger(config)
-	log.Info(asJSON(actual))
+	restfulspec.BuildSwagger(config)
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(config))
 
 	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("/Users/udris/Desktop/CloudAdmin/swagger-ui/dist"))))
@@ -139,8 +141,11 @@ func (s *Service) StartWebService() {
 	}
 
 	http2.ConfigureServer(server, &http2.Server{})
+	certFile := os.Getenv("CERT_FILE")
+	certKeyFile := os.Getenv("CERT_KEY_FILE")
+
 	log.Info("Started api service on port 443")
-	err = server.ListenAndServeTLS("cert/cert.crt", "cert/cert.key")
+	err = server.ListenAndServeTLS(certFile, certKeyFile)
 	if err != nil {
 		log.Fatal("ListenAndServe: ", zap.Error(err))
 	}

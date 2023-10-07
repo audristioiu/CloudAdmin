@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -1550,10 +1551,22 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		appsInfo.Response = append(appsInfo.Response, appsData...)
 	}
 
+	nrReplicas, _ := strconv.ParseInt(request.QueryParameter("nr_replicas"), 0, 32)
+	var userNameSpace string
+	userNameSpace, err = api.kubeClient.CreateNamespace(username)
+	if err != nil {
+		errorData.Message = "Internal error / creating namespace"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userNameSpace == "" {
+		userNameSpace = "namespace-" + username
+	}
 	for _, app := range appsInfo.Response {
 		dirName := strings.Split(app.Name, ".")[0]
-		extensionName := strings.Split(app.Name, ".")[1]
-		dirName, err := helpers.GenerateDockerFile(dirName, app, api.apiLogger)
+		newDirName, err := helpers.GenerateDockerFile(dirName, app, api.apiLogger)
 		if err != nil {
 			api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
 			errorData.Message = "Internal error / generating docker file"
@@ -1562,8 +1575,8 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
-
-		err = api.dockerClient.BuildImage(dirName + "_" + extensionName)
+		imageName := newDirName
+		err = api.dockerClient.BuildImage(imageName)
 		if err != nil {
 			errorData.Message = "Internal error / building image"
 			errorData.StatusCode = http.StatusInternalServerError
@@ -1571,7 +1584,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
-		err = api.dockerClient.PushImage(dirName + "_" + extensionName)
+		tagName, err := api.dockerClient.PushImage(imageName)
 		if err != nil {
 			errorData.Message = "Internal error / pushing image"
 			errorData.StatusCode = http.StatusInternalServerError
@@ -1579,7 +1592,15 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
-		dirNames = append(dirNames, dirName+"_"+extensionName)
+		err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, int32(nrReplicas))
+		if err != nil {
+			errorData.Message = "Internal error / creating deployment"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		dirNames = append(dirNames, imageName)
 
 	}
 
@@ -1594,9 +1615,83 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		}
 		os.RemoveAll(dir)
 	}
+	for _, app := range appNamesList {
+		err = api.psqlRepo.UpdateAppData(&domain.ApplicationData{Name: app, IsRunning: true})
+		if err != nil {
+			errorData.Message = "Internal error / failed to update apps"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+	}
+
 	scheduleResponse := domain.QueryResponse{}
 	scheduleResponse.Message = "Apps scheduled succesfully"
 	scheduleResponse.ResourcesAffected = append(scheduleResponse.ResourcesAffected, appNamesList...)
+	response.WriteEntity(scheduleResponse)
+
+}
+
+// GetPodResults returns logs from pod
+func (api *API) GetPodResults(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	podName := request.QueryParameter("pod_name")
+	if podName == "" {
+		api.apiLogger.Error(" Couldn't read pod name query parameter")
+		errorData.Message = "Bad Request/ empty pod name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	splitPodName := strings.Split(podName, "-deployment")[0]
+	splitApp := strings.Split(splitPodName, "-")
+	appName := splitApp[0] + "." + splitApp[1]
+
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("Apps not found", zap.Any("apps", appName))
+		errorData.Message = "Apps not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+
+	}
+
+	podLogs, err := api.kubeClient.GetLogsForPodName(podName, "namespace-"+username)
+	if err != nil {
+		errorData.Message = "Bad Request/ no pod found"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+	}
+
+	scheduleResponse := domain.GetLogsFromPod{}
+	scheduleResponse.PrintMessage = podLogs
+	scheduleResponse.AppName = podName
 	response.WriteEntity(scheduleResponse)
 
 }

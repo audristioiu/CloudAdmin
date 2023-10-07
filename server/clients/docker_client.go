@@ -30,7 +30,7 @@ type ErrorDetail struct {
 	Message string `json:"message"`
 }
 
-// DockerClient represents info about Docker
+// DockerClient represents info about Docker Client
 type DockerClient struct {
 	ctx                  context.Context
 	dockerClient         *client.Client
@@ -61,7 +61,7 @@ func NewDockerClient(ctx context.Context, logger *zap.Logger, dockerID, dockerUs
 func (dock *DockerClient) BuildImage(dirName string) error {
 	//todo remove
 	path, _ := os.Getwd()
-	tar, err := archive.TarWithOptions(path+dirName, &archive.TarOptions{})
+	tar, err := archive.TarWithOptions(path+`\`+dirName, &archive.TarOptions{})
 	if err != nil {
 		dock.dockerLogger.Error("failed to create tar with options", zap.Error(err))
 		return err
@@ -90,7 +90,7 @@ func (dock *DockerClient) BuildImage(dirName string) error {
 }
 
 // PushImage pushes image to docker registry
-func (dock *DockerClient) PushImage(dirName string) error {
+func (dock *DockerClient) PushImage(dirName string) (string, error) {
 	authConfig := registry.AuthConfig{
 		Username: dock.dockerUsername,
 		Password: dock.dockerPass,
@@ -102,17 +102,17 @@ func (dock *DockerClient) PushImage(dirName string) error {
 	rd, err := dock.dockerClient.ImagePush(dock.ctx, tag, opts)
 	if err != nil {
 		dock.dockerLogger.Error("failed to push image", zap.Error(err))
-		return err
+		return "", err
 	}
 
 	defer rd.Close()
 
 	err = print(rd)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return tag, nil
 }
 
 // ListContainersAndDelete lists containers and deletes the one's with dirName
