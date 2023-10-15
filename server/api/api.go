@@ -190,6 +190,9 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("nr_replicas", "change nr replicas of the pod(only if it is running)").DataType("integer").Required(false).AllowEmptyValue(true)).
+			Param(ws.QueryParameter("max_nr_replicas", "change max nr replicas of the pod(only if it is running and for random sched)").DataType("integer").Required(false).AllowEmptyValue(true)).
+			Param(ws.QueryParameter("new_image", "change current image to a new one(only if it is running)").DataType("string").Required(false).AllowEmptyValue(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).

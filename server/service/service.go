@@ -81,9 +81,11 @@ func (s *Service) StartWebService() {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
 
+	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+
 	// initialize clients for kubernetes and docker
 	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
-	kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath)
+	kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
 	if kubernetesClient == nil {
 		log.Fatal("[FATAL] Error in creating kubernetes client")
 		return
@@ -93,7 +95,6 @@ func (s *Service) StartWebService() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
-	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
 	dockerUsername := os.Getenv("DOCKER_USERNAME")
 	dockerPassword := os.Getenv("DOCKER_PASSWORD")
 	if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
