@@ -10,7 +10,7 @@ var (
 	// DefaultNrDeployedApps represents default number of deployed apps for a new registered user
 	DefaultNrDeployedApps int = 0
 	// ScheduleTypes represents allowed scheduling types
-	ScheduleTypes    = []string{"normal", "keda", "rr_sjf", "multi_qos"}
+	ScheduleTypes    = []string{"normal", "random_scheduler", "rr_sjf", "multi_qos"}
 	mapCodeExtension = map[string]string{
 		"c":    "c",
 		"cpp":  "c++",

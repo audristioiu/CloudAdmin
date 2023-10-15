@@ -493,6 +493,38 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 			}
 		}
 
+		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+		if err != nil {
+			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
+			errorData.Message = "Internal error / retrieving apps"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		for _, app := range userAppsData {
+			execName := strings.Split(app.Name, ".")[0]
+			extensionName := strings.Split(app.Name, ".")[1]
+			deployName := execName + "-" + extensionName + "-deployment"
+			err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+			if err != nil {
+				errorData.Message = "Internal error/ failed to delete deployment"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			err = api.kubeClient.DeleteNamespace(app.Namespace)
+			if err != nil {
+				errorData.Message = "Internal error/ failed to delete namespace"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+		}
+
 		marshalledRequest, err = json.Marshal(request.Request.URL)
 		if err != nil {
 			api.apiLogger.Error(" Couldn't marshal request", zap.Any("request_url", request.Request.URL))
@@ -1257,6 +1289,45 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
+	nrReplicas := request.QueryParameter("nr_replicas")
+	maxReplicas := request.QueryParameter("max_nr_replicas")
+	newImage := request.QueryParameter("new_image")
+	if nrReplicas != "" || newImage != "" || maxReplicas != "" {
+		var appInfo domain.ApplicationData
+
+		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+		if err != nil {
+			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
+			errorData.Message = "Internal error / retrieving apps"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+		}
+		for _, app := range appsData {
+			if appData.Name == app.Name {
+				appInfo = *app
+				break
+			}
+		}
+		if !appInfo.IsRunning && (nrReplicas != "" || newImage != "" || maxReplicas != "") {
+			api.apiLogger.Error(" Bad Request / app is not running")
+			errorData.Message = " Bad Request / app is not running"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+		} else {
+			splitAppName := strings.Split(appInfo.Name, ".")
+			imageName := splitAppName[0] + "-" + splitAppName[1]
+			nrReplicasInteger, _ := strconv.ParseInt(nrReplicas, 10, 32)
+			maxReplicasInteger, _ := strconv.ParseInt(maxReplicas, 10, 32)
+			if appInfo.ScheduleType == "random_scheduler" {
+				api.kubeClient.UpdateAutoScaler(imageName, appInfo.Namespace, int32(nrReplicasInteger), int32(maxReplicasInteger))
+			} else {
+				api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, int32(nrReplicasInteger))
+			}
+
+		}
+	}
 
 	userData, err := api.psqlRepo.GetUserData(username)
 	if err != nil {
@@ -1374,6 +1445,23 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		return
 
 	}
+
+	appsData := make([]*domain.ApplicationData, 0)
+	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+	if err != nil {
+		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
+		errorData.Message = "Internal error / retrieving apps"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	for _, app := range userAppsData {
+		if slices.Contains(appNamesList, app.Name) {
+			appsData = append(appsData, app)
+		}
+	}
+
 	for _, appName := range appNamesList {
 		err := api.psqlRepo.DeleteAppData(strings.TrimSpace(appName), username)
 		if err != nil {
@@ -1403,6 +1491,20 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 			return
 		}
 
+	}
+
+	for _, app := range appsData {
+		execName := strings.Split(app.Name, ".")[0]
+		extensionName := strings.Split(app.Name, ".")[1]
+		deployName := execName + "-" + extensionName
+		err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+		if err != nil {
+			errorData.Message = "Internal error/ failed to delete deployment"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
 	}
 
 	//clear all the cache for that specific user
@@ -1539,7 +1641,8 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / retrieving apps"
 		errorData.StatusCode = http.StatusInternalServerError
-		appsInfo.Errors = append(appsInfo.Errors, errorData)
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
 	}
 	if len(appNamesList) > 0 {
 		for _, appData := range appsData {
@@ -1553,16 +1656,13 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	nrReplicas, _ := strconv.ParseInt(request.QueryParameter("nr_replicas"), 0, 32)
 	var userNameSpace string
-	userNameSpace, err = api.kubeClient.CreateNamespace(username)
+	userNameSpace, err = api.kubeClient.CreateNamespace(username, scheduleType)
 	if err != nil {
 		errorData.Message = "Internal error / creating namespace"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
-	}
-	if userNameSpace == "" {
-		userNameSpace = "namespace-" + username
 	}
 	for _, app := range appsInfo.Response {
 		dirName := strings.Split(app.Name, ".")[0]
@@ -1592,7 +1692,8 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
-		err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, int32(nrReplicas))
+
+		err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-"), int32(nrReplicas))
 		if err != nil {
 			errorData.Message = "Internal error / creating deployment"
 			errorData.StatusCode = http.StatusInternalServerError
@@ -1600,7 +1701,32 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
+
+		if scheduleType == "random_scheduler" {
+			_, err = api.kubeClient.CreateAutoScaler(imageName, userNameSpace, int32(1), int32(5))
+			if err != nil {
+				errorData.Message = "Internal error / creating auto scaler"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+		}
 		dirNames = append(dirNames, imageName)
+
+		updatedAppData := domain.ApplicationData{}
+		updatedAppData.Name = app.Name
+		updatedAppData.Namespace = userNameSpace
+		updatedAppData.ScheduleType = scheduleType
+		updatedAppData.IsRunning = true
+		err = api.psqlRepo.UpdateAppData(&updatedAppData)
+		if err != nil {
+			errorData.Message = "Internal error / failed to update app"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
 
 	}
 
@@ -1614,16 +1740,6 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			return
 		}
 		os.RemoveAll(dir)
-	}
-	for _, app := range appNamesList {
-		err = api.psqlRepo.UpdateAppData(&domain.ApplicationData{Name: app, IsRunning: true})
-		if err != nil {
-			errorData.Message = "Internal error / failed to update apps"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
 	}
 
 	scheduleResponse := domain.QueryResponse{}
@@ -1681,7 +1797,24 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 
 	}
 
-	podLogs, err := api.kubeClient.GetLogsForPodName(podName, "namespace-"+username)
+	appData := domain.ApplicationData{}
+	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+	if err != nil {
+		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
+		errorData.Message = "Internal error / retrieving apps"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	for _, app := range userAppsData {
+		if app.Name == appName {
+			appData = *app
+			break
+		}
+	}
+
+	podLogs, err := api.kubeClient.GetLogsForPodName(podName, appData.Namespace)
 	if err != nil {
 		errorData.Message = "Bad Request/ no pod found"
 		errorData.StatusCode = http.StatusBadRequest
@@ -1689,10 +1822,10 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		response.WriteEntity(errorData)
 	}
 
-	scheduleResponse := domain.GetLogsFromPod{}
-	scheduleResponse.PrintMessage = podLogs
-	scheduleResponse.AppName = podName
-	response.WriteEntity(scheduleResponse)
+	podLogsResponse := domain.GetLogsFromPod{}
+	podLogsResponse.PrintMessage = podLogs
+	podLogsResponse.AppName = podName
+	response.WriteEntity(podLogsResponse)
 
 }
 

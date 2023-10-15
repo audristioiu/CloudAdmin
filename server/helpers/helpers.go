@@ -562,7 +562,7 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 				newCMD = append(newCMD, appData.ParamArguments)
 			}
 			dockProps := domain.DockerFile{
-				From:    "golang:1.21",
+				From:    "golang:1.21.3",
 				Workdir: "/" + execName + "/",
 				Copy:    ". /" + execName,
 				Run:     "go mod download",
@@ -708,7 +708,7 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 			pathFiles = append(pathFiles, path)
 		}
 
-		fmt.Printf("dir: %v: name: %s\n", info.IsDir(), path)
+		logger.Debug("file_path_walk", zap.Any("is_dir", info.IsDir()), zap.String("file_path", path))
 		return nil
 	})
 	if err != nil {

@@ -31,6 +31,8 @@ type ApplicationData struct {
 	Description      string    `json:"description"`
 	IsRunning        bool      `json:"is_running"`
 	Owner            string    `json:"owner"`
+	Namespace        string    `json:"namespace,omitempty"`
+	ScheduleType     string    `json:"schedule_type,omitempty"`
 }
 
 // ErrorResponse represents error info

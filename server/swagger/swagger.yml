@@ -107,6 +107,18 @@ paths:
           required: true
           schema:
             type: string
+        - name: nr_replicas
+          in: query
+          description: change nr replicas of the pod(only if it is running)
+          required: false
+          schema:
+            type: integer
+        - name: new_image
+          in: query
+          description: change current image to a new one(only if it is running)
+          required: false
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -615,6 +627,13 @@ components:
         - is_running
         - name
         - updated_timestamp
+        - owner
+        - namespace
+        - schedule_type
+        - flag_arguments
+        - param_arguments
+        - is_main
+        - subgroup_files
       type: object
       properties:
         created_timestamp:
@@ -626,6 +645,10 @@ components:
           type: boolean
         owner:
           type: string
+        namespace:
+          type: string
+        schedule_type:
+          type: string
         name:
           type: string
         flag_arguments:
@@ -633,6 +656,10 @@ components:
           items:
             type: string
         param_arguments:
+          type: array
+          items:
+            type: string
+        subgroup_files:
           type: array
           items:
             type: string
