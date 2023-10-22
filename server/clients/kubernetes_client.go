@@ -52,7 +52,7 @@ func NewKubernetesClient(ctx context.Context, logger *zap.Logger, kubeConfig, sc
 }
 
 // CreateNamespace creates new namespace for user
-func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (string, error) {
+func (k *KubernetesClient) CreateNamespace(userName, scheduleType, fileName string, fileData []byte) (string, error) {
 
 	var nameSpaceName string
 
@@ -117,56 +117,67 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 		return "", err
 	}
 
-	switch scheduleType {
-	//todo add the other schedulers
-	case "random_scheduler":
-		scheduleTypeName := strings.ReplaceAll(scheduleType, "_", "-")
-		serviceAccount := apiv1.ServiceAccount{
-			ObjectMeta: metav1.ObjectMeta{
+	scheduleTypeName := strings.ReplaceAll(scheduleType, "_", "-")
+	serviceAccount := apiv1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleTypeName,
+			Namespace: nameSpaceName,
+			Labels:    map[string]string{"app": scheduleTypeName, "component": scheduleTypeName},
+		},
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+	}
+
+	_, err = k.kubeClient.CoreV1().ServiceAccounts(nameSpaceName).Create(k.ctx, &serviceAccount, metav1.CreateOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to create service account", zap.Error(err))
+		return "", err
+	}
+	// do it only once
+	_, err = k.kubeClient.RbacV1().ClusterRoleBindings().Update(k.ctx, &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      scheduleTypeName,
+			Namespace: nameSpaceName,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "system:kube-scheduler",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
 				Name:      scheduleTypeName,
 				Namespace: nameSpaceName,
-				Labels:    map[string]string{"app": scheduleTypeName, "component": scheduleTypeName},
 			},
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "rbac.authorization.k8s.io/v1",
-			},
-		}
+		},
+	}, metav1.UpdateOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to update the random scheduler cluster role binding", zap.Error(err))
+		return "", err
+	}
 
-		_, err := k.kubeClient.CoreV1().ServiceAccounts(nameSpaceName).Create(k.ctx, &serviceAccount, metav1.CreateOptions{})
+	var configMapName string
+
+	if scheduleType == "rr_sjf" {
+		configMapName, err = k.CreateConfigMap(nameSpaceName, fileName, fileData)
 		if err != nil {
-			k.kubeLogger.Error("failed to create service account", zap.Error(err))
 			return "", err
 		}
-		// do it only once
-		_, err = k.kubeClient.RbacV1().ClusterRoleBindings().Update(k.ctx, &rbacv1.ClusterRoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      scheduleTypeName,
-				Namespace: nameSpaceName,
-			},
-			RoleRef: rbacv1.RoleRef{
-				APIGroup: "rbac.authorization.k8s.io",
-				Kind:     "ClusterRole",
-				Name:     "system:kube-scheduler",
-			},
-			Subjects: []rbacv1.Subject{
-				{
-					Kind:      "ServiceAccount",
-					Name:      scheduleTypeName,
-					Namespace: nameSpaceName,
-				},
-			},
-		}, metav1.UpdateOptions{})
-		if err != nil {
-			k.kubeLogger.Error("failed to update te random scheduler cluster role binding", zap.Error(err))
-			return "", err
-		}
+	}
 
-		err = k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName+"-go", nameSpaceName, scheduleTypeName, "", (1))
-		if err != nil {
-			k.kubeLogger.Error("failed to create deployment for scheduler", zap.Error(err), zap.String("schedule_type", scheduleType))
-			return "", err
-		}
+	schedulerCommands := []string{
+		"--leader-elect=true",
+		"--scheduler-name=" + scheduleTypeName,
+		"--lock-object-name=" + scheduleTypeName,
+	}
 
+	err = k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName+"-go", nameSpaceName, scheduleTypeName, "",
+		configMapName, schedulerCommands, int32(0), int32(1))
+	if err != nil {
+		k.kubeLogger.Error("failed to create deployment for scheduler", zap.Error(err), zap.String("schedule_type", scheduleType))
+		return "", err
 	}
 
 	time.Sleep(5 * time.Second)
@@ -189,8 +200,32 @@ func (k *KubernetesClient) DeleteNamespace(userNameSpace string) error {
 	return nil
 }
 
+// CreateConfigMap creates a config map used for pods in namespace
+func (k *KubernetesClient) CreateConfigMap(namespace, fileName string, marshalledTaskData []byte) (string, error) {
+	cfMap, err := k.kubeClient.CoreV1().ConfigMaps(namespace).Create(k.ctx, &apiv1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rr-sjf-config-map",
+			Namespace: namespace,
+		},
+		BinaryData: map[string][]byte{
+			fileName: marshalledTaskData,
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to create configmap", zap.Error(err))
+		return "", err
+	}
+	k.kubeLogger.Info("Created config map", zap.String("config_map_name", cfMap.GetName()))
+	return cfMap.GetName(), nil
+}
+
+// todo de testat
 // CreateDeployment creates a deployment for image in the required namespace with a specific nr of replicas
-func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName, schedulerName string, nrReplicas int32) error {
+func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName, schedulerName,
+	configMapName string, schedulerCommands []string, portNr, nrReplicas int32) error {
 	deploymentsClient := k.kubeClient.AppsV1().Deployments(namespace)
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -220,11 +255,36 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 			},
 		},
 	}
+	if len(schedulerCommands) > 0 {
+		deployment.Spec.Template.Spec.Containers[0].Command = schedulerCommands
+	}
 	if serviceName != "" {
 		deployment.Spec.Template.Spec.ServiceAccountName = serviceName
 	}
 	if schedulerName != "" {
 		deployment.Spec.Template.Spec.SchedulerName = schedulerName
+	}
+	if portNr != int32(0) {
+		deployment.Spec.Template.Spec.Containers[0].Ports = []apiv1.ContainerPort{{HostPort: portNr}}
+	}
+
+	if configMapName != "" {
+		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = []apiv1.VolumeMount{
+			{
+				Name:      "config-volume",
+				MountPath: "/config-volume",
+			},
+		}
+		deployment.Spec.Template.Spec.Volumes = []apiv1.Volume{
+			{
+				Name: "config-volume",
+				VolumeSource: apiv1.VolumeSource{
+					HostPath: &apiv1.HostPathVolumeSource{
+						Path: "/data",
+					},
+				},
+			},
+		}
 	}
 
 	result, err := deploymentsClient.Create(k.ctx, deployment, metav1.CreateOptions{})
@@ -322,9 +382,9 @@ func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) (string,
 
 // CreateAutoScaler creates a horizontal pod auto scaler for deploymentName
 func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) (*hpav1.HorizontalPodAutoscaler, error) {
+	targetUtilization := int32(70)
 	autoscaler := &hpav1.HorizontalPodAutoscaler{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Pod",
 			APIVersion: "autoscaling/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -333,12 +393,13 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 		},
 		Spec: hpav1.HorizontalPodAutoscalerSpec{
 			ScaleTargetRef: hpav1.CrossVersionObjectReference{
-				Kind:       "deployment.apps",
+				Kind:       "Deployment",
 				Name:       deploymentName + "-development",
 				APIVersion: "apps/v1",
 			},
-			MinReplicas: &minReplicas,
-			MaxReplicas: maxReplicas,
+			MinReplicas:                    &minReplicas,
+			MaxReplicas:                    maxReplicas,
+			TargetCPUUtilizationPercentage: &targetUtilization,
 		},
 	}
 
@@ -351,6 +412,35 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 	}
 
 	k.kubeLogger.Debug("Sucesfully created autoscaler", zap.String("hpa_name", apply.GetName()))
+
+	return apply, nil
+}
+
+// CreateService exposes deploymentName as a service
+func (k *KubernetesClient) CreateService(deploymentName string, namespace string) (*apiv1.Service, error) {
+	port, _ := helpers.GetFreePort()
+	service := apiv1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   deploymentName + "-service",
+			Labels: map[string]string{"run": deploymentName},
+		},
+		Spec: apiv1.ServiceSpec{
+			Ports: []apiv1.ServicePort{
+				{
+					Port: int32(port),
+				},
+			},
+			Selector: map[string]string{"run": deploymentName},
+		},
+	}
+
+	apply, err := k.kubeClient.CoreV1().Services(namespace).Create(k.ctx, &service, metav1.CreateOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to expose service", zap.Error(err))
+		return nil, err
+	}
+
+	k.kubeLogger.Debug("Sucesfully create service", zap.String("service_name", apply.GetName()))
 
 	return apply, nil
 }

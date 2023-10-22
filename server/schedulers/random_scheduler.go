@@ -93,6 +93,7 @@ func initInformers(clientset *kubernetes.Clientset, podQueue chan *v1.Pod, quit 
 	return nodeInformer.Lister()
 }
 
+// Run starts schedulling each pod from channel
 func (s *RandomScheduler) Run(quit chan struct{}) {
 	wait.Until(s.ScheduleOne, 0, quit)
 }

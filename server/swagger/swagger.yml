@@ -401,7 +401,7 @@ paths:
         - name: nr_replicas
           in: query
           description: nr of replicas(only for normal schedulling)
-          required: false
+          required: true
           schema:
             type: integer
       responses:

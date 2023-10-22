@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
+	"cloudadmin/priority_queue"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -566,8 +567,9 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 }
 
 // UploadApp uploads app to s3
+// We have 2 situations : each file has a text file and all apps have main function and we have a program that uses at least 2 source code files
+// and we have to determine which file has main function
 func (api *API) UploadApp(request *restful.Request, response *restful.Response) {
-
 	allApps, _ := api.psqlRepo.GetAllApps()
 	allAppsNames := helpers.GetAppsName(allApps)
 
@@ -1117,8 +1119,6 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		var appNamesList []string
 		var filter string
 
-		appnames := request.QueryParameter("appnames")
-
 		username := request.QueryParameter("username")
 		if username == "" {
 			api.apiLogger.Error(" Couldn't read username query parameter")
@@ -1191,6 +1191,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			}
 		}
 
+		appnames := request.QueryParameter("appnames")
 		if appnames == "" {
 			appNamesList = userData.Applications
 		} else {
@@ -1655,18 +1656,15 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	}
 
 	nrReplicas, _ := strconv.ParseInt(request.QueryParameter("nr_replicas"), 0, 32)
-	var userNameSpace string
-	userNameSpace, err = api.kubeClient.CreateNamespace(username, scheduleType)
-	if err != nil {
-		errorData.Message = "Internal error / creating namespace"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
-		response.WriteEntity(errorData)
-		return
-	}
+
+	taskItems := make([]priority_queue.TaskItem, 0)
+	var pairNames [][]string
+	idx := 0
+
+	// push images to docker registry and retrieve task items
 	for _, app := range appsInfo.Response {
 		dirName := strings.Split(app.Name, ".")[0]
-		newDirName, err := helpers.GenerateDockerFile(dirName, app, api.apiLogger)
+		newDirName, item, err := helpers.GenerateDockerFile(dirName, app, api.apiLogger)
 		if err != nil {
 			api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
 			errorData.Message = "Internal error / generating docker file"
@@ -1692,17 +1690,40 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
+		taskItems = append(taskItems, item...)
+		pairNames[idx] = []string{tagName, imageName}
+		idx++
+	}
+	idx--
 
-		err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-"), int32(nrReplicas))
-		if err != nil {
-			errorData.Message = "Internal error / creating deployment"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
+	fileData, _ := json.MarshalIndent(taskItems, "", " ")
 
+	// create namespace using username,schedule type to deploy the scheduler + file and data if needed
+	var userNameSpace string
+	userNameSpace, err = api.kubeClient.CreateNamespace(username, scheduleType, "tasks_duration.json", fileData)
+	if err != nil {
+		errorData.Message = "Internal error / creating namespace"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	// create deployments for each app and take into account schedulerType
+	for i, pairImageTag := range pairNames {
+		tagName := pairImageTag[0]
+		imageName := pairImageTag[1]
+		app := appsInfo.Response[i]
 		if scheduleType == "random_scheduler" {
+			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-"), "", []string{},
+				int32(80), int32(nrReplicas))
+			if err != nil {
+				errorData.Message = "Internal error / creating deployment"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
 			_, err = api.kubeClient.CreateAutoScaler(imageName, userNameSpace, int32(1), int32(5))
 			if err != nil {
 				errorData.Message = "Internal error / creating auto scaler"
@@ -1711,8 +1732,20 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				response.WriteEntity(errorData)
 				return
 			}
+		} else {
+			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-"), "", []string{},
+				int32(0), int32(nrReplicas))
+			if err != nil {
+				errorData.Message = "Internal error / creating deployment"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
 		}
 		dirNames = append(dirNames, imageName)
+
+		//if everything works well, applications are running and info is updated in postgres
 
 		updatedAppData := domain.ApplicationData{}
 		updatedAppData.Name = app.Name

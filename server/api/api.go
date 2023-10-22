@@ -228,7 +228,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.QueryParameter("appnames", "name of the apps you want to delete").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("schedule_type", "type of schedulling").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("nr_replicas", "nr of replicas(only for normal schedulling)").DataType("int32")).
+			Param(ws.QueryParameter("nr_replicas", "nr of replicas(only for normal schedulling)").DataType("int32").Required(true).AllowEmptyValue(false)).
 			Doc("Schedule apps").
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).

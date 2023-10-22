@@ -1,14 +1,19 @@
 package helpers
 
 import (
+	"bytes"
 	"cloudadmin/domain"
+	"cloudadmin/priority_queue"
+	"container/heap"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -492,8 +497,11 @@ func copy(src, dst string) (int64, error) {
 	return nBytes, err
 }
 
-// GenerateDockerFile returns name of the dockerfile created using app info
-func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger *zap.Logger) (string, error) {
+// GenerateDockerFile returns name of the dockerfile created using app info + task item
+func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger *zap.Logger) (string, []priority_queue.TaskItem, error) {
+
+	var taskExecutionTime []priority_queue.TaskItem
+
 	mkDirName := dirName + "-" + strings.Split(appData.Name, ".")[1]
 	var packageJs []string
 	var runJs, runPy string
@@ -503,7 +511,7 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 	err := os.Mkdir(mkDirName, 0666)
 	if err != nil {
 		logger.Error("failed to create directory", zap.Error(err))
-		return "", err
+		return "", nil, err
 	}
 	path, _ := os.Getwd()
 	path = strings.ReplaceAll(path, "CloudAdmin", "")
@@ -513,7 +521,7 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 	dockFile, err := os.Create(filepath.Join(mkDirName, filepath.Base("Dockerfile")))
 	if err != nil {
 		logger.Error("could not create temp file", zap.Error(err))
-		return "", err
+		return "", nil, err
 	}
 
 	appName := appData.Name
@@ -547,7 +555,12 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
 			if err != nil {
-				return "", err
+				return "", nil, err
+			}
+			taskExecutionTime, err = GetExecutionTimeForTasks([]string{"node"}, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			if err != nil {
+				return "", nil, err
 			}
 
 		}
@@ -571,7 +584,12 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
 			if err != nil {
-				return "", err
+				return "", nil, err
+			}
+			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			if err != nil {
+				return "", nil, err
 			}
 
 		}
@@ -597,7 +615,12 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
 			if err != nil {
-				return "", err
+				return "", nil, err
+			}
+			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			if err != nil {
+				return "", nil, err
 			}
 
 		}
@@ -622,7 +645,12 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
 			if err != nil {
-				return "", err
+				return "", nil, err
+			}
+			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			if err != nil {
+				return "", nil, err
 			}
 
 		}
@@ -653,7 +681,12 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
 			if err != nil {
-				return "", err
+				return "", nil, err
+			}
+			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			if err != nil {
+				return "", nil, err
 			}
 
 		}
@@ -683,17 +716,90 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			err := WriteDockerFile(dockFile, dockProps, logger)
 			if err != nil {
-				return "", err
+				return "", nil, err
+			}
+			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			if err != nil {
+				return "", nil, err
 			}
 
 		}
 	default:
 		{
-			return "", fmt.Errorf("unsupported extension")
+			return "", nil, fmt.Errorf("unsupported extension")
 		}
 	}
 	defer dockFile.Close()
-	return mkDirName, nil
+	return mkDirName, taskExecutionTime, nil
+}
+
+// GetExecutionTimeForTasks retrieves list of name-execution time items that will be used in RR SJF algorithm
+func GetExecutionTimeForTasks(commands, flags, params, tasksPath []string, logger *zap.Logger) ([]priority_queue.TaskItem, error) {
+	tasks := make([]priority_queue.TaskItem, 0)
+
+	for i, namePath := range tasksPath {
+		cmd := strings.Split(commands[i], " ")
+		var execCommand *exec.Cmd
+		var hasFlags, hasParams bool
+		if len(flags) > 0 {
+			hasFlags = true
+		}
+		if len(params) > 0 {
+			hasParams = true
+		}
+		if hasFlags && !hasParams {
+			if slices.Contains(cmd, "go") {
+				execCommand = exec.Command(cmd[0], cmd[1], flags[i], namePath)
+			} else {
+				execCommand = exec.Command(cmd[0], flags[i], namePath)
+			}
+
+		}
+		if hasParams && !hasFlags {
+			if slices.Contains(cmd, "go") {
+				execCommand = exec.Command(cmd[0], cmd[1], params[i], namePath)
+			} else {
+				execCommand = exec.Command(cmd[0], params[i], namePath)
+			}
+		}
+		if !hasParams && !hasFlags {
+			if slices.Contains(cmd, "go") {
+				execCommand = exec.Command(cmd[0], cmd[1], namePath)
+			} else {
+				execCommand = exec.Command(cmd[0], namePath)
+			}
+		}
+		if hasFlags && hasParams {
+			if slices.Contains(cmd, "go") {
+				execCommand = exec.Command(cmd[0], cmd[1], flags[i], params[i], namePath)
+			} else {
+				execCommand = exec.Command(cmd[0], flags[i], params[i], namePath)
+			}
+		}
+
+		var out bytes.Buffer
+		var stderr bytes.Buffer
+		execCommand.Stdout = &out
+		execCommand.Stderr = &stderr
+
+		start := time.Now()
+		err := execCommand.Run()
+		if err != nil {
+			logger.Error("failed to exec command", zap.String("stderr", stderr.String()), zap.Error(err))
+			return nil, err
+		}
+
+		elapsed := time.Since(start)
+
+		folderNames := strings.Split(namePath, `\`)
+		tasks = append(tasks, priority_queue.TaskItem{
+			Name:     folderNames[len(folderNames)-1],
+			Duration: priority_queue.Duration(elapsed.Seconds() - float64(1)).String(),
+		})
+	}
+	return tasks, nil
+
 }
 
 // CreateFilesFromDir returns ApplicationData struct for main app and subgroup apps
@@ -763,4 +869,36 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 	}
 
 	return mainApp, appsData, appTxt, nil
+}
+
+// GetFreePort asks the kernel for a free open port that is ready to use.
+func GetFreePort() (port int, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close()
+			return l.Addr().(*net.TCPAddr).Port, nil
+		}
+	}
+	return
+}
+
+// CreatePQ returns a priority queue based on map of task names and task durations
+func CreatePQ(items []priority_queue.TaskItem) priority_queue.PriorityQueue {
+	// Create a priority queue, put the items in it, and
+	// establish the priority queue (heap) invariants.
+	tasksPriorityQueue := make(priority_queue.PriorityQueue, len(items))
+	i := 0
+	for _, task := range items {
+		floatDuration, _ := strconv.ParseFloat(task.Duration, 64)
+		tasksPriorityQueue[i] = &priority_queue.Item{
+			Name:         task.Name,
+			TaskDuration: priority_queue.Duration(floatDuration),
+			Index:        i,
+		}
+		i++
+	}
+	heap.Init(&tasksPriorityQueue)
+	return tasksPriorityQueue
 }
