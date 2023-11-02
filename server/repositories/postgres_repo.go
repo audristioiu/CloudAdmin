@@ -295,7 +295,7 @@ func (p *PostgreSqlRepo) GetAppsCount(owner string, countApp bool) (int, error) 
 }
 
 // GetAppsData retrieves apps from PostgreSql table using fql filter
-func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams []string) (int, int, []*domain.ApplicationData, error) {
+func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset string, sortParams []string) (int, int, []*domain.ApplicationData, error) {
 	totals, _ := p.GetAppsCount(owner, false)
 	resultsCount := 0
 
@@ -391,6 +391,12 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams 
 				if len(sortParams) == 2 {
 					selectStatement += " ORDER BY " + sortParams[0] + " " + sortParams[1]
 				}
+				if offset != "" {
+					selectStatement += " OFFSET " + offset + " "
+				}
+				if limit != "" {
+					selectStatement += " LIMIT " + limit + " "
+				}
 				filterArguments["app_owner"] = owner
 				break
 			}
@@ -413,10 +419,16 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions string, sortParams 
 		if len(sortParams) == 2 {
 			selectStatement += "ORDER BY " + sortParams[0] + " " + sortParams[1]
 		}
+		if offset != "" {
+			selectStatement += " OFFSET " + offset + " "
+		}
+		if limit != "" {
+			selectStatement += " LIMIT " + limit + " "
+		}
 		p.psqlLogger.Info(selectStatement)
 		rows, err = p.conn.Query(p.ctx, selectStatement, owner)
 		if err != nil {
-			p.psqlLogger.Error(" could not retrieve appn", zap.Error(err))
+			p.psqlLogger.Error(" could not retrieve apps", zap.Error(err))
 			return 0, 0, nil, err
 		}
 	}

@@ -161,6 +161,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 				"filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(AND-&&,OR-||) or separate").
 				DataType("string").AllowEmptyValue(true)).
 			Param(ws.QueryParameter("sort", "sort applications by name,created_timestamp or updated_timestamp").DataType("string").AllowEmptyValue(true)).
+			Param(ws.QueryParameter("limit", "limit number of applications shown").DataType("integer").AllowEmptyValue(true)).
+			Param(ws.QueryParameter("offset", "start index from which apps will be shown").DataType("integer").AllowEmptyValue(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
@@ -178,7 +180,6 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
-			//Filter(api.BasicAuthenticate).
 			To(api.GetAppsAggregates).
 			Writes(domain.AppsAggregatesInfo{}).
 			Returns(http.StatusOK, "OK", domain.AppsAggregatesInfo{}))

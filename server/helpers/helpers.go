@@ -516,8 +516,12 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 	path, _ := os.Getwd()
 	path = strings.ReplaceAll(path, "CloudAdmin", "")
 	path = strings.ReplaceAll(path, "server", "")
-	path = path[:len(path)-1]
-	copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
+	path = filepath.Join(path, filepath.Base(mkDirName)) + "\\"
+	_, err = copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
+	if err != nil {
+		logger.Error("failed to copy", zap.Error(err))
+		return "", nil, err
+	}
 	dockFile, err := os.Create(filepath.Join(mkDirName, filepath.Base("Dockerfile")))
 	if err != nil {
 		logger.Error("could not create temp file", zap.Error(err))
@@ -557,8 +561,8 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 			if err != nil {
 				return "", nil, err
 			}
-			taskExecutionTime, err = GetExecutionTimeForTasks([]string{"node"}, []string{appData.FlagArguments}, []string{appData.ParamArguments},
-				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			taskExecutionTime, err = GetExecutionTimeForTasks([]string{"node", appName}, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, []string{}, logger)
 			if err != nil {
 				return "", nil, err
 			}
@@ -587,7 +591,7 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 				return "", nil, err
 			}
 			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
-				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, []string{}, logger)
 			if err != nil {
 				return "", nil, err
 			}
@@ -618,7 +622,7 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 				return "", nil, err
 			}
 			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
-				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, []string{}, logger)
 			if err != nil {
 				return "", nil, err
 			}
@@ -647,8 +651,8 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 			if err != nil {
 				return "", nil, err
 			}
-			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
-				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			taskExecutionTime, err = GetExecutionTimeForTasks([]string{"javac", appName}, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
 			if err != nil {
 				return "", nil, err
 			}
@@ -660,10 +664,11 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			newCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
+			//todo remove when switching to linux
 			if appData.ParamArguments != "" {
-				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
+				newCMD = append(newCMD, execName, appData.ParamArguments)
 			} else {
-				newCMD = append(newCMD, "./"+execName)
+				newCMD = append(newCMD, execName)
 			}
 			if appData.FlagArguments != "" {
 				newRun = "gcc -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
@@ -683,8 +688,10 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 			if err != nil {
 				return "", nil, err
 			}
-			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
-				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			//todo remove when switching to linux
+			newCMD[0] = newCMD[0] + ".exe"
+			taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
 			if err != nil {
 				return "", nil, err
 			}
@@ -696,10 +703,11 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			newCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
+			//todo remove when switching to linux
 			if appData.ParamArguments != "" {
-				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
+				newCMD = append(newCMD, execName, appData.ParamArguments)
 			} else {
-				newCMD = append(newCMD, "./"+execName)
+				newCMD = append(newCMD, execName)
 			}
 			if appData.FlagArguments != "" {
 				newRun = "g++ -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
@@ -718,8 +726,10 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 			if err != nil {
 				return "", nil, err
 			}
-			taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
-				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, logger)
+			//todo remove when switching to linux
+			newCMD[0] = newCMD[0] + ".exe"
+			taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
 			if err != nil {
 				return "", nil, err
 			}
@@ -735,46 +745,57 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 }
 
 // GetExecutionTimeForTasks retrieves list of name-execution time items that will be used in RR SJF algorithm
-func GetExecutionTimeForTasks(commands, flags, params, tasksPath []string, logger *zap.Logger) ([]priority_queue.TaskItem, error) {
+func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []string, logger *zap.Logger) ([]priority_queue.TaskItem, error) {
 	tasks := make([]priority_queue.TaskItem, 0)
 
 	for i, namePath := range tasksPath {
-		cmd := strings.Split(commands[i], " ")
 		var execCommand *exec.Cmd
 		var hasFlags, hasParams bool
-		if len(flags) > 0 {
+		if len(flags) > 0 && flags[0] != "" {
 			hasFlags = true
 		}
-		if len(params) > 0 {
+		if len(params) > 0 && params[0] != "" {
 			hasParams = true
 		}
 		if hasFlags && !hasParams {
-			if slices.Contains(cmd, "go") {
-				execCommand = exec.Command(cmd[0], cmd[1], flags[i], namePath)
+			if slices.Contains(commands, "go") || slices.Contains(commands, "python") {
+				execCommand = exec.Command(commands[0], commands[1], flags[i], namePath)
+			} else if slices.Contains(commands, "gcc") || slices.Contains(commands, "g++") {
+				execCommand = exec.Command(commands[0], commands[1], strings.Split(namePath, ".")[0], flags[i], namePath)
 			} else {
-				execCommand = exec.Command(cmd[0], flags[i], namePath)
+				execCommand = exec.Command(commands[0], flags[i], namePath)
 			}
 
 		}
 		if hasParams && !hasFlags {
-			if slices.Contains(cmd, "go") {
-				execCommand = exec.Command(cmd[0], cmd[1], params[i], namePath)
+			if slices.Contains(commands, "go") || slices.Contains(commands, "python") {
+				execCommand = exec.Command(commands[0], commands[1], params[i], namePath)
+			} else if slices.Contains(commands, "gcc") || slices.Contains(commands, "g++") {
+				execCommand = exec.Command(commands[0], commands[1], strings.Split(namePath, ".")[0], namePath)
+			} else if slices.Contains(commands, "javac") {
+				execCommand = exec.Command(commands[0], namePath)
 			} else {
-				execCommand = exec.Command(cmd[0], params[i], namePath)
+				execCommand = exec.Command(commands[0], params[i], namePath)
 			}
 		}
 		if !hasParams && !hasFlags {
-			if slices.Contains(cmd, "go") {
-				execCommand = exec.Command(cmd[0], cmd[1], namePath)
+			if slices.Contains(commands, "go") || slices.Contains(commands, "python") {
+				execCommand = exec.Command(commands[0], commands[1], namePath)
+			} else if slices.Contains(commands, "gcc") || slices.Contains(commands, "g++") {
+				execCommand = exec.Command(commands[0], commands[1], strings.Split(namePath, ".")[0], namePath)
 			} else {
-				execCommand = exec.Command(cmd[0], namePath)
+				execCommand = exec.Command(commands[0], namePath)
 			}
 		}
 		if hasFlags && hasParams {
-			if slices.Contains(cmd, "go") {
-				execCommand = exec.Command(cmd[0], cmd[1], flags[i], params[i], namePath)
+			if slices.Contains(commands, "go") || slices.Contains(commands, "python") {
+				execCommand = exec.Command(commands[0], commands[1], flags[i], params[i], namePath)
+			} else if slices.Contains(commands, "gcc") || slices.Contains(commands, "g++") {
+				execCommand = exec.Command(commands[0], commands[1], strings.Split(namePath, ".")[0], namePath)
+			} else if slices.Contains(commands, "javac") {
+				execCommand = exec.Command(commands[0], flags[i], namePath)
 			} else {
-				execCommand = exec.Command(cmd[0], flags[i], params[i], namePath)
+				execCommand = exec.Command(commands[0], flags[i], params[i], namePath)
 			}
 		}
 
@@ -790,13 +811,51 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath []string, logge
 			return nil, err
 		}
 
-		elapsed := time.Since(start)
+		if len(runCommands) > 0 {
+			startCmd := time.Now()
+			var newExecCommand *exec.Cmd
+			//update when switching to linux
+			if len(runCommands) == 2 {
+				newExecCommand = exec.Command("cmd", "/K", runCommands[0], runCommands[1])
+			} else {
+				newExecCommand = exec.Command("cmd", "/K", runCommands[0])
+			}
 
-		folderNames := strings.Split(namePath, `\`)
-		tasks = append(tasks, priority_queue.TaskItem{
-			Name:     folderNames[len(folderNames)-1],
-			Duration: priority_queue.Duration(elapsed.Seconds() - float64(1)).String(),
-		})
+			err := newExecCommand.Run()
+			if err != nil {
+				logger.Error("failed to exec command", zap.String("stderr", stderr.String()), zap.Error(err))
+				return nil, err
+			}
+			elapsedCMD := time.Since(startCmd)
+			folderNames := strings.Split(namePath, `\`)
+			if elapsedCMD.Seconds() > float64(1) {
+				tasks = append(tasks, priority_queue.TaskItem{
+					Name:     folderNames[len(folderNames)-1],
+					Duration: priority_queue.Duration(elapsedCMD.Seconds() - float64(1)).String(),
+				})
+			} else {
+				tasks = append(tasks, priority_queue.TaskItem{
+					Name:     folderNames[len(folderNames)-1],
+					Duration: priority_queue.Duration(elapsedCMD.Seconds()).String(),
+				})
+			}
+		} else {
+			elapsed := time.Since(start)
+			folderNames := strings.Split(namePath, `\`)
+			if elapsed.Seconds() > float64(1) {
+				tasks = append(tasks, priority_queue.TaskItem{
+					Name:     folderNames[len(folderNames)-1],
+					Duration: priority_queue.Duration(elapsed.Seconds() - float64(1)).String(),
+				})
+			} else {
+				tasks = append(tasks, priority_queue.TaskItem{
+					Name:     folderNames[len(folderNames)-1],
+					Duration: priority_queue.Duration(elapsed.Seconds()).String(),
+				})
+			}
+
+		}
+
 	}
 	return tasks, nil
 

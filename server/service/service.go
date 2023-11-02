@@ -135,9 +135,9 @@ func (s *Service) StartWebService() {
 
 	server := &http.Server{
 		Addr:           ":443",
-		ReadTimeout:    10 * time.Minute,
-		WriteTimeout:   10 * time.Minute,
-		IdleTimeout:    10 * time.Minute,
+		ReadTimeout:    15 * time.Minute,
+		WriteTimeout:   15 * time.Minute,
+		IdleTimeout:    15 * time.Minute,
 		MaxHeaderBytes: 1 << 20,
 	}
 

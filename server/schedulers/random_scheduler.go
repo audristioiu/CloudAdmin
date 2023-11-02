@@ -20,8 +20,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// todo schimbat scheduler-ul sa fie altfel
-const schedulerName = "random-scheduler"
+const schedulerName = "random-scheduler-go-deployment"
 
 type predicateFunc func(node *v1.Node, pod *v1.Pod) bool
 type priorityFunc func(node *v1.Node, pod *v1.Pod) int

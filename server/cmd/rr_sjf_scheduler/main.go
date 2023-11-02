@@ -19,5 +19,5 @@ func main() {
 	defer close(quit)
 
 	scheduler := schedulers.NewHybridScheduler(podQueue, quit)
-	scheduler.Run()
+	scheduler.Run(quit)
 }

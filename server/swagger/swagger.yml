@@ -64,6 +64,18 @@ paths:
           allowEmptyValue: true
           schema:
             type: string
+        - name: limit
+          in: query
+          description: limit number of applications shown
+          allowEmptyValue: true
+          schema:
+            type: integer   
+        - name: offset
+          in: query
+          description: start index from which apps will be shown
+          allowEmptyValue: true
+          schema:
+            type: integer             
       responses:
         '200':
           description: OK

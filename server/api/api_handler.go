@@ -5,6 +5,7 @@ import (
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
 	"cloudadmin/priority_queue"
+	schedule_alghoritms "cloudadmin/schedule_algorithms"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -494,7 +495,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 			}
 		}
 
-		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 		if err != nil {
 			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 			errorData.Message = "Internal error / retrieving apps"
@@ -1191,6 +1192,9 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			}
 		}
 
+		limit := request.QueryParameter("limit")
+		offset := request.QueryParameter("offset")
+
 		appnames := request.QueryParameter("appnames")
 		if appnames == "" {
 			appNamesList = userData.Applications
@@ -1206,7 +1210,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			api.apiLogger.Debug("sorting by ", zap.Any("sort_query", sortParams))
 		}
 
-		total, resultsCount, appsData, err := api.psqlRepo.GetAppsData(username, filter, sortParams)
+		total, resultsCount, appsData, err := api.psqlRepo.GetAppsData(username, filter, limit, offset, sortParams)
 		if err != nil {
 			if strings.Contains(err.Error(), "fql") {
 				api.apiLogger.Error(" Invalid fql filter for get apps", zap.Error(err))
@@ -1296,7 +1300,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	if nrReplicas != "" || newImage != "" || maxReplicas != "" {
 		var appInfo domain.ApplicationData
 
-		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 		if err != nil {
 			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 			errorData.Message = "Internal error / retrieving apps"
@@ -1448,7 +1452,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 
 	appsData := make([]*domain.ApplicationData, 0)
-	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / retrieving apps"
@@ -1637,7 +1641,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	appsInfo.Response = make([]*domain.ApplicationData, 0)
 	appsInfo.Errors = make([]domain.ErrorResponse, 0)
 
-	_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+	_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / retrieving apps"
@@ -1658,8 +1662,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	nrReplicas, _ := strconv.ParseInt(request.QueryParameter("nr_replicas"), 0, 32)
 
 	taskItems := make([]priority_queue.TaskItem, 0)
-	var pairNames [][]string
-	idx := 0
+	pairNames := make([][]string, 0)
 
 	// push images to docker registry and retrieve task items
 	for _, app := range appsInfo.Response {
@@ -1691,16 +1694,14 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			return
 		}
 		taskItems = append(taskItems, item...)
-		pairNames[idx] = []string{tagName, imageName}
-		idx++
+		pairNames = append(pairNames, []string{tagName, imageName})
 	}
-	idx--
 
 	fileData, _ := json.MarshalIndent(taskItems, "", " ")
 
 	// create namespace using username,schedule type to deploy the scheduler + file and data if needed
 	var userNameSpace string
-	userNameSpace, err = api.kubeClient.CreateNamespace(username, scheduleType, "tasks_duration.json", fileData)
+	userNameSpace, err = api.kubeClient.CreateNamespace(username, scheduleType)
 	if err != nil {
 		errorData.Message = "Internal error / creating namespace"
 		errorData.StatusCode = http.StatusInternalServerError
@@ -1709,14 +1710,45 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		return
 	}
 
+	if scheduleType == "rr_sjf_scheduler" {
+
+		file, err := os.Create("tasks_duration.json")
+		if err != nil {
+			errorData.Message = "Internal error /  create task duration file"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		err = os.WriteFile(file.Name(), fileData, 0644)
+		if err != nil {
+			errorData.Message = "Internal error /  write to task duration file"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		tasksPQ, err := schedule_alghoritms.CreatePriorityQueueBasedOnTasksDuration(file.Name(), api.apiLogger)
+		if err != nil {
+			errorData.Message = "Internal error / failed priority queue"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		pairNames = schedule_alghoritms.RoundRobinShortestJobFirstAlgorithm(tasksPQ, pairNames, api.apiLogger)
+	}
+
 	// create deployments for each app and take into account schedulerType
 	for i, pairImageTag := range pairNames {
 		tagName := pairImageTag[0]
 		imageName := pairImageTag[1]
 		app := appsInfo.Response[i]
 		if scheduleType == "random_scheduler" {
-			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-"), "", []string{},
-				int32(80), int32(nrReplicas))
+			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go", "",
+				[]string{}, int32(0), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -1732,9 +1764,19 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				response.WriteEntity(errorData)
 				return
 			}
+		} else if scheduleType != "normal" {
+			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go", "",
+				[]string{}, int32(0), int32(nrReplicas))
+			if err != nil {
+				errorData.Message = "Internal error / creating deployment"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
 		} else {
-			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-"), "", []string{},
-				int32(0), int32(nrReplicas))
+			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", "", "",
+				[]string{}, int32(0), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -1831,7 +1873,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	}
 
 	appData := domain.ApplicationData{}
-	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", []string{})
+	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / retrieving apps"
