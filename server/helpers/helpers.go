@@ -664,7 +664,6 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			newCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
-			//todo remove when switching to linux
 			if appData.ParamArguments != "" {
 				newCMD = append(newCMD, execName, appData.ParamArguments)
 			} else {
@@ -703,7 +702,6 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 
 			newCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
-			//todo remove when switching to linux
 			if appData.ParamArguments != "" {
 				newCMD = append(newCMD, execName, appData.ParamArguments)
 			} else {

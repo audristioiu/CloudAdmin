@@ -17,7 +17,9 @@ import (
 	"time"
 	"unicode"
 
+	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/emicklei/go-restful/v3"
+	metrics "github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
@@ -338,6 +340,9 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		response.WriteEntity(userData)
 	}
 
+	api.getUserMetric.Mark(1)
+	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+
 }
 
 // UpdateUserProfile updates user profile
@@ -414,6 +419,9 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	//gather the fresh new data to be cached
 	newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
 	api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
+
+	api.updateUserMetric.Mark(1)
+	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
 	updateResponse.Message = "User updated succesfully"
@@ -1089,6 +1097,9 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	}
 	cachedRequests[username] = make([]string, 0)
 
+	api.registerAppMetric.Mark(1)
+	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+
 	registerResponse := domain.QueryResponse{}
 	registerResponse.Message = "Apps uploaded succesfully"
 	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, appsUploaded...)
@@ -1259,13 +1270,13 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			api.apiCache.SetWithTTL(string(marshalledRequest), appsInfo, 1, time.Hour*24)
 			cachedRequests[username] = append(cachedRequests[username], string(marshalledRequest))
 		}
-
-		return
 	} else {
 		appsData := appsDataCache.(domain.GetApplicationsData)
 		api.apiLogger.Debug(" Apps  found in cache")
 		response.WriteEntity(appsData)
 	}
+	api.getAppsMetric.Mark(1)
+	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 }
 
@@ -1397,6 +1408,9 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		api.apiCache.Del(cachedReq)
 	}
 	cachedRequests[username] = make([]string, 0)
+
+	api.updateAppsMetric.Mark(1)
+	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
 	updateResponse.Message = "App updated succesfully"
@@ -1817,6 +1831,9 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		os.RemoveAll(dir)
 	}
 
+	api.scheduleAppsMetric.Mark(1)
+	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+
 	scheduleResponse := domain.QueryResponse{}
 	scheduleResponse.Message = "Apps scheduled succesfully"
 	scheduleResponse.ResourcesAffected = append(scheduleResponse.ResourcesAffected, appNamesList...)
@@ -1896,6 +1913,9 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 	}
+
+	api.getPodResultsMetric.Mark(1)
+	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}
 	podLogsResponse.PrintMessage = podLogs

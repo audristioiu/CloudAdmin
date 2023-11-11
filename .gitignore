@@ -4,3 +4,4 @@ swagger-ui/
 server/cert/
 client/src/Certs/
 server/tasks_duration.json
+server/dashboard/

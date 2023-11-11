@@ -169,7 +169,6 @@ func (k *KubernetesClient) CreateConfigMap(namespace, fileName string, marshalle
 	return cfMap.GetName(), nil
 }
 
-// todo de testat
 // CreateDeployment creates a deployment for image in the required namespace with a specific nr of replicas
 func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName, schedulerName,
 	configMapName string, schedulerCommands []string, portNr, nrReplicas int32) error {
@@ -254,7 +253,7 @@ func (k *KubernetesClient) UpdateDeployment(deployName, namespace, newImage stri
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Retrieve the latest version of Deployment before attempting update
 		// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver
-		result, getErr := deploymentsClient.Get(context.TODO(), deployName+"-deployment", metav1.GetOptions{})
+		result, getErr := deploymentsClient.Get(k.ctx, deployName+"-deployment", metav1.GetOptions{})
 		if getErr != nil {
 			k.kubeLogger.Error("failed to get deployment", zap.Error(getErr))
 			return getErr

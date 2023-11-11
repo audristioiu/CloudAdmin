@@ -3,10 +3,16 @@ package service
 import (
 	"cloudadmin/api"
 	"cloudadmin/clients"
+	"cloudadmin/helpers"
 	"cloudadmin/repositories"
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/dgraph-io/ristretto"
@@ -14,6 +20,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-openapi/spec"
 	"github.com/joho/godotenv"
+	"github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
@@ -27,7 +34,7 @@ func NewService() *Service {
 	return &Service{}
 }
 
-// StartWebService initializez logger,restful and swagger api, postgres and s3 repo, local cache,docker and kubernetes clients
+// StartWebService initializez logger,restful and swagger api, postgres and s3 repo, local cache,docker and kubernetes clients + metrics for grafana
 func (s *Service) StartWebService() {
 
 	log, _ := zap.NewDevelopment()
@@ -109,8 +116,31 @@ func (s *Service) StartWebService() {
 	}
 	log.Debug("Docker client initialized")
 
+	// register metrics for graphite client
+	getAppsMetric := metrics.GetOrRegisterMeter("applications.get", nil)
+	updateAppsMetric := metrics.GetOrRegisterMeter("applications.update", nil)
+	registerAppMetric := metrics.GetOrRegisterMeter("applications.register", nil)
+
+	scheduleAppsMetric := metrics.GetOrRegisterMeter("applications.schedule", nil)
+	getPodResultsMetric := metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
+
+	getUserMetric := metrics.GetOrRegisterMeter("users.get.profile", nil)
+	updateUserMetric := metrics.GetOrRegisterMeter("users.update.profile", nil)
+	log.Debug("Created graphite metrics")
+
+	// initialize tcp address for graphite
+	graphiteHost := os.Getenv("GRAPHITE_HOST")
+	graphiteAddr, err := net.ResolveTCPAddr("tcp", graphiteHost)
+	if err != nil {
+		log.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
+	}
+
+	log.Debug("Initialize graphite for metrics")
+
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient)
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient,
+		graphiteAddr, getAppsMetric, updateAppsMetric, registerAppMetric, scheduleAppsMetric,
+		getPodResultsMetric, getUserMetric, updateUserMetric)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -141,15 +171,40 @@ func (s *Service) StartWebService() {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	http2.ConfigureServer(server, &http2.Server{})
+	err = http2.ConfigureServer(server, &http2.Server{})
+	if err != nil {
+		log.Fatal("htt2p Configure server", zap.Error(err))
+		return
+	}
 	certFile := os.Getenv("CERT_FILE")
 	certKeyFile := os.Getenv("CERT_KEY_FILE")
 
 	log.Info("Started api service on port 443")
-	err = server.ListenAndServeTLS(certFile, certKeyFile)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", zap.Error(err))
+
+	go func() {
+		if err = server.ListenAndServeTLS(certFile, certKeyFile); !errors.Is(err, http.ErrServerClosed) {
+			log.Error("HTTP server error", zap.Error(err))
+		}
+		for _, metric := range helpers.MetricsName {
+			metrics.Unregister(metric)
+		}
+
+		fmt.Println("hai tata cu oprirea")
+		log.Debug("Stopped serving new connections.")
+	}()
+
+	sigChan := make(chan os.Signal, 2)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	<-sigChan
+
+	shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownRelease()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Error("HTTP shutdown error: %v", zap.Error(err))
 	}
+
+	log.Debug("Graceful shutdown complete.")
 }
 
 // enrichSwaggerObject describes swagger specs

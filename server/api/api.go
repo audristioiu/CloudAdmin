@@ -5,11 +5,13 @@ import (
 	"cloudadmin/domain"
 	"cloudadmin/repositories"
 	"context"
+	"net"
 	"net/http"
 
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
+	metrics "github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
 )
 
@@ -25,30 +27,46 @@ const (
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service + clients
 type API struct {
-	ctx          context.Context
-	psqlRepo     *repositories.PostgreSqlRepo
-	apiCache     *ristretto.Cache
-	apiLogger    *zap.Logger
-	profiler     *repositories.ProfilingService
-	dockerClient *clients.DockerClient
-	kubeClient   *clients.KubernetesClient
+	ctx                 context.Context
+	psqlRepo            *repositories.PostgreSqlRepo
+	apiCache            *ristretto.Cache
+	apiLogger           *zap.Logger
+	profiler            *repositories.ProfilingService
+	dockerClient        *clients.DockerClient
+	kubeClient          *clients.KubernetesClient
+	getAppsMetric       metrics.Meter
+	updateAppsMetric    metrics.Meter
+	registerAppMetric   metrics.Meter
+	scheduleAppsMetric  metrics.Meter
+	getPodResultsMetric metrics.Meter
+	getUserMetric       metrics.Meter
+	updateUserMetric    metrics.Meter
+	graphiteAddr        *net.TCPAddr
 }
 
 // NewAPI returns an API object
 func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger,
-	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient) *API {
+	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient,
+	graphiteAddr *net.TCPAddr, getAppsMetric metrics.Meter, updateAppsMetric metrics.Meter, registerAppMetric metrics.Meter,
+	scheduleAppsMetric metrics.Meter, getPodResultsMetric metrics.Meter, getUserMetric metrics.Meter, updateUserMetric metrics.Meter) *API {
 	return &API{
-		ctx:          ctx,
-		psqlRepo:     postgresRepo,
-		apiCache:     cache,
-		apiLogger:    logger,
-		profiler:     cpuProfiler,
-		dockerClient: dockerClient,
-		kubeClient:   kubeClient,
+		ctx:                 ctx,
+		psqlRepo:            postgresRepo,
+		apiCache:            cache,
+		apiLogger:           logger,
+		profiler:            cpuProfiler,
+		dockerClient:        dockerClient,
+		kubeClient:          kubeClient,
+		getAppsMetric:       getAppsMetric,
+		updateAppsMetric:    updateAppsMetric,
+		registerAppMetric:   registerAppMetric,
+		scheduleAppsMetric:  scheduleAppsMetric,
+		getPodResultsMetric: getPodResultsMetric,
+		getUserMetric:       getUserMetric,
+		updateUserMetric:    updateUserMetric,
+		graphiteAddr:        graphiteAddr,
 	}
 }
-
-// todo add schedule routes
 
 // RegisterRoutes adds routes for all endpoints
 func (api *API) RegisterRoutes(ws *restful.WebService) {
