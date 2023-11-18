@@ -77,7 +77,7 @@ func (s *HybridScheduler) ScheduleOne() {
 
 	s.counter++
 	if s.counter >= len(nodes) {
-		s.counter = 1
+		s.counter = 0
 	}
 
 }

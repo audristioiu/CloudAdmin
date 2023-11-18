@@ -27,6 +27,16 @@ import (
 var (
 	//map of users with their specific cached requests as value
 	cachedRequests = make(map[string][]string, 0)
+	// register metrics for graphite client
+	getAppsMetric     = metrics.GetOrRegisterMeter("applications.get", nil)
+	updateAppsMetric  = metrics.GetOrRegisterMeter("applications.update", nil)
+	registerAppMetric = metrics.GetOrRegisterMeter("applications.register", nil)
+
+	scheduleAppsMetric  = metrics.GetOrRegisterMeter("applications.schedule", nil)
+	getPodResultsMetric = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
+
+	getUserMetric    = metrics.GetOrRegisterMeter("users.get.profile", nil)
+	updateUserMetric = metrics.GetOrRegisterMeter("users.update.profile", nil)
 )
 
 // AdminAuthenticate verifies role and user_id for admin
@@ -340,7 +350,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		response.WriteEntity(userData)
 	}
 
-	api.getUserMetric.Mark(1)
+	getUserMetric.Mark(1)
 	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 }
@@ -420,7 +430,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
 	api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
-	api.updateUserMetric.Mark(1)
+	updateUserMetric.Mark(1)
 	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
@@ -1097,7 +1107,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	}
 	cachedRequests[username] = make([]string, 0)
 
-	api.registerAppMetric.Mark(1)
+	registerAppMetric.Mark(1)
 	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 	registerResponse := domain.QueryResponse{}
@@ -1275,7 +1285,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		api.apiLogger.Debug(" Apps  found in cache")
 		response.WriteEntity(appsData)
 	}
-	api.getAppsMetric.Mark(1)
+	getAppsMetric.Mark(1)
 	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 }
@@ -1409,7 +1419,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	}
 	cachedRequests[username] = make([]string, 0)
 
-	api.updateAppsMetric.Mark(1)
+	updateAppsMetric.Mark(1)
 	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
@@ -1831,7 +1841,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		os.RemoveAll(dir)
 	}
 
-	api.scheduleAppsMetric.Mark(1)
+	scheduleAppsMetric.Mark(1)
 	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 	scheduleResponse := domain.QueryResponse{}
@@ -1914,7 +1924,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		response.WriteEntity(errorData)
 	}
 
-	api.getPodResultsMetric.Mark(1)
+	getPodResultsMetric.Mark(1)
 	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}

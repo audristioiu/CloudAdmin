@@ -116,17 +116,6 @@ func (s *Service) StartWebService() {
 	}
 	log.Debug("Docker client initialized")
 
-	// register metrics for graphite client
-	getAppsMetric := metrics.GetOrRegisterMeter("applications.get", nil)
-	updateAppsMetric := metrics.GetOrRegisterMeter("applications.update", nil)
-	registerAppMetric := metrics.GetOrRegisterMeter("applications.register", nil)
-
-	scheduleAppsMetric := metrics.GetOrRegisterMeter("applications.schedule", nil)
-	getPodResultsMetric := metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
-
-	getUserMetric := metrics.GetOrRegisterMeter("users.get.profile", nil)
-	updateUserMetric := metrics.GetOrRegisterMeter("users.update.profile", nil)
-	log.Debug("Created graphite metrics")
 
 	// initialize tcp address for graphite
 	graphiteHost := os.Getenv("GRAPHITE_HOST")
@@ -139,8 +128,7 @@ func (s *Service) StartWebService() {
 
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient,
-		graphiteAddr, getAppsMetric, updateAppsMetric, registerAppMetric, scheduleAppsMetric,
-		getPodResultsMetric, getUserMetric, updateUserMetric)
+		graphiteAddr)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
