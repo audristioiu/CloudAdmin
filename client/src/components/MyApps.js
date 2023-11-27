@@ -25,11 +25,11 @@ function MyApps() {
 
   const handleUpload = async (isComplex) => {
     const selectedFiles = document.getElementById('input').files;
-  
+
     if (selectedFiles) {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       const username = userInfo?.username;
-  
+
       const config_app = {
         headers: {
           'Content-type': 'multipart/form-data',
@@ -41,17 +41,17 @@ function MyApps() {
           is_complex: isComplex,
         },
       };
-  
+
       const agent = new Agent({
         cert: certs.certFile,
         key: certs.keyFile,
       });
-  
+
       const formData = new FormData();
       for (var i = 0; i < selectedFiles.length; i++) {
         formData.append("file", selectedFiles[i]);
       }
-  
+
       try {
         await axios.post('https://localhost:443/register/app', formData, config_app, { httpsAgent: agent });
       } catch (error) {
@@ -66,103 +66,77 @@ function MyApps() {
   };
 
   //TODO filtre update ciudat (actualizare sau ceva) si sort nu se updateaza automat
-  const fetchApps = async () => {
-    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-    const username = userInfo?.username;
-
-    if (typeInput === "created_timestamp" || typeInput === "updated_timestamp") {
-      setTimeStampOn(true);
-    } else {
-      setTimeStampOn(false);
-    }
-
+  const buildConfig = (userInfo, typeInput, timestampInput, sortQueryInput) => {
     const config = {
       headers: {
         'Content-type': 'application/json',
         'USER-AUTH': userInfo?.role,
         'USER-UUID': userInfo?.user_id,
       },
+      params: {},
     };
+
+    setTimeStampOn(typeInput === 'created_timestamp' || typeInput === 'updated_timestamp');
+
+    if (typeInput === 'created_timestamp' || typeInput === 'updated_timestamp') {
+      config.params.filter = `${typeInput}>=${timeRanges[timestampInput]}`;
+    }
+
+    if (sortQueryInput.length !== 0) {
+      config.params.sort = sortQueryInput;
+    }
+
+    return config;
+  };
+
+  const buildAppConfig = (userInfo, query_my_apps, username) => ({
+    headers: {
+      'Content-type': 'application/json',
+      'USER-AUTH': userInfo?.role,
+      'USER-UUID': userInfo?.user_id,
+    },
+    params: {
+      appnames: query_my_apps,
+      username,
+    },
+  });
+
+  const buildSearchConfig = (config_app, typeInput, searchInput) => {
+    if (searchInput.length !== 0) {
+      config_app.params = {
+        ...config_app.params,
+        [typeInput === 'custom_filter' ? 'filter' : 'appnames']: typeInput === 'name' ? searchInput : typeInput === 'custom_filter' ? searchInput : `${typeInput}=${searchInput}`,
+      };
+    }
+
+    return config_app;
+  };
+
+  const fetchApps = async () => {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+    const username = userInfo?.username;
 
     try {
       const agent = new Agent({
-        // (NOTE: this will disable client verification)
         rejectUnauthorized: false,
         cert: certs.certFile,
         key: certs.keyFile,
-      })
-      const response = await axios.get(`https://localhost:443/user/${username}`, config, { httpsAgent: agent },);
-      const my_apps = response.data?.applications;
+      });
+
+      const responseUser = await axios.get(`https://localhost:443/user/${username}`, buildConfig(userInfo, typeInput, timestampInput, sortQueryInput), { httpsAgent: agent });
+
+      const my_apps = responseUser.data?.applications;
+
       if (my_apps !== undefined) {
         const query_my_apps = my_apps.join();
+        let config_app = buildAppConfig(userInfo, query_my_apps, username);
+        config_app = buildSearchConfig(config_app, typeInput, searchInput);
 
-        let config_app = {
-          headers: {
-            'Content-type': 'application/json',
-            'USER-AUTH': userInfo?.role,
-            'USER-UUID': userInfo?.user_id,
-          },
-          params: {
-            appnames: query_my_apps,
-            username: username,
-          },
-        };
-
-        if (searchInput.length !== 0) {
-          if (typeInput.length === 0 || typeInput === 'name') {
-            config_app = {
-              ...config_app,
-              params: {
-                ...config_app.params,
-                appnames: searchInput,
-              },
-            };
-          } else if (typeInput === 'custom_filter') {
-
-            config_app = {
-              ...config_app,
-              params: {
-                ...config_app.params,
-                filter: searchInput,
-              },
-            };
-          } else {
-            config_app = {
-              ...config_app,
-              params: {
-                ...config_app.params,
-                filter: typeInput + '=' + searchInput,
-              },
-            };
-          }
-        }
-
-        if (typeInput === 'created_timestamp' || typeInput === 'updated_timestamp') {
-          config_app = {
-            ...config_app,
-            params: {
-              ...config_app.params,
-              filter: typeInput + '>=' + timeRanges[timestampInput],
-            },
-          };
-        }
-
-        if (sortQueryInput.length !== 0) {
-          config_app = {
-            ...config_app,
-            params: {
-              ...config_app.params,
-              sort: sortQueryInput
-            }
-          }
-        }
-
-        const response_apps = await axios.get('https://localhost:443/app', config_app, { httpsAgent: agent },);
-        setApps(response_apps.data.Response);
+        const responseApps = await axios.get('https://localhost:443/app', config_app, { httpsAgent: agent });
+        setApps(responseApps.data.Response);
       }
-
     } catch (error) {
-      setErrorMessage("Could not retrieve your apps. /" + error.response.data.message);
+      setErrorMessage(`Could not retrieve your apps. /${error.response?.data?.message}`);
       setApps([]);
     }
   };
