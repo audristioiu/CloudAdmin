@@ -263,16 +263,28 @@ function MyApps() {
           </button>
         </div>
       </form>
-      <div className="form-style">
-        <div className="list-items">{renderApps()}</div>
-        <input type="file" id="input" multiple={true} />
-        <button type="button" className='button-3' onClick={handleUploadArchive}>
-          SubmitArchive
-        </button>
-        <button type="button" className='button-3' onClick={handleUploadComplexArchive}>
-          SubmitComplexArchive
-        </button>
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>App Name</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>&nbsp;</th>
+            </tr>
+          </thead>
+          <tbody>
+            {renderApps()}
+          </tbody>
+        </table>
       </div>
+      <input type="file" id="input" multiple={true} />
+      <button type="button" className='button-3' onClick={handleUploadArchive}>
+        SubmitArchive
+      </button>
+      <button type="button" className='button-3' onClick={handleUploadComplexArchive}>
+        SubmitComplexArchive
+      </button>
 
       {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>

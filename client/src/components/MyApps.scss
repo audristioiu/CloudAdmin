@@ -9,14 +9,14 @@
   outline: 0;
   background: #fff;
   padding: 0 1.6rem;
-  border-radius: .7rem;
+  border-radius: 0.7rem;
   appearance: none;
-  transition: all .3s cubic-bezier(0, 0, 0.43, 1.49);
+  transition: all 0.3s cubic-bezier(0, 0, 0.43, 1.49);
   transition-property: width, border-radius;
   z-index: 1;
   position: relative;
   height: 30px;
-  font-family: 'Lato', sans-serif;
+  font-family: "Lato", sans-serif;
   border: 0;
   color: #2f2f2f;
 }
@@ -26,10 +26,10 @@
   min-width: 200px;
 
   padding: 7px 40px 7px 12px;
-  border: 1px solid #E8EAED;
+  border: 1px solid #e8eaed;
   border-radius: 5px;
   background: white;
-  box-shadow: 0 1px 3px -2px #9098A9;
+  box-shadow: 0 1px 3px -2px #9098a9;
   cursor: pointer;
   font-family: inherit;
   font-size: 16px;
@@ -50,14 +50,14 @@ button {
 .button-3 {
   appearance: none;
   background-color: #2ea44f;
-  border: 1px solid rgba(27, 31, 35, .15);
+  border: 1px solid rgba(27, 31, 35, 0.15);
   border-radius: 6px;
-  box-shadow: rgba(27, 31, 35, .1) 0 1px 0;
+  box-shadow: rgba(27, 31, 35, 0.1) 0 1px 0;
   box-sizing: border-box;
   color: #fff;
   cursor: pointer;
   display: inline-block;
-  font-family: -apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+  font-family: -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   font-size: 14px;
   font-weight: 600;
   line-height: 20px;
@@ -82,20 +82,20 @@ button {
 }
 
 .button-3:focus {
-  box-shadow: rgba(46, 164, 79, .4) 0 0 0 3px;
+  box-shadow: rgba(46, 164, 79, 0.4) 0 0 0 3px;
   outline: none;
 }
 
 .button-3:disabled {
   background-color: #94d3a2;
-  border-color: rgba(27, 31, 35, .1);
-  color: rgba(255, 255, 255, .8);
+  border-color: rgba(27, 31, 35, 0.1);
+  color: rgba(255, 255, 255, 0.8);
   cursor: default;
 }
 
 .button-3:active {
   background-color: #298e46;
-  box-shadow: rgba(20, 70, 32, .2) 0 1px 0 inset;
+  box-shadow: rgba(20, 70, 32, 0.2) 0 1px 0 inset;
 }
 
 .edit_delete_section {
@@ -105,4 +105,80 @@ button {
 .app-description {
   max-width: 500px;
   padding: none;
+}
+
+.table-container {
+  padding-top: 20px;
+  padding-bottom: 30px;
+}
+
+.table {
+  min-width: 1000px !important;
+  width: 100%;
+  box-shadow: 0px 5px 12px -12px rgba(0, 0, 0, 0.29);
+
+  thead th {
+    border: none;
+    padding: 30px;
+    font-size: 13px;
+    font-weight: 500;
+    color: gray;
+  }
+
+  thead tr {
+    background: #141e30;
+    border-bottom: 4px solid #eceffa;
+  }
+
+  tbody tr {
+    margin-bottom: 10px;
+    border-bottom: 4px solid #f8f9fd;
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  tbody th,
+  tbody td {
+    border: none;
+    padding: 30px;
+    font-size: 14px;
+    background: #141e30;
+    text-align: center;
+
+    &.status span {
+      position: relative;
+      border-radius: 30px;
+      padding: 4px 10px 4px 25px;
+
+      &:after {
+        position: absolute;
+        top: 9px;
+        left: 10px;
+        width: 10px;
+        height: 10px;
+        content: "";
+        border-radius: 50%;
+      }
+    }
+
+    &.status .active {
+      background: #cff6dd;
+      color: #1fa750;
+
+      &:after {
+        background: #23bd5a;
+      }
+    }
+
+    &.status .waiting {
+      background: #fdf5dd;
+      color: #cfa00c;
+
+      &:after {
+        background: #f2be1d;
+      }
+    }
+  }
 }
