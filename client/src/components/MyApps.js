@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AppItem from './AppItem';
-import './MyApps.css';
-import {Agent} from 'https';
+import './MyApps.scss';
+import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 
 function MyApps() {
@@ -14,16 +14,16 @@ function MyApps() {
   const [timestampInput, setTimestampInput] = useState('');
   const [timestampOn, setTimeStampOn] = useState(false);
   const timeRanges = {
-    "1 day" : "1 day",
-    "3 days" : "3 day",
-    "7 days" : "7 day",
-    "14 days" : "14 day",
-    "30 days" : "30 day",
-    "60 days" : "60 day",
-    "90 days" : "90 day"
+    "1 day": "1 day",
+    "3 days": "3 day",
+    "7 days": "7 day",
+    "14 days": "14 day",
+    "30 days": "30 day",
+    "60 days": "60 day",
+    "90 days": "90 day"
   };
 
-  
+
 
   const handleUploadArchive = () => {
     const selectedFiles = document.getElementById('input').files;
@@ -48,14 +48,14 @@ function MyApps() {
       })
 
       const formData = new FormData();
-      for(var i=0;i<selectedFiles.length;i++){
+      for (var i = 0; i < selectedFiles.length; i++) {
         formData.append("file", selectedFiles[i]);
       }
 
       try {
-        axios.post('https://localhost:443/register/app', formData, config_app, {httpsAgent : agent},);
+        axios.post('https://localhost:443/register/app', formData, config_app, { httpsAgent: agent },);
       } catch (error) {
-        setErrorMessage("Failed to upload app. /" + error.response.data.message );
+        setErrorMessage("Failed to upload app. /" + error.response.data.message);
       }
     }
   };
@@ -84,14 +84,14 @@ function MyApps() {
       })
 
       const formData = new FormData();
-      for(var i=0;i<selectedFiles.length;i++){
+      for (var i = 0; i < selectedFiles.length; i++) {
         formData.append("file", selectedFiles[i]);
       }
 
       try {
-        axios.post('https://localhost:443/register/app', formData, config_app, {httpsAgent : agent},);
+        axios.post('https://localhost:443/register/app', formData, config_app, { httpsAgent: agent },);
       } catch (error) {
-        setErrorMessage("Failed to upload app. /" + error.response.data.message );
+        setErrorMessage("Failed to upload app. /" + error.response.data.message);
       }
     }
   };
@@ -117,11 +117,11 @@ function MyApps() {
     try {
       const agent = new Agent({
         // (NOTE: this will disable client verification)
-        rejectUnauthorized : false,
+        rejectUnauthorized: false,
         cert: certs.certFile,
         key: certs.keyFile,
       })
-      const response = await axios.get(`https://localhost:443/user/${username}`, config, {httpsAgent:agent},);
+      const response = await axios.get(`https://localhost:443/user/${username}`, config, { httpsAgent: agent },);
       const my_apps = response.data?.applications;
       if (my_apps !== undefined) {
         const query_my_apps = my_apps.join();
@@ -137,7 +137,7 @@ function MyApps() {
             username: username,
           },
         };
-  
+
         if (searchInput.length !== 0) {
           if (typeInput.length === 0 || typeInput === 'name') {
             config_app = {
@@ -148,7 +148,7 @@ function MyApps() {
               },
             };
           } else if (typeInput === 'custom_filter') {
-            
+
             config_app = {
               ...config_app,
               params: {
@@ -186,11 +186,11 @@ function MyApps() {
             }
           }
         }
-  
-        const response_apps = await axios.get('https://localhost:443/app', config_app, {httpsAgent : agent},);
+
+        const response_apps = await axios.get('https://localhost:443/app', config_app, { httpsAgent: agent },);
         setApps(response_apps.data.Response);
       }
-     
+
     } catch (error) {
       setErrorMessage("Could not retrieve your apps. /" + error.response.data.message);
       setApps([]);
@@ -198,7 +198,7 @@ function MyApps() {
   };
 
   useEffect(() => {
-   
+
     fetchApps();
   }, [searchInput, typeInput, timestampInput, sortQueryInput]);
 
@@ -226,23 +226,23 @@ function MyApps() {
             <option value="is_running">IsRunning</option>
             <option value="created_timestamp">CreatedTimestamp</option>
             <option value="updated_timestamp">UpdatedTimestamp</option>
-            <option value ="custom_filter">CustomFilter</option>
+            <option value="custom_filter">CustomFilter</option>
           </select>
         </label>
         {timestampOn &&
-        <label>
-          Pick Range:
-          <select value={timestampInput} onChange={(e) => setTimestampInput(e.target.value)}>
-            <option value="1 day">1 day</option>
-            <option value="3 days">3 days</option>
-            <option value="7 days">7 days</option>
-            <option value="14 days">14 days</option>
-            <option value="30 days">30 days</option>
-            <option value="60 days">60 days</option>
-            <option value="90 days">90 days</option>
-          </select>
-        </label>
-}        <label>
+          <label>
+            Pick Range:
+            <select value={timestampInput} onChange={(e) => setTimestampInput(e.target.value)}>
+              <option value="1 day">1 day</option>
+              <option value="3 days">3 days</option>
+              <option value="7 days">7 days</option>
+              <option value="14 days">14 days</option>
+              <option value="30 days">30 days</option>
+              <option value="60 days">60 days</option>
+              <option value="90 days">90 days</option>
+            </select>
+          </label>
+        }        <label>
           Sorting Types:
           <select value={sortQueryInput} onChange={(e) => setSortQueryInput(e.target.value)}>
             <option value="name|asc">Sort names ascending</option>
@@ -267,10 +267,10 @@ function MyApps() {
           SubmitComplexArchive
         </button>
       </div>
-      
+
       {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>
-    
+
   );
 }
 

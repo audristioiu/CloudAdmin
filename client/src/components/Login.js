@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import './Login.css';
-import {Agent} from 'https';
+import './Login.scss';
+import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 
 //expiry date pe login?
@@ -32,7 +32,7 @@ function Login({ setAuth }) {
         "https://localhost:443/login",
         { "username": username, "password": password },
         config,
-        {httpAgent : agent},
+        { httpAgent: agent },
       );
       localStorage.setItem("userPass", password);
       localStorage.setItem("userInfo", JSON.stringify(data));

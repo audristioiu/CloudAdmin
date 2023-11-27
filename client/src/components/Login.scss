@@ -603,3 +603,40 @@ input:checked + .slider:before {
   50% { background-color: #247d03; box-shadow: rgba(0, 0, 0, 0.2) 0 -1px 7px 1px, inset #01580a 0 -1px 9px, rgba(0, 255, 89, 0.5) 0 2px 0;}
   to { background-color: #2a9104; }
 }
+
+.home-container {
+  position: absolute;
+  text-align: center;
+  top: 50%;
+  left: 50%;
+  width: 400px;
+  padding: 40px;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,.5);
+  box-sizing: border-box;
+  box-shadow: 0 15px 25px rgba(0,0,0,.6);
+  border-radius: 10px;
+}
+
+.user-details {
+  padding-top: 30px;
+  text-align: center;
+  
+  ul {
+    margin: 0;
+		gap: 1rem;
+		padding: 0;
+		display: flex;
+		list-style: none;
+		place-items: center;
+		flex-direction: column;
+
+    li {
+      width: 340px;
+      text-align: center;
+      border-radius: 3rem;
+      background: #243b55;
+      padding: 1.1rem 1.5rem 1.1rem 1.5rem;
+    }
+  }
+}

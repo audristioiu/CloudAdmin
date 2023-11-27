@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import './MyApps.css';
+import './MyApps.scss';
 
 function AppItem(app) {
   const [appName, setAppName] = useState(app.app.name);
@@ -70,7 +70,7 @@ function AppItem(app) {
           Delete App
         </button>
       </div>
-    
+
     </div>
   );
 };

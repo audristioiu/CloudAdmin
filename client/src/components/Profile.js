@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import user_photo from '../user.png';
-import './Profile.css';
-import {Agent} from 'https';
+import './Profile.scss';
+import { Agent } from 'https';
 import certs from '../Certs/certs';
 
 
@@ -52,7 +52,7 @@ const ProfilePage = () => {
                 "old_password": false,
               },
             },
-            { httpsAgent : agent },
+            { httpsAgent: agent },
           );
 
           console.log(userInfo)
@@ -64,7 +64,7 @@ const ProfilePage = () => {
             },
           };
 
-          const response = await axios.get(`https://localhost:443/user/${username}`, config, { httpsAgent : agent },);
+          const response = await axios.get(`https://localhost:443/user/${username}`, config, { httpsAgent: agent },);
           const userJobRole = response.data?.job_role;
           const userNrAppsDeployed = response.data?.nr_deployed_apps
           const birth = response.data?.birth_date;

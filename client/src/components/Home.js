@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import {Agent} from 'https';
+import { Agent } from 'https';
 import certs from '../Certs/certs';
-import './Login.css';
+import './Login.scss';
 
 function Home() {
 
@@ -24,10 +24,8 @@ function Home() {
         const username = userInfo?.username;
 
         if (username) {
-
-
           //trigger last time online update
-          const response =await axios.get(
+          const response = await axios.get(
             "https://localhost:443/app/aggregates",
             {
               headers: {
@@ -37,7 +35,7 @@ function Home() {
                 "username": username,
               },
             },
-            { httpsAgent : agent },
+            { httpsAgent: agent },
           );
 
           console.log(response)
@@ -45,11 +43,11 @@ function Home() {
           const runningAppsOwnerCount = response.data.QueryInfo?.running_apps_owner_count
           const mainAppsTotalCount = response.data.QueryInfo?.main_apps_total_count;
           const runningAppsTotalCount = response.data.QueryInfo?.running_apps_total_count;
-        setNrMainAppsOwner(mainAppsOwnerCount);
-        setRunningAppsOwner(runningAppsOwnerCount);
-        setNrTotalMainApps(mainAppsTotalCount);
-        setNrTotalRunningApps(runningAppsTotalCount);
-            
+          setNrMainAppsOwner(mainAppsOwnerCount);
+          setRunningAppsOwner(runningAppsOwnerCount);
+          setNrTotalMainApps(mainAppsTotalCount);
+          setNrTotalRunningApps(runningAppsTotalCount);
+
         }
       } catch (error) {
         setErrorMessage("Could not retrieve user details. /" + error.response.data.message);
@@ -60,24 +58,21 @@ function Home() {
   }, []);
 
   return (
-    <div className="login-box">
+    <div className="home-container">
       <h1>Welcome to Cloud Admin!</h1>
       <p>This platform helps you upload and deploy applications in cloud</p>
       <nav>
       </nav>
 
-       <div className="user-details">
-        <div className="user-info">
-        <p>Nr of applications owned : {nrMainAppsOwner} </p>
-        <p>Nr of running applications owned : {nrRunningAppsOwner} </p>
-        <p>Total number of applications : {nrTotalMainApps} </p>
-        <p>Total number of running applications : {nrTotalRunningApps} </p>
-        </div>
+      <div className="user-details">
+        <ul className="user-info">
+          <li>Number of applications owned : {nrMainAppsOwner} </li>
+          <li>Number of running applications owned : {nrRunningAppsOwner} </li>
+          <li>Total number of applications : {nrTotalMainApps} </li>
+          <li>Total number of running applications : {nrTotalRunningApps} </li>
+        </ul>
       </div>
     </div>
-
-    
-
   );
 }
 

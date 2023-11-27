@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import './Login.css';
-import {Agent} from 'https';
+import './Login.scss';
+import { Agent } from 'https';
 import certs from '../Certs/certs';
 
 function Register() {
@@ -55,11 +55,11 @@ function Register() {
           cert: certs.certFile,
           key: certs.keyFile,
         })
-       await axios.post(
+        await axios.post(
           "https://localhost:443/register/user",
-          { "username": username, "password": password, "email" : userEmail },
+          { "username": username, "password": password, "email": userEmail },
           config,
-          {httpsAgent : agent},
+          { httpsAgent: agent },
         );
 
         history('/login');
@@ -90,7 +90,7 @@ function Register() {
             required
           />
           <label>Username</label>
-          </div>
+        </div>
         <div className="user-box">
           <input
             type="text"

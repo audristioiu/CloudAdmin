@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import user_photo from '../user.png';
-import {Agent} from 'https';
+import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 
 const EditProfilePage = () => {
@@ -39,7 +39,7 @@ const EditProfilePage = () => {
             "USER-AUTH": userInfo?.role,
             "USER-UUID": userInfo?.user_id,
           },
-          
+
         };
 
         const updatedData = {
@@ -89,7 +89,7 @@ const EditProfilePage = () => {
                 "https://localhost:443/login",
                 { "username": username, "password": oldPassword },
                 config,
-                {httpsAgent : agent},
+                { httpsAgent: agent },
               );
             } catch (error) {
               setErrorMessage("Wrong old password / " + error.response.data.message);
@@ -100,13 +100,13 @@ const EditProfilePage = () => {
             localStorage.setItem("userPass", password);
           }
 
-          const response = await axios.put(`https://localhost:443/user/`, updatedData, config, {httpsAgent : agent},);
+          const response = await axios.put(`https://localhost:443/user/`, updatedData, config, { httpsAgent: agent },);
           if (response.status === 200) {
             // Profile updated successfully, navigate back to profile page
             navigate('/profile');
           }
         } else {
-          const response = await axios.put(`https://localhost:443/user/`, updatedData, config, {httpsAgent : agent},);
+          const response = await axios.put(`https://localhost:443/user/`, updatedData, config, { httpsAgent: agent },);
           if (response.status === 200) {
             // Profile updated successfully, navigate back to profile page
             navigate('/profile');
