@@ -23,12 +23,13 @@ function MyApps() {
     "90 days": "90 day"
   };
 
-  const handleUploadArchive = () => {
+  const handleUpload = async (isComplex) => {
     const selectedFiles = document.getElementById('input').files;
+  
     if (selectedFiles) {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
       const username = userInfo?.username;
-
+  
       const config_app = {
         headers: {
           'Content-type': 'multipart/form-data',
@@ -37,59 +38,24 @@ function MyApps() {
         },
         params: {
           username: username,
+          is_complex: isComplex,
         },
       };
-
+  
       const agent = new Agent({
         cert: certs.certFile,
         key: certs.keyFile,
-      })
-
+      });
+  
       const formData = new FormData();
       for (var i = 0; i < selectedFiles.length; i++) {
         formData.append("file", selectedFiles[i]);
       }
-
+  
       try {
-        axios.post('https://localhost:443/register/app', formData, config_app, { httpsAgent: agent },);
+        await axios.post('https://localhost:443/register/app', formData, config_app, { httpsAgent: agent });
       } catch (error) {
-        setErrorMessage("Failed to upload app. /" + error.response.data.message);
-      }
-    }
-  };
-
-  const handleUploadComplexArchive = () => {
-    const selectedFiles = document.getElementById('input').files;
-    if (selectedFiles) {
-      const userInfo = JSON.parse(localStorage.getItem('userInfo'));
-      const username = userInfo?.username;
-
-      const config_app = {
-        headers: {
-          'Content-type': 'multipart/form-data',
-          'USER-AUTH': userInfo?.role,
-          'USER-UUID': userInfo?.user_id,
-        },
-        params: {
-          username: username,
-          is_complex: true
-        },
-      };
-
-      const agent = new Agent({
-        cert: certs.certFile,
-        key: certs.keyFile,
-      })
-
-      const formData = new FormData();
-      for (var i = 0; i < selectedFiles.length; i++) {
-        formData.append("file", selectedFiles[i]);
-      }
-
-      try {
-        axios.post('https://localhost:443/register/app', formData, config_app, { httpsAgent: agent },);
-      } catch (error) {
-        setErrorMessage("Failed to upload app. /" + error.response.data.message);
+        setErrorMessage(`Failed to upload app. ${error.response?.data?.message}`);
       }
     }
   };
@@ -279,10 +245,10 @@ function MyApps() {
         </table>
       </div>
       <input type="file" id="input" multiple={true} />
-      <button type="button" className='button-3' onClick={handleUploadArchive}>
+      <button type="button" className='button-3' onClick={handleUpload(false)}>
         SubmitArchive
       </button>
-      <button type="button" className='button-3' onClick={handleUploadComplexArchive}>
+      <button type="button" className='button-3' onClick={handleUpload(true)}>
         SubmitComplexArchive
       </button>
 
