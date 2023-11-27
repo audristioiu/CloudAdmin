@@ -93,6 +93,12 @@ function MyApps() {
       }
     }
   };
+
+  const handleSearchApp = (event) => {
+    event.preventDefault();
+    fetchApps();
+  };
+
   //TODO filtre update ciudat (actualizare sau ceva) si sort nu se updateaza automat
   const fetchApps = async () => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -196,9 +202,8 @@ function MyApps() {
   };
 
   useEffect(() => {
-
     fetchApps();
-  }, [searchInput, typeInput, timestampInput, sortQueryInput]);
+  }, []);
 
   const renderApps = () => {
     if (apps) {
@@ -208,7 +213,7 @@ function MyApps() {
 
   return (
     <div className='myapps_container'>
-      <form onSubmit={fetchApps}>
+      <form onSubmit={handleSearchApp}>
         <div className='search_bar'>
           <input
             type="search"
@@ -241,7 +246,7 @@ function MyApps() {
                 <option value="90 days">90 days</option>
               </select>
             </label>
-          }        
+          }
           <label>
             Sorting Types:
             <select value={sortQueryInput} onChange={(e) => setSortQueryInput(e.target.value)}>
