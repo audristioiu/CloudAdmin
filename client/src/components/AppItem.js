@@ -13,12 +13,14 @@ function AppItem(app) {
     history('/editapp');
   }
 
+  const getStatusClass = () => (appRunningState ? ' active' : ' waiting');
+
   return (
     <tr>
       <td>{appName}</td>
       <td>{appDescription}</td>
       <td className={"status"}>
-        <span className={appRunningState ? ' active' : ' waiting'}> 
+        <span className={getStatusClass()}> 
           {appRunningState ? "Active" : "Not running"}
         </span>
       </td>

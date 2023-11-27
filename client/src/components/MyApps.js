@@ -244,13 +244,15 @@ function MyApps() {
           </tbody>
         </table>
       </div>
-      <input type="file" id="input" multiple={true} />
-      <button type="button" className='button-3' onClick={handleUpload(false)}>
-        SubmitArchive
-      </button>
-      <button type="button" className='button-3' onClick={handleUpload(true)}>
-        SubmitComplexArchive
-      </button>
+      <form>
+        <input type="file" id="input" multiple={true} />
+        <button type="button" className='button-3' onClick={() => handleUpload(false)}>
+          SubmitArchive
+        </button>
+        <button type="button" className='button-3' onClick={() => handleUpload(true)}>
+          SubmitComplexArchive
+        </button>
+      </form>
 
       {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
     </div>
