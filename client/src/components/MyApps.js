@@ -23,8 +23,6 @@ function MyApps() {
     "90 days": "90 day"
   };
 
-
-
   const handleUploadArchive = () => {
     const selectedFiles = document.getElementById('input').files;
     if (selectedFiles) {
@@ -210,53 +208,56 @@ function MyApps() {
 
   return (
     <div className='myapps_container'>
-      <div className='search_bar'>
-        <input
-          type="search"
-          placeholder="Search apps here"
-          onChange={(e) => setSearchInput(e.target.value)}
-          value={searchInput}
-        />
-        <label>
-          Pick filter:
-          <select value={typeInput} onChange={(e) => setTypeInput(e.target.value)}>
-            <option value="name">name</option>
-            <option value="kname">name(keyword)</option>
-            <option value="description">Description(keyword)</option>
-            <option value="is_running">IsRunning</option>
-            <option value="created_timestamp">CreatedTimestamp</option>
-            <option value="updated_timestamp">UpdatedTimestamp</option>
-            <option value="custom_filter">CustomFilter</option>
-          </select>
-        </label>
-        {timestampOn &&
+      <form onSubmit={fetchApps}>
+        <div className='search_bar'>
+          <input
+            type="search"
+            placeholder="Search apps here"
+            onChange={(e) => setSearchInput(e.target.value)}
+            value={searchInput}
+          />
           <label>
-            Pick Range:
-            <select value={timestampInput} onChange={(e) => setTimestampInput(e.target.value)}>
-              <option value="1 day">1 day</option>
-              <option value="3 days">3 days</option>
-              <option value="7 days">7 days</option>
-              <option value="14 days">14 days</option>
-              <option value="30 days">30 days</option>
-              <option value="60 days">60 days</option>
-              <option value="90 days">90 days</option>
+            Pick filter:
+            <select value={typeInput} onChange={(e) => setTypeInput(e.target.value)}>
+              <option value="name">name</option>
+              <option value="kname">name(keyword)</option>
+              <option value="description">Description(keyword)</option>
+              <option value="is_running">IsRunning</option>
+              <option value="created_timestamp">CreatedTimestamp</option>
+              <option value="updated_timestamp">UpdatedTimestamp</option>
+              <option value="custom_filter">CustomFilter</option>
             </select>
           </label>
-        }        <label>
-          Sorting Types:
-          <select value={sortQueryInput} onChange={(e) => setSortQueryInput(e.target.value)}>
-            <option value="name|asc">Sort names ascending</option>
-            <option value="name|desc">Sort names descending</option>
-            <option value="created_timestamp|asc">Sort by Created Timestamp ascending</option>
-            <option value="created_timestamp|desc">Sort by Created Timestamp descending</option>
-            <option value="updated_timestamp|asc">Sort by Last Updated ascending</option>
-            <option value="updated_timestamp|desc">Sort by Last Updated descending</option>
-          </select>
-        </label>
-        <button type="button" className='button-3' onClick={fetchApps}>
-          Submit
-        </button>
-      </div>
+          {timestampOn &&
+            <label>
+              Pick Range:
+              <select value={timestampInput} onChange={(e) => setTimestampInput(e.target.value)}>
+                <option value="1 day">1 day</option>
+                <option value="3 days">3 days</option>
+                <option value="7 days">7 days</option>
+                <option value="14 days">14 days</option>
+                <option value="30 days">30 days</option>
+                <option value="60 days">60 days</option>
+                <option value="90 days">90 days</option>
+              </select>
+            </label>
+          }        
+          <label>
+            Sorting Types:
+            <select value={sortQueryInput} onChange={(e) => setSortQueryInput(e.target.value)}>
+              <option value="name|asc">Sort names ascending</option>
+              <option value="name|desc">Sort names descending</option>
+              <option value="created_timestamp|asc">Sort by Created Timestamp ascending</option>
+              <option value="created_timestamp|desc">Sort by Created Timestamp descending</option>
+              <option value="updated_timestamp|asc">Sort by Last Updated ascending</option>
+              <option value="updated_timestamp|desc">Sort by Last Updated descending</option>
+            </select>
+          </label>
+          <button type="submit" className='button-3'>
+            Submit
+          </button>
+        </div>
+      </form>
       <div className="form-style">
         <div className="list-items">{renderApps()}</div>
         <input type="file" id="input" multiple={true} />
