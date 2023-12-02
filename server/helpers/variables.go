@@ -11,9 +11,14 @@ var (
 	DefaultNrDeployedApps int = 0
 	// ScheduleTypes represents allowed scheduling types
 	ScheduleTypes = []string{"normal", "random_scheduler", "rr_sjf_scheduler", "multi_qos_scheduler"}
+	// LoginAttempts represents number of login attempts before timeout
+	LoginAttempts = 5
+	// TimeoutLimit represents limit of timeouts a user has
+	TimeoutLimit = 3
 	//MetricsName represents slice of metrics that are unregistered when closing app
 	MetricsName = []string{"applications.get", "applications.update", "applications.register",
-		"applications.schedule", "applications.get_pod_results", "users.get.profile", "users.update.profile"}
+		"applications.schedule", "applications.get_pod_results", "users.get.profile", "users.update.profile",
+		"users_failed_login"}
 	mapCodeExtension = map[string]string{
 		"c":    "c",
 		"cpp":  "c++",

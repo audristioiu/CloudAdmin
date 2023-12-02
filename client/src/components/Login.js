@@ -5,7 +5,7 @@ import './Login.scss';
 import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 
-//expiry date pe login?
+
 function Login({ setAuth }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +37,12 @@ function Login({ setAuth }) {
       localStorage.setItem("userPass", password);
       localStorage.setItem("userInfo", JSON.stringify(data));
       setAuth(true);
-      history('/');
+      if (data.otp_data.otp_enabled) {
+        history('/otp/validate');
+      } else {
+        history('/');
+      }
+     
     } catch (error) {
       setErrorMessage("Wrong username or password. /" + error.response.data.message);
       return

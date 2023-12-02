@@ -6,6 +6,7 @@ import (
 	"cloudadmin/helpers"
 	"cloudadmin/repositories"
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	vt "github.com/VirusTotal/vt-go"
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -87,51 +89,57 @@ func (s *Service) StartWebService() {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
 
-	// dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
 
 	// initialize clients for kubernetes and docker
-	// kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
-	// kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
-	// if kubernetesClient == nil {
-	// 	log.Fatal("[FATAL] Error in creating kubernetes client")
-	// 	return
-	// }
-	// log.Debug("Kubernetes client initialized")
+	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
+	kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
+	if kubernetesClient == nil {
+		log.Fatal("[FATAL] Error in creating kubernetes client")
+		return
+	}
+	log.Debug("Kubernetes client initialized")
 
-	// ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
-	// defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	defer cancel()
 
-	// dockerUsername := os.Getenv("DOCKER_USERNAME")
-	// dockerPassword := os.Getenv("DOCKER_PASSWORD")
-	// if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
-	// 	log.Fatal("[FATAL] docker registry_id/username/pass not found")
-	// 	return
-	// }
+	dockerUsername := os.Getenv("DOCKER_USERNAME")
+	dockerPassword := os.Getenv("DOCKER_PASSWORD")
+	if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
+		log.Fatal("[FATAL] docker registry_id/username/pass not found")
+		return
+	}
 
-	// dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
-	// if dockerClient == nil {
-	// 	log.Fatal("[FATAL] Error in creating docker client")
-	// 	return
-	// }
-	// log.Debug("Docker client initialized")
-	var dockerClient *clients.DockerClient
-	var kubernetesClient *clients.KubernetesClient
-
+	dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
+	if dockerClient == nil {
+		log.Fatal("[FATAL] Error in creating docker client")
+		return
+	}
+	log.Debug("Docker client initialized")
 
 	// initialize tcp address for graphite
 	graphiteHost := os.Getenv("GRAPHITE_HOST")
 	graphiteAddr, err := net.ResolveTCPAddr("tcp", graphiteHost)
 	if err != nil {
 		log.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
+		return
 	}
-
 	log.Debug("Initialize graphite for metrics")
 
 	requestCount := make(map[string]int)
-    maxRequestPerMinute := 10
+	maxRequestPerMinute := 10
+
+	// initialize virus total client
+	vtAPIKey := os.Getenv("VIRUSTOTAL_KEY")
+	vtClient := vt.NewClient(vtAPIKey)
+	if vtClient == nil {
+		log.Fatal("[FATAL] Failed to create new virus total client")
+		return
+	}
+
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient,
-		graphiteAddr, requestCount, maxRequestPerMinute)
+		graphiteAddr, requestCount, maxRequestPerMinute, vtClient)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -143,16 +151,29 @@ func (s *Service) StartWebService() {
 	restfulspec.BuildSwagger(config)
 	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(config))
 
-	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("/Users/udris/Desktop/CloudAdmin/swagger-ui/dist"))))
+	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("../swagger-ui/dist"))))
 
 	// Optionally, you may need to enable CORS for the UI to work.
 	cors := restful.CrossOriginResourceSharing{
 		AllowedHeaders: []string{"Content-Type", "Accept", "USER-AUTH", "USER-UUID"},
-		AllowedDomains: []string{"http://localhost:3000"},
+		AllowedDomains: []string{"https://localhost:3000"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		CookiesAllowed: false,
 		Container:      restful.DefaultContainer}
 	restful.DefaultContainer.Filter(cors.Filter)
+
+	cfg := &tls.Config{
+		MinVersion:               tls.VersionTLS12,
+		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		},
+	}
 
 	server := &http.Server{
 		Addr:           ":443",
@@ -160,6 +181,8 @@ func (s *Service) StartWebService() {
 		WriteTimeout:   15 * time.Minute,
 		IdleTimeout:    15 * time.Minute,
 		MaxHeaderBytes: 1 << 20,
+		TLSConfig:      cfg,
+		TLSNextProto:   make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
 	}
 
 	err = http2.ConfigureServer(server, &http2.Server{})
