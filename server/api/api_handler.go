@@ -239,6 +239,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	}
 
 	if userData.Password == "" {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" Couldn't read password query parameter")
 		errorData.Message = "Bad Request/ empty password"
 		errorData.StatusCode = http.StatusBadRequest
@@ -248,6 +250,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	}
 
 	if len(userData.Password) < 16 {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" password too short")
 		errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
 		errorData.StatusCode = http.StatusBadRequest
@@ -256,6 +260,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 	if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" password does not contain digits")
 		errorData.Message = "Bad Request/ Password does not contain digits"
 		errorData.StatusCode = http.StatusBadRequest
@@ -264,6 +270,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 	if !unicode.IsUpper(rune(userData.Password[0])) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" password does not start with uppercase")
 		errorData.Message = "Bad Request/ Password does not start with uppercase"
 		errorData.StatusCode = http.StatusBadRequest
@@ -272,6 +280,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 	if !helpers.HasSymbol(userData.Password) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" password does not have special characters")
 		errorData.Message = "Bad Request/ Password does not have special characters"
 		errorData.StatusCode = http.StatusBadRequest
@@ -280,6 +290,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 	if strings.Contains(userData.Password, userData.UserName) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" password does not have special characters")
 		errorData.Message = "Bad Request/ Password does not have special characters"
 		errorData.StatusCode = http.StatusBadRequest
@@ -301,6 +313,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	}
 
 	if !helpers.CheckPasswordHash(userData.Password, dbUserData.Password) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 		//rate limit mechanism + update in cache
 		if !dbUserData.UserLocked {
 			// update postgres for timeout
@@ -553,6 +567,23 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
 		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if dbUserData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -2141,6 +2172,23 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
 	if userData.UserLocked {
 		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
 		errorData.StatusCode = http.StatusForbidden
@@ -2404,6 +2452,23 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
 		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
