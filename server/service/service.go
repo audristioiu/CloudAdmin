@@ -7,7 +7,6 @@ import (
 	"cloudadmin/repositories"
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -88,33 +87,35 @@ func (s *Service) StartWebService() {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
 
-	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+	// dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
 
 	// initialize clients for kubernetes and docker
-	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
-	kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
-	if kubernetesClient == nil {
-		log.Fatal("[FATAL] Error in creating kubernetes client")
-		return
-	}
-	log.Debug("Kubernetes client initialized")
+	// kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
+	// kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
+	// if kubernetesClient == nil {
+	// 	log.Fatal("[FATAL] Error in creating kubernetes client")
+	// 	return
+	// }
+	// log.Debug("Kubernetes client initialized")
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
-	defer cancel()
+	// ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+	// defer cancel()
 
-	dockerUsername := os.Getenv("DOCKER_USERNAME")
-	dockerPassword := os.Getenv("DOCKER_PASSWORD")
-	if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
-		log.Fatal("[FATAL] docker registry_id/username/pass not found")
-		return
-	}
+	// dockerUsername := os.Getenv("DOCKER_USERNAME")
+	// dockerPassword := os.Getenv("DOCKER_PASSWORD")
+	// if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
+	// 	log.Fatal("[FATAL] docker registry_id/username/pass not found")
+	// 	return
+	// }
 
-	dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
-	if dockerClient == nil {
-		log.Fatal("[FATAL] Error in creating docker client")
-		return
-	}
-	log.Debug("Docker client initialized")
+	// dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
+	// if dockerClient == nil {
+	// 	log.Fatal("[FATAL] Error in creating docker client")
+	// 	return
+	// }
+	// log.Debug("Docker client initialized")
+	var dockerClient *clients.DockerClient
+	var kubernetesClient *clients.KubernetesClient
 
 
 	// initialize tcp address for graphite
@@ -126,9 +127,11 @@ func (s *Service) StartWebService() {
 
 	log.Debug("Initialize graphite for metrics")
 
+	requestCount := make(map[string]int)
+    maxRequestPerMinute := 10
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient,
-		graphiteAddr)
+		graphiteAddr, requestCount, maxRequestPerMinute)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -145,7 +148,7 @@ func (s *Service) StartWebService() {
 	// Optionally, you may need to enable CORS for the UI to work.
 	cors := restful.CrossOriginResourceSharing{
 		AllowedHeaders: []string{"Content-Type", "Accept", "USER-AUTH", "USER-UUID"},
-		AllowedDomains: []string{"https://localhost:3000"},
+		AllowedDomains: []string{"http://localhost:3000"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		CookiesAllowed: false,
 		Container:      restful.DefaultContainer}
@@ -177,7 +180,6 @@ func (s *Service) StartWebService() {
 			metrics.Unregister(metric)
 		}
 
-		fmt.Println("hai tata cu oprirea")
 		log.Debug("Stopped serving new connections.")
 	}()
 

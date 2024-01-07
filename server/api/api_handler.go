@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"sync"
 
 	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/emicklei/go-restful/v3"
@@ -37,6 +38,7 @@ var (
 
 	getUserMetric    = metrics.GetOrRegisterMeter("users.get.profile", nil)
 	updateUserMetric = metrics.GetOrRegisterMeter("users.update.profile", nil)
+	mutex sync.Mutex
 )
 
 // AdminAuthenticate verifies role and user_id for admin
@@ -1554,6 +1556,19 @@ func (api *API) GetAppsAggregates(request *restful.Request, response *restful.Re
 	appInfo := domain.AppsAggregatesInfo{}
 
 	username := request.QueryParameter("username")
+
+	mutex.Lock()
+    if api.requestCount[username] > api.maxRequestPerMinute {
+        mutex.Unlock()
+		fmt.Println(api.requestCount[username])
+        errorData.Message = "Too many requests per minute. Please try again later."
+        errorData.StatusCode = http.StatusTooManyRequests
+        response.WriteHeader(http.StatusTooManyRequests)
+        response.WriteEntity(errorData)
+        return
+    }
+    api.requestCount[username]++
+    mutex.Unlock()
 
 	mainAppsOwnerCount, err := api.psqlRepo.GetAppsCount(username, false)
 	if err != nil {
