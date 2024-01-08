@@ -398,7 +398,14 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
-
+	if dbUserData.UserLimitTimeout < 3 && dbUserData.UserLimitLoginAttempts == 0 {
+		api.apiLogger.Error(" Too many requests. Please try again in 5 minutes.")
+		errorData.Message = "Too many requests. Please try again in 5 minutes"
+		errorData.StatusCode = http.StatusTooManyRequests
+		response.WriteHeader(http.StatusTooManyRequests)
+		response.WriteEntity(errorData)
+		return
+	}
 	if dbUserData.UserLocked {
 		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
 		errorData.StatusCode = http.StatusForbidden
