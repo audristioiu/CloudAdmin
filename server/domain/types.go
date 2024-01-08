@@ -18,7 +18,7 @@ type UserData struct {
 	UserLocked             bool            `json:"user_locked"`
 	UserTimeout            *time.Time      `json:"user_timeout,omitempty"`
 	UserLimitLoginAttempts int             `json:"user_limit_login_attempts"`
-	UserLimitTimeout       int             `json:"user_limit_timout"`
+	UserLimitTimeout       int             `json:"user_limit_timeout"`
 	NrDeployedApps         int             `json:"nr_deployed_apps"`
 	WantNotify             bool            `json:"want_notify"`
 	OTPData                OneTimePassData `json:"otp_data,omitempty"`
