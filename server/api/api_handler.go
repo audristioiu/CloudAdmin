@@ -204,18 +204,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	errorData := domain.ErrorResponse{}
 	oldPass := request.QueryParameter("old_password")
 
-	reqUrl, _ := request.Request.URL.Parse(userPath + "/" + userData.UserName)
-	marshalledRequest, err := json.Marshal(reqUrl)
-	if err != nil {
-		api.apiLogger.Error(" Couldn't marshal request", zap.Any("request_url", request.Request.URL))
-		errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Login"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
-		response.WriteEntity(errorData)
-		return
-	}
-
-	err = request.ReadEntity(&userData)
+	err := request.ReadEntity(&userData)
 	if err != nil {
 		api.apiLogger.Error(" Couldn't read body with error : ", zap.Error(err))
 		errorData.Message = "Bad Request/ could not read body"
@@ -299,6 +288,17 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		errorData.Message = "Bad Request/ Password does not have special characters"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	reqUrl, _ := request.Request.URL.Parse(request.Request.URL.Host + "/" + userPath + "/" + userData.UserName)
+	marshalledRequest, err := json.Marshal(reqUrl)
+	if err != nil {
+		api.apiLogger.Error(" Couldn't marshal request", zap.Any("request_url", request.Request.URL))
+		errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Login"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}
