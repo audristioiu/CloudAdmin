@@ -292,7 +292,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	reqUrl, _ := request.Request.URL.Parse(request.Request.URL.Host + "/" + userPath + "/" + userData.UserName)
+	reqUrl, _ := request.Request.URL.Parse(request.Request.URL.Host + userPath + "/" + userData.UserName)
 	marshalledRequest, err := json.Marshal(reqUrl)
 	if err != nil {
 		api.apiLogger.Error(" Couldn't marshal request", zap.Any("request_url", request.Request.URL))
@@ -377,6 +377,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 			response.WriteEntity(errorData)
 			return
 		}
+		newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
+		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 		dbUserData.Password = ""
 		err = api.psqlRepo.UpdateUserData(dbUserData)
@@ -389,7 +391,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		}
 
 		//gather the fresh new data to be cached
-		newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
+		newUserData, _ = api.psqlRepo.GetUserData(userData.UserName)
 		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 		failedLoginMetrics.Mark(1)
