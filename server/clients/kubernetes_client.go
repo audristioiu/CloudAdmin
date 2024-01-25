@@ -56,10 +56,11 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 	var nameSpaceName string
 
 	nr := strconv.Itoa(helpers.GetRandomInt())
+	newUserName := strings.ReplaceAll(userName, "_", "-")
 	namespaceClient := k.kubeClient.CoreV1().Namespaces()
 	newNamespace := &apiv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "namespace-" + userName + nr,
+			Name: "namespace-" + newUserName + nr,
 		},
 	}
 	resNameSpace, err := namespaceClient.Create(k.ctx, newNamespace, metav1.CreateOptions{})

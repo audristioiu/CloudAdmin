@@ -703,9 +703,9 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 			newCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
 			if appData.ParamArguments != "" {
-				newCMD = append(newCMD, execName, appData.ParamArguments)
+				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
 			} else {
-				newCMD = append(newCMD, execName)
+				newCMD = append(newCMD, "./"+execName)
 			}
 			if appData.FlagArguments != "" {
 				newRun = "gcc -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
@@ -741,9 +741,9 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 			newCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
 			if appData.ParamArguments != "" {
-				newCMD = append(newCMD, execName, appData.ParamArguments)
+				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
 			} else {
-				newCMD = append(newCMD, execName)
+				newCMD = append(newCMD, "./"+execName)
 			}
 			if appData.FlagArguments != "" {
 				newRun = "g++ -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
