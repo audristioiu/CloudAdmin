@@ -34,8 +34,8 @@ var (
 	updateAppsMetric  = metrics.GetOrRegisterMeter("applications.update", nil)
 	registerAppMetric = metrics.GetOrRegisterMeter("applications.register", nil)
 
-	malwareFileMetric = metrics.GetOrRegisterMeter("applications.malware", nil)
-	safeFileMetric    = metrics.GetOrRegisterMeter("applications.safe", nil)
+	// malwareFileMetric = metrics.GetOrRegisterMeter("applications.malware", nil)
+	// safeFileMetric    = metrics.GetOrRegisterMeter("applications.safe", nil)
 
 	scheduleAppsMetric  = metrics.GetOrRegisterMeter("applications.schedule", nil)
 	getPodResultsMetric = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
