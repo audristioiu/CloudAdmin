@@ -14,6 +14,8 @@ import ProfilePage from './components/Profile';
 import EditProfilePage from './components/EditProfilePage';
 import MyApps from './components/MyApps';
 import EditApp from './components/EditApp';
+import OneTimePassword from "./components/OneTimePass/OneTimePassword";
+import OneTimePasswordValidate from "./components/OneTimePass/OneTimePasswordValidate";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -34,6 +36,8 @@ function App() {
       <Routes>
         <Route path='/login' element={<Login setAuth={setAuth} />} />
         <Route path='/register' element={<Register />} />
+        <Route path='/otp/setup' element={<OneTimePassword />} />
+        <Route path='/otp/validate' element={<OneTimePasswordValidate />} />
         <Route path='/' element={isAuthenticated ? <>
           <Navbar />
           <Home />

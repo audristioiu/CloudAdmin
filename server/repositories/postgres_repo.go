@@ -55,12 +55,15 @@ func (p *PostgreSqlRepo) InsertUserData(userData *domain.UserData) error {
 
 	newUserData := domain.UserData{}
 	insertStatement := `INSERT INTO users (username, password, email, full_name, nr_deployed_apps, job_role,
-						birth_date, joined_date, last_time_online, want_notify,applications,user_id, role) 
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING username`
+						birth_date, joined_date, last_time_online, want_notify,applications,user_locked,user_timeout, 
+						user_limit_login_attempts, user_limit_timeout,user_id, role,otp_enabled, otp_verified, otp_secret, otp_auth_url) 
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,$16,$17,$18,$19,$20,$21) RETURNING username`
 
 	row := p.conn.QueryRow(p.ctx, insertStatement, userData.UserName, userData.Password, userData.Email,
 		userData.FullName, userData.NrDeployedApps, userData.JobRole, userData.BirthDate, userData.JoinedDate, userData.LastTimeOnline,
-		userData.WantNotify, userData.Applications, userData.UserID, userData.Role)
+		userData.WantNotify, userData.Applications, userData.UserLocked, userData.UserTimeout, userData.UserLimitLoginAttempts,
+		userData.UserLimitTimeout, userData.UserID, userData.Role, userData.OTPData.OTPEnabled, userData.OTPData.OTPVerified,
+		userData.OTPData.OTPSecret, userData.OTPData.OTPAuthURL)
 	err := row.Scan(&newUserData.UserName)
 	if err != nil {
 		p.psqlLogger.Error(" could not insert data", zap.Error(err))
@@ -74,11 +77,12 @@ func (p *PostgreSqlRepo) InsertUserData(userData *domain.UserData) error {
 func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) {
 	userData := domain.UserData{}
 	selectStatement := `SELECT * FROM users where username=$1`
-
 	row := p.conn.QueryRow(p.ctx, selectStatement, username)
 	err := row.Scan(&userData.UserName, &userData.Password, &userData.Email, &userData.FullName,
 		&userData.NrDeployedApps, &userData.JobRole, &userData.BirthDate, &userData.JoinedDate, &userData.LastTimeOnline,
-		&userData.WantNotify, &userData.Applications, &userData.UserID, &userData.Role)
+		&userData.WantNotify, &userData.Applications, &userData.UserLocked, &userData.UserTimeout,
+		&userData.UserLimitLoginAttempts, &userData.UserLimitTimeout, &userData.UserID, &userData.Role, &userData.OTPData.OTPEnabled,
+		&userData.OTPData.OTPVerified, &userData.OTPData.OTPSecret, &userData.OTPData.OTPAuthURL)
 	if err != nil {
 		p.psqlLogger.Error(" could not retrieve user", zap.Error(err))
 		return nil, err
@@ -90,10 +94,12 @@ func (p *PostgreSqlRepo) GetUserData(username string) (*domain.UserData, error) 
 // GetUserDataWithUUID retrieves user using UUID for authorization from PostgreSql table
 func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, error) {
 	userData := domain.UserData{}
-	selectStatement := "SELECT username,user_id,role, applications FROM users where user_id=$1"
+	selectStatement := `SELECT username,email,user_id,role, applications,user_locked,user_timeout, 
+						user_limit_login_attempts, user_limit_timeout,otp_secret FROM users where user_id=$1`
 
 	row := p.conn.QueryRow(p.ctx, selectStatement, userID)
-	err := row.Scan(&userData.UserName, &userData.UserID, &userData.Role, &userData.Applications)
+	err := row.Scan(&userData.UserName, &userData.Email, &userData.UserID, &userData.Role, &userData.Applications, &userData.UserLocked,
+		&userData.UserTimeout, &userData.UserLimitLoginAttempts, &userData.UserLimitTimeout, &userData.OTPData.OTPSecret)
 	if err != nil {
 		p.psqlLogger.Error(" could not retrieve user using uuid", zap.Error(err))
 		return nil, err
@@ -105,10 +111,12 @@ func (p *PostgreSqlRepo) GetUserDataWithUUID(userID string) (*domain.UserData, e
 // GetUserDataWitEmail retrieves user using Email for authorization from PostgreSql table
 func (p *PostgreSqlRepo) GetUserDataWithEmail(email string) (*domain.UserData, error) {
 	userData := domain.UserData{}
-	selectStatement := "SELECT username,user_id,role, applications FROM users where email=$1"
+	selectStatement := `SELECT username,user_id,role, applications,user_locked,user_timeout, 
+					user_limit_login_attempts, user_limit_timeout  FROM users where email=$1`
 
 	row := p.conn.QueryRow(p.ctx, selectStatement, email)
-	err := row.Scan(&userData.UserName, &userData.UserID, &userData.Role, &userData.Applications)
+	err := row.Scan(&userData.UserName, &userData.UserID, &userData.Role, &userData.Applications, &userData.UserLocked,
+		&userData.UserTimeout, &userData.UserLimitLoginAttempts, &userData.UserLimitTimeout)
 	if err != nil {
 		p.psqlLogger.Error(" could not retrieve user using email", zap.Error(err))
 		return nil, err
@@ -129,11 +137,16 @@ func (p *PostgreSqlRepo) UpdateUserData(userData *domain.UserData) error {
 						want_notify=COALESCE(NULLIF($4,FALSE), want_notify), 
 						password=COALESCE(NULLIF($5,E''), password),
 						birth_date=COALESCE(NULLIF($6,E''), birth_date),
-						full_name=COALESCE(NULLIF($7,E''), full_name)
-						WHERE username=$8`
+						full_name=COALESCE(NULLIF($7,E''), full_name),
+						user_locked=COALESCE(NULLIF($8,FALSE), user_locked),
+						user_timeout=$9,
+						user_limit_login_attempts = $10,
+						user_limit_timeout = $11
+						WHERE username=$12`
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, userData.NrDeployedApps, userData.JobRole, userData.Email,
-		userData.WantNotify, userData.Password, userData.BirthDate, userData.FullName, userData.UserName)
+		userData.WantNotify, userData.Password, userData.BirthDate, userData.FullName, userData.UserLocked, userData.UserTimeout,
+		userData.UserLimitLoginAttempts, userData.UserLimitTimeout, userData.UserName)
 	if err != nil {
 		p.psqlLogger.Error(" could not update user", zap.Error(err))
 		return err
@@ -160,6 +173,28 @@ func (p *PostgreSqlRepo) UpdateUserLastTimeOnlineData(lastTimestamp time.Time, u
 		return errors.New("no row found to update")
 	}
 	p.psqlLogger.Info("Successfuly updated user last timestamp", zap.String("user_last_timestamp", lastTimestamp.String()))
+	return nil
+}
+
+// UpdateUserOTP updates otp user data from PostgreSql table
+func (p *PostgreSqlRepo) UpdateUserOTP(otpData domain.OneTimePassData, userData *domain.UserData) error {
+	updateStatement := `UPDATE  users SET 
+						otp_enabled=$1,
+						otp_verified=$2,
+						otp_secret=$3,
+						otp_auth_url=$4 
+						WHERE username=$5`
+
+	row, err := p.conn.Exec(p.ctx, updateStatement, otpData.OTPEnabled, otpData.OTPVerified, otpData.OTPSecret, otpData.OTPAuthURL, userData.UserName)
+	if err != nil {
+		p.psqlLogger.Error(" could not update user otp", zap.Error(err))
+		return err
+	}
+	if row.RowsAffected() != 1 {
+		p.psqlLogger.Error(" no row found to update")
+		return errors.New("no row found to update")
+	}
+	p.psqlLogger.Info("Successfuly updated user otp", zap.Any("user_otp", otpData))
 	return nil
 }
 

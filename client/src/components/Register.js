@@ -3,6 +3,9 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Login.scss';
 import { Agent } from 'https';
+import PasswordStrengthBar from 'react-password-strength-bar';
+import './Login.css';
+import {Agent} from 'https';
 import certs from '../Certs/certs';
 
 function Register() {
@@ -119,6 +122,7 @@ function Register() {
             onChange={(event) => setConfirmPassword(event.target.value)}
             required
           />
+          <PasswordStrengthBar password={password} />
           <label>Confirm Password</label>
         </div>
         <a type="submit" onClick={handleSubmit}>

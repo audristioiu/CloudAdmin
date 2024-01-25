@@ -14,12 +14,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
-	"sync"
 
 	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/pquerna/otp/totp"
 	metrics "github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
@@ -33,11 +34,17 @@ var (
 	updateAppsMetric  = metrics.GetOrRegisterMeter("applications.update", nil)
 	registerAppMetric = metrics.GetOrRegisterMeter("applications.register", nil)
 
+	malwareFileMetric = metrics.GetOrRegisterMeter("applications.malware", nil)
+	safeFileMetric    = metrics.GetOrRegisterMeter("applications.safe", nil)
+
 	scheduleAppsMetric  = metrics.GetOrRegisterMeter("applications.schedule", nil)
 	getPodResultsMetric = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
 
-	getUserMetric    = metrics.GetOrRegisterMeter("users.get.profile", nil)
-	updateUserMetric = metrics.GetOrRegisterMeter("users.update.profile", nil)
+	loginMetrics       = metrics.GetOrRegisterMeter("users_login", nil)
+	failedLoginMetrics = metrics.GetOrRegisterMeter("users_failed_login", nil)
+	getUserMetric      = metrics.GetOrRegisterMeter("users.get.profile", nil)
+	updateUserMetric   = metrics.GetOrRegisterMeter("users.update.profile", nil)
+
 	mutex sync.Mutex
 )
 
@@ -102,9 +109,17 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 
-	if len(userData.Password) < 8 {
+	if len(userData.Password) < 16 {
 		api.apiLogger.Error(" password too short")
-		errorData.Message = "Bad Request/ Password too short"
+		errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+		api.apiLogger.Error(" password does not contain digits")
+		errorData.Message = "Bad Request/ Password does not contain digits"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
@@ -113,6 +128,22 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	if !unicode.IsUpper(rune(userData.Password[0])) {
 		api.apiLogger.Error(" password does not start with uppercase")
 		errorData.Message = "Bad Request/ Password does not start with uppercase"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !helpers.HasSymbol(userData.Password) {
+		api.apiLogger.Error(" password does not have special characters")
+		errorData.Message = "Bad Request/ Password does not have special characters"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if strings.Contains(userData.Password, userData.UserName) {
+		api.apiLogger.Error(" password does not have special characters")
+		errorData.Message = "Bad Request/ Password does not have special characters"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
@@ -143,6 +174,12 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	userData.LastTimeOnline = &nowTime
 	userData.Applications = []string{}
 	userData.NrDeployedApps = helpers.DefaultNrDeployedApps
+	userData.WantNotify = false
+	userData.UserLocked = false
+	userData.UserTimeout = nil
+	userData.UserLimitLoginAttempts = helpers.LoginAttempts
+	userData.UserLimitTimeout = helpers.TimeoutLimit
+	userData.OTPData = domain.OneTimePassData{OTPEnabled: false, OTPVerified: false}
 
 	err = api.psqlRepo.InsertUserData(&userData)
 	if err != nil {
@@ -163,10 +200,9 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 func (api *API) UserLogin(request *restful.Request, response *restful.Response) {
 	userData := domain.UserData{}
 	newUserData := &domain.UserData{}
-
+	errorData := domain.ErrorResponse{}
 	oldPass := request.QueryParameter("old_password")
 
-	errorData := domain.ErrorResponse{}
 	err := request.ReadEntity(&userData)
 	if err != nil {
 		api.apiLogger.Error(" Couldn't read body with error : ", zap.Error(err))
@@ -194,6 +230,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	}
 
 	if userData.Password == "" {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" Couldn't read password query parameter")
 		errorData.Message = "Bad Request/ empty password"
 		errorData.StatusCode = http.StatusBadRequest
@@ -202,15 +240,29 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	if len(userData.Password) < 8 {
+	if len(userData.Password) < 16 {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" password too short")
-		errorData.Message = "Bad Request/ Password too short"
+		errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+		api.apiLogger.Error(" password does not contain digits")
+		errorData.Message = "Bad Request/ Password does not contain digits"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
 	if !unicode.IsUpper(rune(userData.Password[0])) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" password does not start with uppercase")
 		errorData.Message = "Bad Request/ Password does not start with uppercase"
 		errorData.StatusCode = http.StatusBadRequest
@@ -218,9 +270,42 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
+	if !helpers.HasSymbol(userData.Password) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+		api.apiLogger.Error(" password does not have special characters")
+		errorData.Message = "Bad Request/ Password does not have special characters"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if strings.Contains(userData.Password, userData.UserName) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+		api.apiLogger.Error(" password does not have special characters")
+		errorData.Message = "Bad Request/ Password does not have special characters"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	reqUrl, _ := request.Request.URL.Parse(request.Request.URL.Host + userPath + "/" + userData.UserName)
+	marshalledRequest, err := json.Marshal(reqUrl)
+	if err != nil {
+		api.apiLogger.Error(" Couldn't marshal request", zap.Any("request_url", request.Request.URL))
+		errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Login"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	dbUserData, err := api.psqlRepo.GetUserData(userData.UserName)
 	if err != nil {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
@@ -230,10 +315,121 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	}
 
 	if !helpers.CheckPasswordHash(userData.Password, dbUserData.Password) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+		//rate limit mechanism + update in cache
+		if !dbUserData.UserLocked {
+			// update postgres for timeout
+			dbUserData.UserLimitLoginAttempts = dbUserData.UserLimitLoginAttempts - 1
+			if dbUserData.UserLimitLoginAttempts <= 0 {
+				if dbUserData.UserTimeout == nil {
+					dbUserData.UserLimitTimeout = dbUserData.UserLimitTimeout - 1
+					if dbUserData.UserLimitTimeout <= 0 {
+						dbUserData.UserLocked = true
+					}
+					nowTime := time.Now()
+					dbUserData.UserTimeout = &nowTime
+					dbUserData.Password = ""
+					err = api.psqlRepo.UpdateUserData(dbUserData)
+					if err != nil {
+						errorData.Message = "Internal error / updating user data in postgres"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+					//gather the fresh new data to be cached
+					newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
+					api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
+				} else {
+					if time.Since(*dbUserData.UserTimeout) < 5*time.Second {
+						api.apiLogger.Error(" Too many requests. Please try again in 5 minutes.")
+						errorData.Message = "Too many requests. Please try again in 5 minutes"
+						errorData.StatusCode = http.StatusTooManyRequests
+						response.WriteHeader(http.StatusTooManyRequests)
+						response.WriteEntity(errorData)
+						return
+					} else {
+						dbUserData.UserLimitLoginAttempts = 5
+						dbUserData.UserTimeout = nil
+						dbUserData.UserLocked = false
+						dbUserData.Password = ""
+						err = api.psqlRepo.UpdateUserData(dbUserData)
+						if err != nil {
+							errorData.Message = "Internal error / updating user data in postgres"
+							errorData.StatusCode = http.StatusInternalServerError
+							response.WriteHeader(http.StatusInternalServerError)
+							response.WriteEntity(errorData)
+							return
+						}
+						//gather the fresh new data to be cached
+						newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
+						api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
+					}
+				}
+			}
+
+		} else {
+			errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+			errorData.StatusCode = http.StatusForbidden
+			response.WriteHeader(http.StatusForbidden)
+			response.WriteEntity(errorData)
+			return
+		}
+		newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
+		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
+
+		dbUserData.Password = ""
+		err = api.psqlRepo.UpdateUserData(dbUserData)
+		if err != nil {
+			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		//gather the fresh new data to be cached
+		newUserData, _ = api.psqlRepo.GetUserData(userData.UserName)
+		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
+
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 		api.apiLogger.Error(" Wrong password given. Please try again.")
 		errorData.Message = "Wrong Password"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if dbUserData.UserTimeout != nil && time.Since(*dbUserData.UserTimeout) < 5*time.Second {
+		api.apiLogger.Error(" Too many requests. Please try again in 5 minutes.")
+		errorData.Message = "Too many requests. Please try again in 5 minutes"
+		errorData.StatusCode = http.StatusTooManyRequests
+		response.WriteHeader(http.StatusTooManyRequests)
+		response.WriteEntity(errorData)
+		return
+	} else {
+		dbUserData.UserLimitLoginAttempts = 5
+		dbUserData.UserTimeout = nil
+		dbUserData.UserLocked = false
+		dbUserData.Password = ""
+		err = api.psqlRepo.UpdateUserData(dbUserData)
+		if err != nil {
+			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		//gather the fresh new data to be cached
+		newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
+		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
+	}
+	if dbUserData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -265,18 +461,6 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 			return
 		}
 
-		reqUrl, _ := request.Request.URL.Parse(userPath + "/" + userData.UserName)
-
-		marshalledRequest, err := json.Marshal(reqUrl)
-		if err != nil {
-			api.apiLogger.Error(" Couldn't marshal request", zap.Any("request_url", request.Request.URL))
-			errorData.Message = "Internal server error/Cannot marshal marshalledRequest in User Profile"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
-
 		//gather the fresh new data to be cached
 		newUserData, _ := api.psqlRepo.GetUserData(userData.UserName)
 		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
@@ -291,7 +475,15 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	newUserData.JoinedDate = nil
 	newUserData.LastTimeOnline = nil
 	newUserData.NrDeployedApps = 0
+	newUserData.UserLimitLoginAttempts = 5
+	newUserData.UserLimitTimeout = 3
+	newUserData.UserLocked = false
+	newUserData.UserTimeout = nil
+	newUserData.OTPData = domain.OneTimePassData{}
+	loginMetrics.Mark(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 	response.WriteEntity(newUserData)
+
 }
 
 // GetUserProfile returns user profile based on username
@@ -331,6 +523,30 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 			response.WriteEntity(errorData)
 			return
 		}
+		userUUID := request.HeaderParameter("USER-UUID")
+		checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+		if err != nil {
+			api.apiLogger.Error(" User not found", zap.String("user_name", username))
+			errorData.Message = "User not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		}
+		if userData.UserName != checkUserData.UserName {
+			errorData.Message = "Status forbidden"
+			errorData.StatusCode = http.StatusForbidden
+			response.WriteHeader(http.StatusForbidden)
+			response.WriteEntity(errorData)
+			return
+		}
+		if userData.UserLocked {
+			errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+			errorData.StatusCode = http.StatusForbidden
+			response.WriteHeader(http.StatusForbidden)
+			response.WriteEntity(errorData)
+			return
+		}
 		api.apiLogger.Debug(" Not found in cache", zap.String("user_name", username))
 		userData.Password = ""
 		userData.Role = ""
@@ -353,7 +569,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 	}
 
 	getUserMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 
 }
 
@@ -372,7 +588,42 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 		return
 	}
 
-	if userData.Role != "" || userData.UserID != "" || len(userData.Applications) > 0 {
+	dbUserData, err := api.psqlRepo.GetUserData(userData.UserName)
+	if err != nil {
+		api.apiLogger.Error(" User id not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if dbUserData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if dbUserData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if userData.Role != "" || userData.UserID != "" || len(userData.Applications) > 0 || userData.UserLimitLoginAttempts > 0 ||
+		userData.UserLimitTimeout > 0 {
 		api.apiLogger.Error(" Wrong fields to update")
 		errorData.Message = "Bad Request/ wrong fields , you can only update birth_date ,job_role,email,  want_notify or password"
 		errorData.StatusCode = http.StatusBadRequest
@@ -433,7 +684,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 	updateUserMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
 	updateResponse.Message = "User updated succesfully"
@@ -587,6 +838,209 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 	response.WriteEntity(deleteResponse)
 }
 
+// GenerateOTPToken generates OTP token
+func (api *API) GenerateOTPToken(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	userUUID := request.HeaderParameter("USER-UUID")
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User id not found", zap.String("user_id", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "cloudadmin.com",
+		AccountName: userData.Email,
+	})
+	if err != nil {
+		api.apiLogger.Error("failed to generate otp key", zap.Error(err))
+		errorData.Message = "Internal error/ failed to generate otp key"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	otpData := domain.OneTimePassData{
+		OTPEnabled:  false,
+		OTPVerified: false,
+		OTPSecret:   key.Secret(),
+		OTPAuthURL:  key.URL(),
+	}
+	err = api.psqlRepo.UpdateUserOTP(otpData, userData)
+	if err != nil {
+		api.apiLogger.Error("failed to update otp", zap.Error(err))
+		errorData.Message = "Internal error/ failed to update otp"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	for _, cachedReq := range cachedRequests[userData.UserName] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[userData.UserName] = make([]string, 0)
+
+	otpResponse := domain.GenerateOTPResponse{
+		Key: key.Secret(),
+		URL: key.URL(),
+	}
+	response.WriteEntity(otpResponse)
+}
+
+// VerifyOTPToken checks otp token
+func (api *API) VerifyOTPToken(request *restful.Request, response *restful.Response) {
+	otpInputData := domain.OTPInput{}
+	errorData := domain.ErrorResponse{}
+	err := request.ReadEntity(&otpInputData)
+	if err != nil {
+		api.apiLogger.Error(" Couldn't read body with error : ", zap.Error(err))
+		errorData.Message = "Bad Request/ could not read body"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	userUUID := request.HeaderParameter("USER-UUID")
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User id not found", zap.String("user_id", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	valid := totp.Validate(otpInputData.Token, userData.OTPData.OTPSecret)
+	if !valid {
+		api.apiLogger.Error(" Token is invalid or user doesn't exist", zap.String("user_id", userUUID))
+		errorData.Message = "Token is invalid or user doesn't exist"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	otpData := userData.OTPData
+	otpData.OTPEnabled = true
+	otpData.OTPVerified = true
+	err = api.psqlRepo.UpdateUserOTP(otpData, userData)
+	if err != nil {
+		api.apiLogger.Error("failed to update otp", zap.Error(err))
+		errorData.Message = "Internal error/ failed to update otp"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	for _, cachedReq := range cachedRequests[userData.UserName] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[userData.UserName] = make([]string, 0)
+	updateResponse := domain.QueryResponse{}
+	updateResponse.Message = "User otp enabled succesfully"
+	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
+	response.WriteEntity(updateResponse)
+}
+
+// ValidateOTPToken validates otp token
+func (api *API) ValidateOTPToken(request *restful.Request, response *restful.Response) {
+	otpInputData := domain.OTPInput{}
+	errorData := domain.ErrorResponse{}
+	err := request.ReadEntity(&otpInputData)
+	if err != nil {
+		api.apiLogger.Error(" Couldn't read body with error : ", zap.Error(err))
+		errorData.Message = "Bad Request/ could not read body"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	userUUID := request.HeaderParameter("USER-UUID")
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User id not found", zap.String("user_id", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	valid := totp.Validate(otpInputData.Token, userData.OTPData.OTPSecret)
+	if !valid {
+		api.apiLogger.Error(" Token is invalid or user doesn't exist", zap.String("user_id", userUUID))
+		errorData.Message = "Token is invalid or user doesn't exist"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	updateResponse := domain.QueryResponse{}
+	updateResponse.Message = "User otp validated succesfully"
+	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
+	response.WriteEntity(updateResponse)
+}
+
+// DisableOTP disables otp
+func (api *API) DisableOTP(request *restful.Request, response *restful.Response) {
+	otpInputData := domain.OTPInput{}
+	errorData := domain.ErrorResponse{}
+	err := request.ReadEntity(&otpInputData)
+	if err != nil {
+		api.apiLogger.Error(" Couldn't read body with error : ", zap.Error(err))
+		errorData.Message = "Bad Request/ could not read body"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	userUUID := request.HeaderParameter("USER-UUID")
+	userData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User id not found", zap.String("user_id", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	otpData := userData.OTPData
+	otpData.OTPEnabled = false
+	otpData.OTPSecret = ""
+	otpData.OTPAuthURL = ""
+	otpData.OTPVerified = false
+	err = api.psqlRepo.UpdateUserOTP(otpData, userData)
+	if err != nil {
+		api.apiLogger.Error("failed to update otp", zap.Error(err))
+		errorData.Message = "Internal error/ failed to update otp"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	for _, cachedReq := range cachedRequests[userData.UserName] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[userData.UserName] = make([]string, 0)
+	updateResponse := domain.QueryResponse{}
+	updateResponse.Message = "User otp disabled succesfully"
+	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
+	response.WriteEntity(updateResponse)
+}
+
 // UploadApp uploads app to s3
 // We have 2 situations : each file has a text file and all apps have main function and we have a program that uses at least 2 source code files
 // and we have to determine which file has main function
@@ -614,6 +1068,13 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
 		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -712,6 +1173,70 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteEntity(errorData)
 					return
 				}
+				// scan file using virus total
+				// vtObject, err := api.vtClient.NewFileScanner().Scan(rc, f.Name, nil)
+				// if err != nil {
+				// 	api.apiLogger.Error(" Couldn't scan file", zap.Error(err))
+				// 	errorData.Message = "Internal error/ Couldn't scan file"
+				// 	errorData.StatusCode = http.StatusInternalServerError
+				// 	response.WriteHeader(http.StatusInternalServerError)
+				// 	response.WriteEntity(errorData)
+				// 	return
+				// }
+				// analyseID := vtObject.ID()
+				// resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
+				// if err != nil {
+				// 	api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
+				// 	errorData.Message = "Internal error/ Couldn't get analyse file"
+				// 	errorData.StatusCode = http.StatusInternalServerError
+				// 	response.WriteHeader(http.StatusInternalServerError)
+				// 	response.WriteEntity(errorData)
+				// 	return
+				// }
+
+				// var respVT domain.VTResponse
+				// err = json.Unmarshal(resp.Data, &respVT)
+				// if err != nil {
+				// 	api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
+				// 	errorData.Message = "Internal error/ failed to unmarshal vt resp"
+				// 	errorData.StatusCode = http.StatusInternalServerError
+				// 	response.WriteHeader(http.StatusInternalServerError)
+				// 	response.WriteEntity(errorData)
+				// 	return
+				// }
+				// for respVT.Attributes.Status == "queued" {
+				// 	time.Sleep(time.Second * 30)
+				// 	resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
+				// 	if err != nil {
+				// 		api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
+				// 		errorData.Message = "Internal error/ Couldn't get analyse file"
+				// 		errorData.StatusCode = http.StatusInternalServerError
+				// 		response.WriteHeader(http.StatusInternalServerError)
+				// 		response.WriteEntity(errorData)
+				// 		return
+				// 	}
+				// 	err = json.Unmarshal(resp.Data, &respVT)
+				// 	if err != nil {
+				// 		api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
+				// 		errorData.Message = "Internal error/ failed to unmarshal vt resp"
+				// 		errorData.StatusCode = http.StatusInternalServerError
+				// 		response.WriteHeader(http.StatusInternalServerError)
+				// 		response.WriteEntity(errorData)
+				// 		return
+				// 	}
+				// }
+				// if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
+				// 	malwareFileMetric.Mark(1)
+				// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+				// 	api.apiLogger.Warn("malware detected")
+				// 	errorData.Message = "Bad request/ malware detected "
+				// 	errorData.StatusCode = http.StatusBadRequest
+				// 	response.WriteHeader(http.StatusBadRequest)
+				// 	response.WriteEntity(errorData)
+				// 	return
+				// }
+				// safeFileMetric.Mark(1)
+				// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 				descr, err1 := io.ReadAll(rc)
 				if err1 != nil {
 					api.apiLogger.Error(" Couldn't read io.Reader with error : ", zap.Error(err1))
@@ -891,11 +1416,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			// Iterate through the files in the archive,
 			// printing some of their contents.
 			for i, f := range r.File {
-				appData := domain.ApplicationData{}
-				nowTime := time.Now()
-				appData.CreatedTimestamp = nowTime
-				appData.UpdatedTimestamp = nowTime
-
 				api.apiLogger.Debug("Writting information for file :\n", zap.String("file_name", f.Name))
 				rc, err := f.Open()
 				if err != nil {
@@ -906,6 +1426,76 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteEntity(errorData)
 					return
 				}
+
+				// scan file using virus total
+				// vtObject, err := api.vtClient.NewFileScanner().Scan(rc, f.Name, nil)
+				// if err != nil {
+				// 	api.apiLogger.Error(" Couldn't scan file", zap.Error(err))
+				// 	errorData.Message = "Internal error/ Couldn't scan file"
+				// 	errorData.StatusCode = http.StatusInternalServerError
+				// 	response.WriteHeader(http.StatusInternalServerError)
+				// 	response.WriteEntity(errorData)
+				// 	return
+				// }
+				// analyseID := vtObject.ID()
+				// resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
+				// if err != nil {
+				// 	api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
+				// 	errorData.Message = "Internal error/ Couldn't get analyse file"
+				// 	errorData.StatusCode = http.StatusInternalServerError
+				// 	response.WriteHeader(http.StatusInternalServerError)
+				// 	response.WriteEntity(errorData)
+				// 	return
+				// }
+
+				// var respVT domain.VTResponse
+				// err = json.Unmarshal(resp.Data, &respVT)
+				// if err != nil {
+				// 	api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
+				// 	errorData.Message = "Internal error/ failed to unmarshal vt resp"
+				// 	errorData.StatusCode = http.StatusInternalServerError
+				// 	response.WriteHeader(http.StatusInternalServerError)
+				// 	response.WriteEntity(errorData)
+				// 	return
+				// }
+				// for respVT.Attributes.Status == "queued" {
+				// 	time.Sleep(time.Second * 30)
+				// 	resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
+				// 	if err != nil {
+				// 		api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
+				// 		errorData.Message = "Internal error/ Couldn't get analyse file"
+				// 		errorData.StatusCode = http.StatusInternalServerError
+				// 		response.WriteHeader(http.StatusInternalServerError)
+				// 		response.WriteEntity(errorData)
+				// 		return
+				// 	}
+				// 	err = json.Unmarshal(resp.Data, &respVT)
+				// 	if err != nil {
+				// 		api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
+				// 		errorData.Message = "Internal error/ failed to unmarshal vt resp"
+				// 		errorData.StatusCode = http.StatusInternalServerError
+				// 		response.WriteHeader(http.StatusInternalServerError)
+				// 		response.WriteEntity(errorData)
+				// 		return
+				// 	}
+				// }
+				// if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
+				// 	malwareFileMetric.Mark(1)
+				// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+				// 	api.apiLogger.Warn("malware detected")
+				// 	errorData.Message = "Bad request/ malware detected "
+				// 	errorData.StatusCode = http.StatusBadRequest
+				// 	response.WriteHeader(http.StatusBadRequest)
+				// 	response.WriteEntity(errorData)
+				// 	return
+				// }
+				// safeFileMetric.Mark(1)
+				// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+
+				appData := domain.ApplicationData{}
+				nowTime := time.Now()
+				appData.CreatedTimestamp = nowTime
+				appData.UpdatedTimestamp = nowTime
 
 				if f.FileInfo().IsDir() {
 					err = os.MkdirAll(f.Name, 0777)
@@ -1110,7 +1700,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	registerAppMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 
 	registerResponse := domain.QueryResponse{}
 	registerResponse.Message = "Apps uploaded succesfully"
@@ -1159,6 +1749,13 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			api.apiLogger.Error(" User id not authorized", zap.String("user_id", userIDHeader))
 			response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 			errorData.Message = "User " + userIDHeader + " is Not Authorized"
+			errorData.StatusCode = http.StatusForbidden
+			response.WriteHeader(http.StatusForbidden)
+			response.WriteEntity(errorData)
+			return
+		}
+		if userData.UserLocked {
+			errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
 			errorData.StatusCode = http.StatusForbidden
 			response.WriteHeader(http.StatusForbidden)
 			response.WriteEntity(errorData)
@@ -1288,7 +1885,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		response.WriteEntity(appsData)
 	}
 	getAppsMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 
 }
 
@@ -1317,6 +1914,24 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
+
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
 	nrReplicas := request.QueryParameter("nr_replicas")
 	maxReplicas := request.QueryParameter("max_nr_replicas")
 	newImage := request.QueryParameter("new_image")
@@ -1355,16 +1970,6 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 			}
 
 		}
-	}
-
-	userData, err := api.psqlRepo.GetUserData(username)
-	if err != nil {
-		api.apiLogger.Error(" User not found", zap.String("user_name", username))
-		errorData.Message = "User not found"
-		errorData.StatusCode = http.StatusNotFound
-		response.WriteHeader(http.StatusNotFound)
-		response.WriteEntity(errorData)
-		return
 	}
 
 	flag := true
@@ -1422,7 +2027,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	updateAppsMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
 	updateResponse.Message = "App updated succesfully"
@@ -1558,17 +2163,17 @@ func (api *API) GetAppsAggregates(request *restful.Request, response *restful.Re
 	username := request.QueryParameter("username")
 
 	mutex.Lock()
-    if api.requestCount[username] > api.maxRequestPerMinute {
-        mutex.Unlock()
+	if api.requestCount[username] > api.maxRequestPerMinute {
+		mutex.Unlock()
 		fmt.Println(api.requestCount[username])
-        errorData.Message = "Too many requests per minute. Please try again later."
-        errorData.StatusCode = http.StatusTooManyRequests
-        response.WriteHeader(http.StatusTooManyRequests)
-        response.WriteEntity(errorData)
-        return
-    }
-    api.requestCount[username]++
-    mutex.Unlock()
+		errorData.Message = "Too many requests per minute. Please try again later."
+		errorData.StatusCode = http.StatusTooManyRequests
+		response.WriteHeader(http.StatusTooManyRequests)
+		response.WriteEntity(errorData)
+		return
+	}
+	api.requestCount[username]++
+	mutex.Unlock()
 
 	mainAppsOwnerCount, err := api.psqlRepo.GetAppsCount(username, false)
 	if err != nil {
@@ -1642,6 +2247,30 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
 		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
 		response.WriteEntity(errorData)
 		return
 	}
@@ -1833,6 +2462,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		updatedAppData.Namespace = userNameSpace
 		updatedAppData.ScheduleType = scheduleType
 		updatedAppData.IsRunning = true
+		updatedAppData.UpdatedTimestamp = time.Now()
 		err = api.psqlRepo.UpdateAppData(&updatedAppData)
 		if err != nil {
 			errorData.Message = "Internal error / failed to update app"
@@ -1857,7 +2487,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	}
 
 	scheduleAppsMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 
 	scheduleResponse := domain.QueryResponse{}
 	scheduleResponse.Message = "Apps scheduled succesfully"
@@ -1903,6 +2533,30 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		response.WriteEntity(errorData)
 		return
 	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
 		api.apiLogger.Error("Apps not found", zap.Any("apps", appName))
@@ -1940,7 +2594,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	}
 
 	getPodResultsMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, 10e9, "metrics", api.graphiteAddr)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}
 	podLogsResponse.PrintMessage = podLogs

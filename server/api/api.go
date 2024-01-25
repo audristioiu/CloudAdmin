@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/VirusTotal/vt-go"
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -18,6 +19,7 @@ const (
 	registerPath     = "/register"
 	loginPath        = "/login"
 	userPath         = "/user"
+	otpPath          = "/otp"
 	appPath          = "/app"
 	aggregatesPath   = "/aggregates"
 	schedulePath     = "/schedule"
@@ -26,33 +28,35 @@ const (
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service + clients
 type API struct {
-	ctx          context.Context
-	psqlRepo     *repositories.PostgreSqlRepo
-	apiCache     *ristretto.Cache
-	apiLogger    *zap.Logger
-	profiler     *repositories.ProfilingService
-	dockerClient *clients.DockerClient
-	kubeClient   *clients.KubernetesClient
-	graphiteAddr *net.TCPAddr
-	requestCount map[string]int
+	ctx                 context.Context
+	psqlRepo            *repositories.PostgreSqlRepo
+	apiCache            *ristretto.Cache
+	apiLogger           *zap.Logger
+	profiler            *repositories.ProfilingService
+	dockerClient        *clients.DockerClient
+	kubeClient          *clients.KubernetesClient
+	graphiteAddr        *net.TCPAddr
+	requestCount        map[string]int
 	maxRequestPerMinute int
+	vtClient            *vt.Client
 }
 
 // NewAPI returns an API object
 func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger,
 	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient,
-	graphiteAddr *net.TCPAddr, requestCount map[string]int, maxRequestPerMinute int) *API {
+	graphiteAddr *net.TCPAddr, requestCount map[string]int, maxRequestPerMinute int, vtClient *vt.Client) *API {
 	return &API{
-		ctx:          ctx,
-		psqlRepo:     postgresRepo,
-		apiCache:     cache,
-		apiLogger:    logger,
-		profiler:     cpuProfiler,
-		dockerClient: dockerClient,
-		kubeClient:   kubeClient,
-		graphiteAddr: graphiteAddr,
-		requestCount: requestCount,
+		ctx:                 ctx,
+		psqlRepo:            postgresRepo,
+		apiCache:            cache,
+		apiLogger:           logger,
+		profiler:            cpuProfiler,
+		dockerClient:        dockerClient,
+		kubeClient:          kubeClient,
+		graphiteAddr:        graphiteAddr,
+		requestCount:        requestCount,
 		maxRequestPerMinute: maxRequestPerMinute,
+		vtClient:            vtClient,
 	}
 }
 
@@ -134,7 +138,65 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusForbidden, "User not allowed as admin", domain.ErrorResponse{}))
-
+	ws.Route(
+		ws.
+			POST(otpPath+"/generate").
+			Doc("Generate OTP token").
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.GenerateOTPToken).
+			Returns(http.StatusOK, "OK", domain.GenerateOTPResponse{}).
+			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			POST(otpPath+"/verify").
+			Doc("Verfiy and enable OTP token").
+			Reads(domain.OTPInput{}).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.VerifyOTPToken).
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			POST(otpPath+"/validate").
+			Doc("Validate OTP token").
+			Reads(domain.OTPInput{}).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.ValidateOTPToken).
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			POST(otpPath+"/disable").
+			Doc("Disable OTP").
+			Reads(domain.OTPInput{}).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.DisableOTP).
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 	tags = []string{"apps"}
 	ws.Route(
 		ws.

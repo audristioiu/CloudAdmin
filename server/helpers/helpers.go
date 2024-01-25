@@ -6,7 +6,7 @@ import (
 	"cloudadmin/priority_queue"
 	"container/heap"
 	"crypto/rand"
-	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -26,6 +26,23 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+var (
+	specialCharacters = []string{"`", "~", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "-", "_",
+		"=", "+", "[", "]", "{", "}", ";", ":", "'", "|", ",", "<", ".", ">", "/", "?"}
+)
+
+// HasSymbol checks if str contains special characters
+func HasSymbol(str string) bool {
+	for _, character := range specialCharacters {
+		hasSpecialChar := strings.ContainsAny(str, character)
+		if hasSpecialChar {
+			return true
+		}
+	}
+
+	return false
+}
+
 // GetRandomInt returns a random int used for postgres params
 func GetRandomInt() int {
 	nBig, err := rand.Int(rand.Reader, big.NewInt(100))
@@ -40,8 +57,9 @@ func GetRandomInt() int {
 func GenerateRole(userData *domain.UserData) *domain.UserData {
 	id := uuid.New().String()
 	userData.UserID = id
-	currentRole := AddSaltToRole(id, userData.UserName)
-	hashedRole := HashPassword(currentRole)
+	currentRole := AddSaltToRole(id, string(generateRandomSalt(16)))
+	updatedRole := AddPepperToRole(currentRole, uuid.New().String())
+	hashedRole := HashPassword(updatedRole)
 
 	userData.Role = hashedRole
 	return userData
@@ -53,9 +71,29 @@ func AddSaltToRole(id, salt string) string {
 	return id + ":" + salt
 }
 
-// HashPassword uses sha256 to generate a hash over password
+// AddPepperToRole combines id with a certain salt
+func AddPepperToRole(id, pepper string) string {
+	return id + ":" + pepper
+}
+
+func generateRandomSalt(saltSize int) []byte {
+	var salt = make([]byte, saltSize)
+
+	_, err := rand.Read(salt[:])
+
+	if err != nil {
+		panic(err)
+	}
+
+	return salt
+}
+
+// HashPassword uses sha512 to generate a hash over password using salt and pepper
 func HashPassword(password string) string {
-	sum := sha256.Sum256([]byte(password))
+	sha512Hasher := sha512.New()
+	passwordBytes := []byte(password)
+	sha512Hasher.Write(passwordBytes)
+	sum := sha512Hasher.Sum(nil)
 	return base64.URLEncoding.EncodeToString(sum[:])
 }
 
@@ -665,9 +703,9 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 			newCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
 			if appData.ParamArguments != "" {
-				newCMD = append(newCMD, execName, appData.ParamArguments)
+				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
 			} else {
-				newCMD = append(newCMD, execName)
+				newCMD = append(newCMD, "./"+execName)
 			}
 			if appData.FlagArguments != "" {
 				newRun = "gcc -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
@@ -703,9 +741,9 @@ func GenerateDockerFile(dirName string, appData *domain.ApplicationData, logger 
 			newCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
 			if appData.ParamArguments != "" {
-				newCMD = append(newCMD, execName, appData.ParamArguments)
+				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
 			} else {
-				newCMD = append(newCMD, execName)
+				newCMD = append(newCMD, "./"+execName)
 			}
 			if appData.FlagArguments != "" {
 				newRun = "g++ -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
