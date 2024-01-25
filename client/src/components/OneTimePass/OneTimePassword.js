@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import {Agent} from 'https';
 import certs from '../../Certs/certs';
-import '../Profile.css';
+import '../Profile.scss';
 import ReactInputVerificationCode from "react-input-verification-code";
 const styles = {
     heading3: `text-xl font-semibold text-gray-900 p-4 border-b`,

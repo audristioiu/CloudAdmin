@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {Agent} from 'https';
 import certs from '../../Certs/certs';
-import '../Profile.css';
+import '../Profile.scss';
 import styled from "styled-components";
 import ReactInputVerificationCode from "react-input-verification-code";
 

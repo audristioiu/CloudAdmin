@@ -30,10 +30,10 @@
     "web3": "^1.6.1"
   },
   "scripts": {
-    "start": "set HTTPS=true&&set SSL_CRT_FILE=\\wsl.localhost/Ubuntu/home/alex/CloudAdmin/server/cert/cert.crt&&set SSL_KEY_FILE=\\wsl.localhost/Ubuntu/home/alex/CloudAdmin/server/cert/cert.key&&react-scripts --openssl-legacy-provider start",
-    "build": "react-scripts --openssl-legacy-provider build",
-    "test": "react-scripts --openssl-legacy-provider test",
-    "eject": "react-scripts --openssl-legacy-provider eject"
+    "start": "dotenv -- react-scripts --openssl-legacy-provider start",
+    "build": "dotenv -- react-scripts --openssl-legacy-provider build",
+    "test": "dotenv -- react-scripts --openssl-legacy-provider test",
+    "eject": "dotenv -- react-scripts --openssl-legacy-provider eject"
   },
   "eslintConfig": {
     "extends": [
