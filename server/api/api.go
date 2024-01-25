@@ -34,12 +34,14 @@ type API struct {
 	dockerClient *clients.DockerClient
 	kubeClient   *clients.KubernetesClient
 	graphiteAddr *net.TCPAddr
+	requestCount map[string]int
+	maxRequestPerMinute int
 }
 
 // NewAPI returns an API object
 func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger,
 	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient,
-	graphiteAddr *net.TCPAddr) *API {
+	graphiteAddr *net.TCPAddr, requestCount map[string]int, maxRequestPerMinute int) *API {
 	return &API{
 		ctx:          ctx,
 		psqlRepo:     postgresRepo,
@@ -49,6 +51,8 @@ func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cach
 		dockerClient: dockerClient,
 		kubeClient:   kubeClient,
 		graphiteAddr: graphiteAddr,
+		requestCount: requestCount,
+		maxRequestPerMinute: maxRequestPerMinute,
 	}
 }
 
