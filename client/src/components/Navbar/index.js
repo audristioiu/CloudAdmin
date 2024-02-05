@@ -5,8 +5,20 @@ import {
   Bars,
   NavMenu,
 } from './NavbarElements';
+import { useNavigate } from 'react-router-dom';
   
 const Navbar = () => {
+  const history = useNavigate();
+
+  const logout = (event) => {
+    event.preventDefault();
+
+    localStorage.removeItem('userPass');
+    localStorage.removeItem('userInfo');
+
+    history.push('/');
+  };
+
   return (
     <>
       <Nav>
@@ -21,6 +33,9 @@ const Navbar = () => {
           <NavLink to='/myapps' activeStyle>
             MyApps
           </NavLink>
+          <button className='logout-btn' onClick={logout}>
+            Logout
+          </button>
           {/* cred ca trebuie un logout + cele de schedule si dashboards*/}
           {/* <NavLink to='/logout' activeStyle>
             Teams
