@@ -232,6 +232,23 @@ func (p *PostgreSqlRepo) UpdateUserAppsData(appName, userName string) error {
 	return nil
 }
 
+// DeleteUserAppsData deletes user app from PostgreSql table
+func (p *PostgreSqlRepo) DeleteUserAppsData(appName, userName string) error {
+	updateStatement := "UPDATE users SET applications=array_remove(applications, $1) WHERE username=$2"
+
+	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userName)
+	if err != nil {
+		p.psqlLogger.Error(" could not update user without app", zap.String("user_name", userName), zap.String("app_name", appName), zap.Error(err))
+		return err
+	}
+	if row.RowsAffected() != 1 {
+		p.psqlLogger.Error(" no row found to update")
+		return errors.New("no row found to update")
+	}
+	p.psqlLogger.Info("Successfuly updated user apps(delete)", zap.String("deleted_app", appName))
+	return nil
+}
+
 // DeleteUserData deletes user from PostgreSql table
 func (p *PostgreSqlRepo) DeleteUserData(username string) error {
 	deleteStatement := "DELETE FROM users WHERE username=$1"

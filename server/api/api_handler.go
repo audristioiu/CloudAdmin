@@ -7,7 +7,6 @@ import (
 	"cloudadmin/priority_queue"
 	schedule_alghoritms "cloudadmin/schedule_algorithms"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/VirusTotal/vt-go"
 	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/pquerna/otp/totp"
@@ -34,8 +34,8 @@ var (
 	updateAppsMetric  = metrics.GetOrRegisterMeter("applications.update", nil)
 	registerAppMetric = metrics.GetOrRegisterMeter("applications.register", nil)
 
-	// malwareFileMetric = metrics.GetOrRegisterMeter("applications.malware", nil)
-	// safeFileMetric    = metrics.GetOrRegisterMeter("applications.safe", nil)
+	malwareFileMetric = metrics.GetOrRegisterMeter("applications.malware", nil)
+	safeFileMetric    = metrics.GetOrRegisterMeter("applications.safe", nil)
 
 	scheduleAppsMetric  = metrics.GetOrRegisterMeter("applications.schedule", nil)
 	getPodResultsMetric = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
@@ -1165,7 +1165,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			for i, f := range r.File {
 				appData := domain.ApplicationData{}
 
-				api.apiLogger.Debug("Writting information for file :\n", zap.String("file_name", f.Name))
+				api.apiLogger.Debug("Writting information for file", zap.String("file_name", f.Name))
 				rc, err := f.Open()
 				if err != nil {
 					api.apiLogger.Error("failed to open file", zap.Error(err))
@@ -1175,70 +1175,73 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteEntity(errorData)
 					return
 				}
-				// scan file using virus total
-				// vtObject, err := api.vtClient.NewFileScanner().Scan(rc, f.Name, nil)
-				// if err != nil {
-				// 	api.apiLogger.Error(" Couldn't scan file", zap.Error(err))
-				// 	errorData.Message = "Internal error/ Couldn't scan file"
-				// 	errorData.StatusCode = http.StatusInternalServerError
-				// 	response.WriteHeader(http.StatusInternalServerError)
-				// 	response.WriteEntity(errorData)
-				// 	return
-				// }
-				// analyseID := vtObject.ID()
-				// resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
-				// if err != nil {
-				// 	api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
-				// 	errorData.Message = "Internal error/ Couldn't get analyse file"
-				// 	errorData.StatusCode = http.StatusInternalServerError
-				// 	response.WriteHeader(http.StatusInternalServerError)
-				// 	response.WriteEntity(errorData)
-				// 	return
-				// }
+				if api.vtClient != nil {
+					// scan file using virus total
+					vtObject, err := api.vtClient.NewFileScanner().Scan(rc, f.Name, nil)
+					if err != nil {
+						api.apiLogger.Error(" Couldn't scan file", zap.Error(err))
+						errorData.Message = "Internal error/ Couldn't scan file"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+					analyseID := vtObject.ID()
+					resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
+					if err != nil {
+						api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
+						errorData.Message = "Internal error/ Couldn't get analyse file"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
 
-				// var respVT domain.VTResponse
-				// err = json.Unmarshal(resp.Data, &respVT)
-				// if err != nil {
-				// 	api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
-				// 	errorData.Message = "Internal error/ failed to unmarshal vt resp"
-				// 	errorData.StatusCode = http.StatusInternalServerError
-				// 	response.WriteHeader(http.StatusInternalServerError)
-				// 	response.WriteEntity(errorData)
-				// 	return
-				// }
-				// for respVT.Attributes.Status == "queued" {
-				// 	time.Sleep(time.Second * 30)
-				// 	resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
-				// 	if err != nil {
-				// 		api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
-				// 		errorData.Message = "Internal error/ Couldn't get analyse file"
-				// 		errorData.StatusCode = http.StatusInternalServerError
-				// 		response.WriteHeader(http.StatusInternalServerError)
-				// 		response.WriteEntity(errorData)
-				// 		return
-				// 	}
-				// 	err = json.Unmarshal(resp.Data, &respVT)
-				// 	if err != nil {
-				// 		api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
-				// 		errorData.Message = "Internal error/ failed to unmarshal vt resp"
-				// 		errorData.StatusCode = http.StatusInternalServerError
-				// 		response.WriteHeader(http.StatusInternalServerError)
-				// 		response.WriteEntity(errorData)
-				// 		return
-				// 	}
-				// }
-				// if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
-				// 	malwareFileMetric.Mark(1)
-				// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
-				// 	api.apiLogger.Warn("malware detected")
-				// 	errorData.Message = "Bad request/ malware detected "
-				// 	errorData.StatusCode = http.StatusBadRequest
-				// 	response.WriteHeader(http.StatusBadRequest)
-				// 	response.WriteEntity(errorData)
-				// 	return
-				// }
-				// safeFileMetric.Mark(1)
-				// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+					var respVT domain.VTResponse
+					err = json.Unmarshal(resp.Data, &respVT)
+					if err != nil {
+						api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
+						errorData.Message = "Internal error/ failed to unmarshal vt resp"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+					for respVT.Attributes.Status == "queued" {
+						time.Sleep(time.Second * 30)
+						resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
+						if err != nil {
+							api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
+							errorData.Message = "Internal error/ Couldn't get analyse file"
+							errorData.StatusCode = http.StatusInternalServerError
+							response.WriteHeader(http.StatusInternalServerError)
+							response.WriteEntity(errorData)
+							return
+						}
+						err = json.Unmarshal(resp.Data, &respVT)
+						if err != nil {
+							api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
+							errorData.Message = "Internal error/ failed to unmarshal vt resp"
+							errorData.StatusCode = http.StatusInternalServerError
+							response.WriteHeader(http.StatusInternalServerError)
+							response.WriteEntity(errorData)
+							return
+						}
+					}
+					if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
+						malwareFileMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+						api.apiLogger.Warn("malware detected")
+						errorData.Message = "Bad request/ malware detected "
+						errorData.StatusCode = http.StatusBadRequest
+						response.WriteHeader(http.StatusBadRequest)
+						response.WriteEntity(errorData)
+						return
+					}
+					safeFileMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+				}
+
 				descr, err1 := io.ReadAll(rc)
 				if err1 != nil {
 					api.apiLogger.Error(" Couldn't read io.Reader with error : ", zap.Error(err1))
@@ -1256,8 +1259,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						appTxt = r.File[i-1].Name
 					}
 					appsDescription = string(descr)
-					fmt.Println(appTxt)
-					fmt.Println(appsDescription)
+					api.apiLogger.Debug("got text", zap.String("text", appTxt))
+					api.apiLogger.Debug("got app description", zap.String("app_descr", appsDescription))
 
 				} else {
 					//+ write in s3
@@ -1418,7 +1421,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			// Iterate through the files in the archive,
 			// printing some of their contents.
 			for i, f := range r.File {
-				api.apiLogger.Debug("Writting information for file :\n", zap.String("file_name", f.Name))
+				api.apiLogger.Debug("Writting information for file", zap.String("file_name", f.Name))
 				rc, err := f.Open()
 				if err != nil {
 					api.apiLogger.Error("failed to open file", zap.Error(err))
@@ -1428,71 +1431,72 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteEntity(errorData)
 					return
 				}
+				if api.vtClient != nil {
+					// scan file using virus total
+					vtObject, err := api.vtClient.NewFileScanner().Scan(rc, f.Name, nil)
+					if err != nil {
+						api.apiLogger.Error(" Couldn't scan file", zap.Error(err))
+						errorData.Message = "Internal error/ Couldn't scan file"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+					analyseID := vtObject.ID()
+					resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
+					if err != nil {
+						api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
+						errorData.Message = "Internal error/ Couldn't get analyse file"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
 
-				// scan file using virus total
-				// vtObject, err := api.vtClient.NewFileScanner().Scan(rc, f.Name, nil)
-				// if err != nil {
-				// 	api.apiLogger.Error(" Couldn't scan file", zap.Error(err))
-				// 	errorData.Message = "Internal error/ Couldn't scan file"
-				// 	errorData.StatusCode = http.StatusInternalServerError
-				// 	response.WriteHeader(http.StatusInternalServerError)
-				// 	response.WriteEntity(errorData)
-				// 	return
-				// }
-				// analyseID := vtObject.ID()
-				// resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
-				// if err != nil {
-				// 	api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
-				// 	errorData.Message = "Internal error/ Couldn't get analyse file"
-				// 	errorData.StatusCode = http.StatusInternalServerError
-				// 	response.WriteHeader(http.StatusInternalServerError)
-				// 	response.WriteEntity(errorData)
-				// 	return
-				// }
-
-				// var respVT domain.VTResponse
-				// err = json.Unmarshal(resp.Data, &respVT)
-				// if err != nil {
-				// 	api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
-				// 	errorData.Message = "Internal error/ failed to unmarshal vt resp"
-				// 	errorData.StatusCode = http.StatusInternalServerError
-				// 	response.WriteHeader(http.StatusInternalServerError)
-				// 	response.WriteEntity(errorData)
-				// 	return
-				// }
-				// for respVT.Attributes.Status == "queued" {
-				// 	time.Sleep(time.Second * 30)
-				// 	resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
-				// 	if err != nil {
-				// 		api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
-				// 		errorData.Message = "Internal error/ Couldn't get analyse file"
-				// 		errorData.StatusCode = http.StatusInternalServerError
-				// 		response.WriteHeader(http.StatusInternalServerError)
-				// 		response.WriteEntity(errorData)
-				// 		return
-				// 	}
-				// 	err = json.Unmarshal(resp.Data, &respVT)
-				// 	if err != nil {
-				// 		api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
-				// 		errorData.Message = "Internal error/ failed to unmarshal vt resp"
-				// 		errorData.StatusCode = http.StatusInternalServerError
-				// 		response.WriteHeader(http.StatusInternalServerError)
-				// 		response.WriteEntity(errorData)
-				// 		return
-				// 	}
-				// }
-				// if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
-				// 	malwareFileMetric.Mark(1)
-				// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
-				// 	api.apiLogger.Warn("malware detected")
-				// 	errorData.Message = "Bad request/ malware detected "
-				// 	errorData.StatusCode = http.StatusBadRequest
-				// 	response.WriteHeader(http.StatusBadRequest)
-				// 	response.WriteEntity(errorData)
-				// 	return
-				// }
-				// safeFileMetric.Mark(1)
-				// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+					var respVT domain.VTResponse
+					err = json.Unmarshal(resp.Data, &respVT)
+					if err != nil {
+						api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
+						errorData.Message = "Internal error/ failed to unmarshal vt resp"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+					for respVT.Attributes.Status == "queued" {
+						time.Sleep(time.Second * 30)
+						resp, err := api.vtClient.Get(vt.URL("analyses/%s", analyseID))
+						if err != nil {
+							api.apiLogger.Error(" Couldn't get analyse file", zap.Error(err))
+							errorData.Message = "Internal error/ Couldn't get analyse file"
+							errorData.StatusCode = http.StatusInternalServerError
+							response.WriteHeader(http.StatusInternalServerError)
+							response.WriteEntity(errorData)
+							return
+						}
+						err = json.Unmarshal(resp.Data, &respVT)
+						if err != nil {
+							api.apiLogger.Error(" failed to unmarshal vt resp", zap.Error(err))
+							errorData.Message = "Internal error/ failed to unmarshal vt resp"
+							errorData.StatusCode = http.StatusInternalServerError
+							response.WriteHeader(http.StatusInternalServerError)
+							response.WriteEntity(errorData)
+							return
+						}
+					}
+					if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
+						malwareFileMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+						api.apiLogger.Warn("malware detected")
+						errorData.Message = "Bad request/ malware detected "
+						errorData.StatusCode = http.StatusBadRequest
+						response.WriteHeader(http.StatusBadRequest)
+						response.WriteEntity(errorData)
+						return
+					}
+					safeFileMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
+				}
 
 				appData := domain.ApplicationData{}
 				nowTime := time.Now()
@@ -1853,13 +1857,13 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			errorData.StatusCode = http.StatusNotFound
 			appsInfo.Errors = append(appsInfo.Errors, errorData)
 		}
-
 		if len(appNamesList) > 0 {
 			for _, appData := range appsData {
 				if slices.Contains(appNamesList, appData.Name) {
 					appsInfo.Response = append(appsInfo.Response, appData)
 				}
 			}
+			resultsCount = len(appsInfo.Response)
 		} else {
 			appsInfo.Response = append(appsInfo.Response, appsData...)
 		}
@@ -2118,6 +2122,14 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				return
 			}
 		}
+		err = api.psqlRepo.DeleteUserAppsData(strings.TrimSpace(appName), username)
+		if err != nil {
+			errorData.Message = "Internal Error / Delete app from user"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
 		execName := strings.Split(appName, ".")[0]
 		extensionName := strings.Split(appName, ".")[1]
 		err = api.dockerClient.ListImagesAndDelete(execName + "_" + extensionName)
@@ -2169,7 +2181,7 @@ func (api *API) GetAppsAggregates(request *restful.Request, response *restful.Re
 	mutex.Lock()
 	if api.requestCount[username] > api.maxRequestPerMinute {
 		mutex.Unlock()
-		fmt.Println(api.requestCount[username])
+		api.apiLogger.Debug("got request count", zap.Any("req_count", api.requestCount[username]))
 		errorData.Message = "Too many requests per minute. Please try again later."
 		errorData.StatusCode = http.StatusTooManyRequests
 		response.WriteHeader(http.StatusTooManyRequests)

@@ -127,14 +127,19 @@ func (s *Service) StartWebService() {
 	log.Debug("Initialize graphite for metrics")
 
 	requestCount := make(map[string]int)
-	maxRequestPerMinute := 10
+	maxRequestPerMinute := 1000
 
 	// initialize virus total client
+	var vtClient *vt.Client
 	vtAPIKey := os.Getenv("VIRUSTOTAL_KEY")
-	vtClient := vt.NewClient(vtAPIKey)
-	if vtClient == nil {
-		log.Fatal("[FATAL] Failed to create new virus total client")
-		return
+	if vtAPIKey != "" {
+		vtClient := vt.NewClient(vtAPIKey)
+		if vtClient == nil {
+			log.Fatal("[FATAL] Failed to create new virus total client")
+			return
+		}
+	} else {
+		vtClient = nil
 	}
 
 	// initialize api
