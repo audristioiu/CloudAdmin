@@ -119,7 +119,7 @@ type DockerFile struct {
 	RunApt     []string
 	Volume     []string
 	EntryPoint []string
-	ExposePort int
+	ExposePort int32
 }
 
 // VTResponse represents response coming from file analysis with VT

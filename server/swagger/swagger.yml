@@ -412,10 +412,16 @@ paths:
             type: string
         - name: nr_replicas
           in: query
-          description: nr of replicas(only for normal schedulling)
+          description: nr of replicas
           required: true
           schema:
             type: integer
+        - name: server_port
+          in: query
+          description: server port for app
+          required: false
+          schema:
+            type: integer    
       responses:
         '200':
           description: OK

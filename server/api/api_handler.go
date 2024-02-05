@@ -142,8 +142,8 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 	if strings.Contains(userData.Password, userData.UserName) {
-		api.apiLogger.Error(" password does not have special characters")
-		errorData.Message = "Bad Request/ Password does not have special characters"
+		api.apiLogger.Error(" password contains user")
+		errorData.Message = "Bad Request/ Password contains user"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
@@ -283,8 +283,8 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	if strings.Contains(userData.Password, userData.UserName) {
 		failedLoginMetrics.Mark(1)
 		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "metrics", api.graphiteAddr)
-		api.apiLogger.Error(" password does not have special characters")
-		errorData.Message = "Bad Request/ Password does not have special characters"
+		api.apiLogger.Error(" password contains user")
+		errorData.Message = "Bad Request/ Password contains user"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
@@ -777,24 +777,26 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		}
 
 		for _, app := range userAppsData {
-			execName := strings.Split(app.Name, ".")[0]
-			extensionName := strings.Split(app.Name, ".")[1]
-			deployName := execName + "-" + extensionName + "-deployment"
-			err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
-			if err != nil {
-				errorData.Message = "Internal error/ failed to delete deployment"
-				errorData.StatusCode = http.StatusInternalServerError
-				response.WriteHeader(http.StatusInternalServerError)
-				response.WriteEntity(errorData)
-				return
-			}
-			err = api.kubeClient.DeleteNamespace(app.Namespace)
-			if err != nil {
-				errorData.Message = "Internal error/ failed to delete namespace"
-				errorData.StatusCode = http.StatusInternalServerError
-				response.WriteHeader(http.StatusInternalServerError)
-				response.WriteEntity(errorData)
-				return
+			if app.IsRunning {
+				execName := strings.Split(app.Name, ".")[0]
+				extensionName := strings.Split(app.Name, ".")[1]
+				deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName + "-" + extensionName + "-deployment")
+				err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+				if err != nil {
+					errorData.Message = "Internal error/ failed to delete deployment"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				err = api.kubeClient.DeleteNamespace(app.Namespace)
+				if err != nil {
+					errorData.Message = "Internal error/ failed to delete namespace"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
 			}
 		}
 
@@ -1612,7 +1614,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					return
 				}
 				defer rc.Close()
-				if strings.Contains(f.Name, ".txt") {
+				if strings.Contains(f.Name, ".txt") && f.Name != "requirements.txt" {
 					if i%2 == 0 {
 						appData.Name = r.File[i+1].Name
 					} else {
@@ -2130,16 +2132,18 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 
 	for _, app := range appsData {
-		execName := strings.Split(app.Name, ".")[0]
-		extensionName := strings.Split(app.Name, ".")[1]
-		deployName := execName + "-" + extensionName
-		err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
-		if err != nil {
-			errorData.Message = "Internal error/ failed to delete deployment"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
+		if app.IsRunning {
+			execName := strings.Split(app.Name, ".")[0]
+			extensionName := strings.Split(app.Name, ".")[1]
+			deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName)
+			err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+			if err != nil {
+				errorData.Message = "Internal error/ failed to delete deployment"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
 		}
 	}
 
@@ -2329,13 +2333,16 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	nrReplicas, _ := strconv.ParseInt(request.QueryParameter("nr_replicas"), 0, 32)
 
+	serverPort, _ := strconv.ParseInt(request.QueryParameter("server_port"), 0, 32)
+
 	taskItems := make([]priority_queue.TaskItem, 0)
 	pairNames := make([][]string, 0)
+	deleteDirNames := make([]string, 0)
 
 	// push images to docker registry and retrieve task items
 	for _, app := range appsInfo.Response {
 		dirName := strings.Split(app.Name, ".")[0]
-		newDirName, item, err := helpers.GenerateDockerFile(dirName, app, api.apiLogger)
+		newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, int32(serverPort), app, api.apiLogger)
 		if err != nil {
 			api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
 			errorData.Message = "Internal error / generating docker file"
@@ -2361,6 +2368,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
+		deleteDirNames = append(deleteDirNames, newDirName)
 		taskItems = append(taskItems, item...)
 		pairNames = append(pairNames, []string{tagName, imageName})
 	}
@@ -2412,11 +2420,11 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	// create deployments for each app and take into account schedulerType
 	for i, pairImageTag := range pairNames {
 		tagName := pairImageTag[0]
-		imageName := pairImageTag[1]
+		imageName := strings.ToLower(strings.ReplaceAll(pairImageTag[1], "_", "-"))
 		app := appsInfo.Response[i]
 		if scheduleType == "random_scheduler" {
 			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go", "",
-				[]string{}, int32(0), int32(nrReplicas))
+				[]string{}, int32(serverPort), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -2483,6 +2491,9 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
+	}
+
+	for _, dir := range deleteDirNames {
 		os.RemoveAll(dir)
 	}
 
@@ -2521,8 +2532,8 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	}
 
 	splitPodName := strings.Split(podName, "-deployment")[0]
-	splitApp := strings.Split(splitPodName, "-")
-	appName := splitApp[0] + "." + splitApp[1]
+	splitApp := strings.Split(splitPodName, "-"+splitPodName[len(splitPodName)-2:])
+	appName := strings.ReplaceAll(splitApp[0]+"."+splitPodName[len(splitPodName)-2:], "-", "_")
 
 	userData, err := api.psqlRepo.GetUserData(username)
 	if err != nil {

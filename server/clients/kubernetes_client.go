@@ -11,14 +11,17 @@ import (
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
-	hpav1 "k8s.io/api/autoscaling/v1"
+	hpav2 "k8s.io/api/autoscaling/v2"
 	apiv1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	client "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 )
 
 // KubernetesClient represents info about Kubernetes client
@@ -36,6 +39,8 @@ func NewKubernetesClient(ctx context.Context, logger *zap.Logger, kubeConfig, sc
 		logger.Error("failed to build config from flags", zap.Error(err))
 		return nil
 	}
+	cfg.QPS = 100
+	cfg.Burst = 100
 
 	clientset, err := client.NewForConfig(cfg)
 	if err != nil {
@@ -89,7 +94,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 			},
 		}
 		_, err := k.kubeClient.CoreV1().ServiceAccounts("default").Create(k.ctx, &serviceAccount, metav1.CreateOptions{})
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "exists") {
 			k.kubeLogger.Error("failed to create service account", zap.Error(err))
 			return "", err
 		}
@@ -111,7 +116,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 				},
 			},
 		}, metav1.UpdateOptions{})
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "exists") {
 			k.kubeLogger.Error("failed to update the random scheduler cluster role binding", zap.Error(err))
 			return "", err
 		}
@@ -124,11 +129,12 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 
 		err = k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName, "default", scheduleTypeName+"-deployment", "",
 			"", schedulerCommands, int32(0), int32(1))
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "exists") {
 			k.kubeLogger.Error("failed to create deployment for scheduler", zap.Error(err), zap.String("schedule_type", scheduleType))
 			return "", err
 		}
 	}
+
 	k.kubeLogger.Info("Created new/Already created namespace", zap.String("namespace", nameSpaceName))
 	return nameSpaceName, nil
 }
@@ -170,13 +176,58 @@ func (k *KubernetesClient) CreateConfigMap(namespace, fileName string, marshalle
 	return cfMap.GetName(), nil
 }
 
+func (k *KubernetesClient) PortForward(imageName, namespace string, sourcePort int32) error {
+	//todo when done
+	return nil
+}
+
+// CreateNodePort exposes port using NodePort
+func (k *KubernetesClient) CreateNodePort(imageName, namespace string, port int32) error {
+	nodeport := apiv1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      imageName + "-service",
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app": imageName + "-deployment",
+			},
+		},
+		Spec: apiv1.ServiceSpec{
+			Ports: []apiv1.ServicePort{
+				{
+					TargetPort: intstr.FromInt32(port),
+					Port:       port,
+					Protocol:   apiv1.ProtocolTCP,
+				},
+			},
+			Selector: map[string]string{
+				"app": imageName + "-deployment",
+			},
+			Type: apiv1.ServiceTypeNodePort,
+		},
+	}
+	svc, err := k.kubeClient.CoreV1().Services(namespace).Create(k.ctx, &nodeport, metav1.CreateOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to create nodeort service", zap.Error(err))
+		return err
+	}
+	k.kubeLogger.Info("Created nodeport service", zap.String("deployment_name", svc.GetName()))
+	return nil
+}
+
 // CreateDeployment creates a deployment for image in the required namespace with a specific nr of replicas
 func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName, schedulerName,
 	configMapName string, schedulerCommands []string, portNr, nrReplicas int32) error {
+	cpuLimit := "500"
+	memLimit := "500"
+	cpuReq := "100"
+	memReq := "100"
 	deploymentsClient := k.kubeClient.AppsV1().Deployments(namespace)
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: imageName + "-deployment",
+			Labels: map[string]string{
+				"app": imageName + "-deployment",
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &nrReplicas,
@@ -196,6 +247,16 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 						{
 							Name:  imageName + "-deployment",
 							Image: tagName,
+							Resources: apiv1.ResourceRequirements{
+								Limits: apiv1.ResourceList{
+									"cpu":    resource.MustParse(cpuLimit),
+									"memory": resource.MustParse(memLimit),
+								},
+								Requests: apiv1.ResourceList{
+									"cpu":    resource.MustParse(cpuReq),
+									"memory": resource.MustParse(memReq),
+								},
+							},
 						},
 					},
 				},
@@ -238,9 +299,22 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 	}
 
 	result, err := deploymentsClient.Create(k.ctx, deployment, metav1.CreateOptions{})
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "exists") {
 		k.kubeLogger.Error("failed to create deployment", zap.Error(err))
 		return err
+	}
+
+	if portNr != int32(0) {
+		deployment.Spec.Template.Spec.Containers[0].Ports = []apiv1.ContainerPort{{HostPort: portNr, ContainerPort: portNr}}
+		err := k.CreateNodePort(imageName, namespace, portNr)
+		if err != nil {
+			return err
+		}
+		// err = k.PortForward(imageName, namespace, portNr)
+		// if err != nil {
+		// 	return err
+		// }
+
 	}
 	k.kubeLogger.Info("Created deployment", zap.String("deployment_name", result.GetName()))
 	return nil
@@ -331,9 +405,9 @@ func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) (string,
 }
 
 // CreateAutoScaler creates a horizontal pod auto scaler for deploymentName (todo not working)
-func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) (*hpav1.HorizontalPodAutoscaler, error) {
+func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) (*hpav2.HorizontalPodAutoscaler, error) {
 	targetUtilization := int32(70)
-	autoscaler := &hpav1.HorizontalPodAutoscaler{
+	autoscaler := &hpav2.HorizontalPodAutoscaler{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "autoscaling/v1",
 		},
@@ -341,19 +415,41 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 			Name:      deploymentName + "-hpa",
 			Namespace: namespace,
 		},
-		Spec: hpav1.HorizontalPodAutoscalerSpec{
-			ScaleTargetRef: hpav1.CrossVersionObjectReference{
+		Spec: hpav2.HorizontalPodAutoscalerSpec{
+
+			ScaleTargetRef: hpav2.CrossVersionObjectReference{
 				Kind:       "Deployment",
-				Name:       deploymentName + "-development",
+				Name:       deploymentName + "-deployment",
 				APIVersion: "apps/v1",
 			},
-			MinReplicas:                    &minReplicas,
-			MaxReplicas:                    maxReplicas,
-			TargetCPUUtilizationPercentage: &targetUtilization,
+			MinReplicas: &minReplicas,
+			MaxReplicas: maxReplicas,
+			Metrics: []hpav2.MetricSpec{
+				{
+					Type: hpav2.ResourceMetricSourceType,
+					Resource: &hpav2.ResourceMetricSource{
+						Name: "cpu",
+						Target: hpav2.MetricTarget{
+							Type:               "Utilization",
+							AverageUtilization: pointer.Int32(targetUtilization),
+						},
+					},
+				},
+				{
+					Type: hpav2.ResourceMetricSourceType,
+					Resource: &hpav2.ResourceMetricSource{
+						Name: "memory",
+						Target: hpav2.MetricTarget{
+							Type:               "Utilization",
+							AverageUtilization: pointer.Int32(targetUtilization),
+						},
+					},
+				},
+			},
 		},
 	}
 
-	apply, err := k.kubeClient.AutoscalingV1().HorizontalPodAutoscalers(namespace).
+	apply, err := k.kubeClient.AutoscalingV2().HorizontalPodAutoscalers(namespace).
 		Create(k.ctx, autoscaler, metav1.CreateOptions{})
 
 	if err != nil {
@@ -362,35 +458,6 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 	}
 
 	k.kubeLogger.Debug("Sucesfully created autoscaler", zap.String("hpa_name", apply.GetName()))
-
-	return apply, nil
-}
-
-// CreateService exposes deploymentName as a service
-func (k *KubernetesClient) CreateService(deploymentName string, namespace string) (*apiv1.Service, error) {
-	port, _ := helpers.GetFreePort()
-	service := apiv1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   deploymentName + "-service",
-			Labels: map[string]string{"run": deploymentName},
-		},
-		Spec: apiv1.ServiceSpec{
-			Ports: []apiv1.ServicePort{
-				{
-					Port: int32(port),
-				},
-			},
-			Selector: map[string]string{"run": deploymentName},
-		},
-	}
-
-	apply, err := k.kubeClient.CoreV1().Services(namespace).Create(k.ctx, &service, metav1.CreateOptions{})
-	if err != nil {
-		k.kubeLogger.Error("failed to expose service", zap.Error(err))
-		return nil, err
-	}
-
-	k.kubeLogger.Debug("Sucesfully create service", zap.String("service_name", apply.GetName()))
 
 	return apply, nil
 }
