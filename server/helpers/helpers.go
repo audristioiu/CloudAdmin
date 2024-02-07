@@ -134,6 +134,16 @@ func CheckAppsExist(applications []string, appsData []string) bool {
 	return true
 }
 
+// CheckSliceContains validates that element exists
+func CheckSliceContains(elements []string, searchElem string) string {
+	for _, elem := range elements {
+		if strings.Contains(elem, searchElem) {
+			return elem
+		}
+	}
+	return ""
+}
+
 // Unique removes dups from slice
 func Unique(s domain.GetApplicationsData) domain.GetApplicationsData {
 	inResult := make(map[string]bool)

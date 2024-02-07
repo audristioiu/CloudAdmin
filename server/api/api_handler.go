@@ -2389,7 +2389,8 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	// create namespace using username,schedule type to deploy the scheduler + file and data if needed
 	var userNameSpace string
-	userNameSpace, err = api.kubeClient.CreateNamespace(username, scheduleType)
+
+	userNameSpace, err = api.kubeClient.CreateNamespace("namespace-"+strings.ReplaceAll(username, "_", "-"), scheduleType)
 	if err != nil {
 		errorData.Message = "Internal error / creating namespace"
 		errorData.StatusCode = http.StatusInternalServerError
