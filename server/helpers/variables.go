@@ -2,7 +2,7 @@ package helpers
 
 var (
 	// GetAppsFilters represents filters that can be used for GetAppsInfo
-	GetAppsFilters = []string{"name", "kname", "description", "created_timestamp", "updated_timestamp", "is_running"}
+	GetAppsFilters = []string{"name", "kname", "description", "created_timestamp", "updated_timestamp", "is_running", "port"}
 	// GetAppsSortFields represents sort fields that can be used for GetAppsInfo
 	GetAppsSortFields = []string{"name", "created_timestamp", "updated_timestamp"}
 	// SortDirections represents sort directions

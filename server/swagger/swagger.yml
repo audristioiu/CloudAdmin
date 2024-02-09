@@ -648,6 +648,7 @@ components:
         - owner
         - namespace
         - schedule_type
+        - port
         - flag_arguments
         - param_arguments
         - is_main
@@ -667,6 +668,8 @@ components:
           type: string
         schedule_type:
           type: string
+        port:
+          type: int32
         name:
           type: string
         flag_arguments:

@@ -53,6 +53,7 @@ type ApplicationData struct {
 	Description      string    `json:"description"`
 	Owner            string    `json:"owner"`
 	Namespace        string    `json:"namespace,omitempty"`
+	Port             *int      `json:"port,omitempty"`
 	ScheduleType     string    `json:"schedule_type,omitempty"`
 	SubgroupFiles    []string  `json:"subgroup_files,omitempty"`
 	IsMain           bool      `json:"is_main,omitempty"`

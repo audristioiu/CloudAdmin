@@ -12,7 +12,6 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -574,6 +573,13 @@ func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domai
 		return "", nil, err
 	}
 
+	for _, subApp := range appData.SubgroupFiles {
+		_, err = copy(path+subApp, filepath.Join(mkDirName, filepath.Base(subApp)))
+		if err != nil {
+			logger.Error("failed to copy", zap.Error(err))
+			return "", nil, err
+		}
+	}
 	//check if extra files does exist in directory
 	_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".in")
 	if err == nil {
@@ -1018,6 +1024,7 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 	appsDescription := ""
 	mainAppData := domain.ApplicationData{}
 	appTxt := ""
+	port := 0
 	for _, path := range pathFiles {
 		file, err := os.ReadFile(path)
 		if err != nil {
@@ -1042,6 +1049,7 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 			appData.SubgroupFiles = []string{}
 			appData.Description = appsDescription
 			appData.Name = strings.Split(path, "/")[1]
+			mainAppData.Port = &port
 
 			regexCompiler, _ := regexp.Compile("main.")
 			if regexCompiler.MatchString(descr) {
@@ -1054,6 +1062,8 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 				mainAppData.SubgroupFiles = []string{}
 				mainAppData.Description = appsDescription
 				mainAppData.Name = strings.Split(path, "/")[1]
+
+				mainAppData.Port = &port
 			} else {
 				appsData = append(appsData, &appData)
 			}
@@ -1063,19 +1073,6 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 	return mainApp, appsData, appTxt, nil
 }
 
-// GetFreePort asks the kernel for a free open port that is ready to use.
-func GetFreePort() (port int, err error) {
-	var a *net.TCPAddr
-	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
-		var l *net.TCPListener
-		if l, err = net.ListenTCP("tcp", a); err == nil {
-			defer l.Close()
-			return l.Addr().(*net.TCPAddr).Port, nil
-		}
-	}
-	return
-}
-
 // CreatePQ returns a priority queue based on map of task names and task durations
 func CreatePQ(items []priority_queue.TaskItem) priority_queue.PriorityQueue {
 	// Create a priority queue, put the items in it, and
@@ -1083,10 +1080,10 @@ func CreatePQ(items []priority_queue.TaskItem) priority_queue.PriorityQueue {
 	tasksPriorityQueue := make(priority_queue.PriorityQueue, len(items))
 	i := 0
 	for _, task := range items {
-		floatDuration, _ := strconv.ParseFloat(task.Duration, 64)
+		taskDuration, _ := time.ParseDuration(task.Duration)
 		tasksPriorityQueue[i] = &priority_queue.Item{
 			Name:         task.Name,
-			TaskDuration: priority_queue.Duration(floatDuration),
+			TaskDuration: taskDuration,
 			Index:        i,
 		}
 		i++

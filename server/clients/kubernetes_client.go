@@ -67,7 +67,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 		namespaceClient := k.kubeClient.CoreV1().Namespaces()
 		newNamespace := &apiv1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "namespace-" + userName + nr,
+				Name: userName + nr,
 			},
 		}
 		resNameSpace, err := namespaceClient.Create(k.ctx, newNamespace, metav1.CreateOptions{})
@@ -123,22 +123,23 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 				k.kubeLogger.Error("failed to update the  scheduler cluster role binding", zap.Error(err))
 				return "", err
 			}
+			//todo
+			schedulerCommands := []string{
+				// "--scheduler-name=" + scheduleTypeName+"-deployment",
+				// "--lock-object-name=" + scheduleTypeName+"-deployment",
+			}
+
+			err = k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName, "default", scheduleTypeName+"-deployment", "",
+				"", schedulerCommands, int32(0), int32(1))
+			if err != nil {
+				k.kubeLogger.Error("failed to create deployment for scheduler", zap.Error(err), zap.String("schedule_type", scheduleType))
+				return "", err
+			}
 
 		} else {
 			k.kubeLogger.Warn("deployment already exists", zap.String("deployment", scheduleTypeName+"-deployment"))
 		}
-		//todo
-		schedulerCommands := []string{
-			// "--scheduler-name=" + scheduleTypeName+"-deployment",
-			// "--lock-object-name=" + scheduleTypeName+"-deployment",
-		}
 
-		err := k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName, "default", scheduleTypeName+"-deployment", "",
-			"", schedulerCommands, int32(0), int32(1))
-		if err != nil {
-			k.kubeLogger.Error("failed to create deployment for scheduler", zap.Error(err), zap.String("schedule_type", scheduleType))
-			return "", err
-		}
 	}
 
 	k.kubeLogger.Info("Created new/Already created namespace", zap.String("namespace", nameSpaceName))
@@ -210,10 +211,15 @@ func (k *KubernetesClient) CreateNodePort(imageName, namespace string, port int3
 // CreateDeployment creates a deployment for image in the required namespace with a specific nr of replicas
 func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName, schedulerName,
 	configMapName string, schedulerCommands []string, portNr, nrReplicas int32) error {
-	cpuLimit := "500"
-	memLimit := "500"
-	cpuReq := "100"
-	memReq := "100"
+	var cpuLimit, memLimit, cpuReq, memReq string
+	if schedulerName == "random_scheduler" {
+		//todo fix
+		cpuLimit = "500Mi"
+		memLimit = "500Mi"
+		cpuReq = "250Mi"
+		memReq = "250Mi"
+	}
+
 	deploymentsClient := k.kubeClient.AppsV1().Deployments(namespace)
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -240,16 +246,6 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 						{
 							Name:  imageName + "-deployment",
 							Image: tagName,
-							Resources: apiv1.ResourceRequirements{
-								Limits: apiv1.ResourceList{
-									"cpu":    resource.MustParse(cpuLimit),
-									"memory": resource.MustParse(memLimit),
-								},
-								Requests: apiv1.ResourceList{
-									"cpu":    resource.MustParse(cpuReq),
-									"memory": resource.MustParse(memReq),
-								},
-							},
 						},
 					},
 				},
@@ -288,6 +284,17 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 					},
 				},
 			},
+		}
+	}
+
+	if schedulerName == "random_scheduler" {
+		deployment.Spec.Template.Spec.Containers[0].Resources.Limits = apiv1.ResourceList{
+			"cpu":    resource.MustParse(cpuLimit),
+			"memory": resource.MustParse(memLimit),
+		}
+		deployment.Spec.Template.Spec.Containers[0].Resources.Requests = apiv1.ResourceList{
+			"cpu":    resource.MustParse(cpuReq),
+			"memory": resource.MustParse(memReq),
 		}
 	}
 

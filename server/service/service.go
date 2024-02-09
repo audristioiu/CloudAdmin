@@ -182,9 +182,9 @@ func (s *Service) StartWebService() {
 
 	server := &http.Server{
 		Addr:           ":443",
-		ReadTimeout:    15 * time.Minute,
-		WriteTimeout:   15 * time.Minute,
-		IdleTimeout:    15 * time.Minute,
+		ReadTimeout:    30 * time.Minute,
+		WriteTimeout:   30 * time.Minute,
+		IdleTimeout:    30 * time.Minute,
 		MaxHeaderBytes: 1 << 20,
 		TLSConfig:      cfg,
 		TLSNextProto:   make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),

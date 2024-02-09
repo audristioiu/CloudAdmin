@@ -1040,6 +1040,9 @@
           "schedule_type": {
             "type": "string"
           },
+          "port": {
+            "type": "int32"
+          },
           "name": {
             "type": "string"
           },

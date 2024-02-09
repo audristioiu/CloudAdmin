@@ -8,6 +8,7 @@ import (
 	schedule_alghoritms "cloudadmin/schedule_algorithms"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
@@ -1101,6 +1102,9 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	multipartReader, _ := request.Request.MultipartReader()
 	multipartReadForm, _ := multipartReader.ReadForm(int64(1000000))
 
+	//init port
+	port := 0
+
 	formFilesName := multipartReadForm.File["file"]
 	if len(formFilesName) == 0 {
 		api.apiLogger.Error(" Couldn't form file")
@@ -1253,9 +1257,9 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				}
 				defer rc.Close()
 				if strings.Contains(f.Name, ".txt") && f.Name != "requirements.txt" {
-					if i%2 == 0 {
+					if i%2 == 0 && i+1 < len(r.File) {
 						appTxt = r.File[i+1].Name
-					} else {
+					} else if i-1 >= 0 {
 						appTxt = r.File[i-1].Name
 					}
 					appsDescription = string(descr)
@@ -1316,7 +1320,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				subGroupMainFiles = append(subGroupMainFiles, app.Name)
 				appsUploaded = append(appsUploaded, app.Name)
 				app.Description = appsDescription
-				app.SubgroupFiles = append(app.SubgroupFiles, mainAppData.Name)
+				app.Port = &port
 				err = api.psqlRepo.InsertAppData(app)
 				if err != nil {
 					errorData.Message = "Internal error/ insert app data in postgres"
@@ -1346,10 +1350,10 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				return
 			}
 
-			subGroupMainFiles = append(subGroupMainFiles, mainAppData.Name)
 			appsUploaded = append(appsUploaded, mainAppData.Name)
 			mainAppData.Description = appsDescription
 			mainAppData.SubgroupFiles = append(mainAppData.SubgroupFiles, subGroupMainFiles...)
+			mainAppData.Port = &port
 			err = api.psqlRepo.InsertAppData(&mainAppData)
 			if err != nil {
 				errorData.Message = "Internal error/ insert main app data in postgres"
@@ -1536,7 +1540,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						}
 						subGroupMainFiles = append(subGroupMainFiles, app.Name)
 						appsUploaded = append(appsUploaded, app.Name)
-						app.SubgroupFiles = append(app.SubgroupFiles, mainAppData.Name)
 						err = api.psqlRepo.InsertAppData(app)
 						if err != nil {
 							errorData.Message = "Internal error/ insert app data in postgres"
@@ -1586,7 +1589,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						response.WriteEntity(errorData)
 						return
 					}
-					subGroupMainFiles = append(subGroupMainFiles, mainAppData.Name)
 					appsUploaded = append(appsUploaded, mainAppData.Name)
 					mainAppData.SubgroupFiles = append(mainAppData.SubgroupFiles, subGroupMainFiles...)
 					err = api.psqlRepo.InsertAppData(&mainAppData)
@@ -1606,6 +1608,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						response.WriteEntity(errorData)
 						return
 					}
+					continue
 				}
 
 				descr, err1 := io.ReadAll(rc)
@@ -1619,9 +1622,9 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				}
 				defer rc.Close()
 				if strings.Contains(f.Name, ".txt") && f.Name != "requirements.txt" {
-					if i%2 == 0 {
+					if i%2 == 0 && i+1 < len(r.File) {
 						appData.Name = r.File[i+1].Name
-					} else {
+					} else if i-1 >= 0 {
 						appData.Name = r.File[i-1].Name
 					}
 					appData.Description = string(descr)
@@ -1632,6 +1635,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					appData.IsMain = true
 					appData.SubgroupFiles = []string{}
 					appData.Owner = username
+					appData.Port = &port
 
 					if slices.Contains(allAppsNames, appData.Name) {
 						api.apiLogger.Error(" App  already exists", zap.String("app_name", appData.Name))
@@ -1848,6 +1852,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 				errorData.Message = "Internal error / retrieving apps"
 				errorData.StatusCode = http.StatusInternalServerError
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
+				return
 
 			}
 		}
@@ -1856,16 +1861,21 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			errorData.Message = "No apps found"
 			errorData.StatusCode = http.StatusNotFound
 			appsInfo.Errors = append(appsInfo.Errors, errorData)
+			return
 		}
 		if len(appNamesList) > 0 {
 			for _, appData := range appsData {
-				if slices.Contains(appNamesList, appData.Name) {
+				if slices.Contains(appNamesList, appData.Name) && appData.IsMain {
 					appsInfo.Response = append(appsInfo.Response, appData)
 				}
 			}
 			resultsCount = len(appsInfo.Response)
 		} else {
-			appsInfo.Response = append(appsInfo.Response, appsData...)
+			for _, appData := range appsData {
+				if appData.IsMain {
+					appsInfo.Response = append(appsInfo.Response, appData)
+				}
+			}
 		}
 
 		if len(appsInfo.Response) > 1 {
@@ -2006,6 +2016,10 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 
 	nowTime := time.Now()
 	appData.UpdatedTimestamp = nowTime
+	port := 0
+	if appData.Port == nil {
+		appData.Port = &port
+	}
 
 	err = api.psqlRepo.UpdateAppData(&appData)
 	if err != nil {
@@ -2344,6 +2358,9 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	}
 
 	nrReplicas, _ := strconv.ParseInt(request.QueryParameter("nr_replicas"), 0, 32)
+	if nrReplicas == int64(0) {
+		nrReplicas = int64(1)
+	}
 
 	serverPort, _ := strconv.ParseInt(request.QueryParameter("server_port"), 0, 32)
 
@@ -2364,22 +2381,32 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			return
 		}
 		imageName := newDirName
-		err = api.dockerClient.BuildImage(imageName)
-		if err != nil {
-			errorData.Message = "Internal error / building image"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
+		var tagName string
+
+		//if app was not updated within the last 10 seconds or update_timestamp = created_timestamp,don't build image
+		if math.Trunc(time.Since(app.UpdatedTimestamp).Seconds()) <= float64(10) || app.UpdatedTimestamp.UnixNano() == app.CreatedTimestamp.UnixNano() {
+			err = api.dockerClient.BuildImage(imageName)
+			if err != nil {
+				errorData.Message = "Internal error / building image"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			tagName, err = api.dockerClient.PushImage(imageName)
+			if err != nil {
+				errorData.Message = "Internal error / pushing image"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+		} else {
+			dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+			tagName = dockerRegID + "/" + strings.ToLower(imageName)
 		}
-		tagName, err := api.dockerClient.PushImage(imageName)
-		if err != nil {
-			errorData.Message = "Internal error / pushing image"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
+
 		deleteDirNames = append(deleteDirNames, newDirName)
 		taskItems = append(taskItems, item...)
 		pairNames = append(pairNames, []string{tagName, imageName})
@@ -2398,7 +2425,6 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
-
 	if scheduleType == "rr_sjf_scheduler" {
 
 		file, err := os.Create("tasks_duration.json")
@@ -2484,6 +2510,8 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		updatedAppData.ScheduleType = scheduleType
 		updatedAppData.IsRunning = true
 		updatedAppData.UpdatedTimestamp = time.Now()
+		port := int(serverPort)
+		updatedAppData.Port = &port
 		err = api.psqlRepo.UpdateAppData(&updatedAppData)
 		if err != nil {
 			errorData.Message = "Internal error / failed to update app"
