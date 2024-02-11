@@ -53,7 +53,7 @@ function MyApps() {
       }
 
       try {
-        await axios.post('https://localhost:443/register/app', formData, config_app, { httpsAgent: agent });
+        await axios.post('https://localhost:9443/register/app', formData, config_app, { httpsAgent: agent });
       } catch (error) {
         setErrorMessage(`Failed to upload app. ${error.response?.data?.message}`);
       }
@@ -123,7 +123,7 @@ function MyApps() {
         key: certs.keyFile,
       });
 
-      const responseUser = await axios.get(`https://localhost:443/user/${username}`, buildConfig(userInfo, typeInput, timestampInput, sortQueryInput), { httpsAgent: agent });
+      const responseUser = await axios.get(`https://localhost:9443/user/${username}`, buildConfig(userInfo, typeInput, timestampInput, sortQueryInput), { httpsAgent: agent });
 
       const my_apps = responseUser.data?.applications;
 
@@ -132,7 +132,7 @@ function MyApps() {
         let config_app = buildAppConfig(userInfo, query_my_apps, username);
         config_app = buildSearchConfig(config_app, typeInput, searchInput);
 
-        const responseApps = await axios.get('https://localhost:443/app', config_app, { httpsAgent: agent });
+        const responseApps = await axios.get('https://localhost:9443/app', config_app, { httpsAgent: agent });
         setApps(responseApps.data.Response);
       }
     } catch (error) {
@@ -170,6 +170,8 @@ function MyApps() {
               <option value="is_running">IsRunning</option>
               <option value="created_timestamp">CreatedTimestamp</option>
               <option value="updated_timestamp">UpdatedTimestamp</option>
+              <option value="port">Port</option>
+              <option value="ip_address">IPAddress</option>
               <option value="custom_filter">CustomFilter</option>
             </select>
           </label>
@@ -210,6 +212,11 @@ function MyApps() {
               <th>App Name</th>
               <th>Description</th>
               <th>Status</th>
+              <th>CreatedTimestamp</th>
+              <th>UpdatedTimestamp</th>
+              <th>ScheduleType</th>
+              <th>Port</th>
+              <th>IPAddress</th>
               <th>&nbsp;</th>
             </tr>
           </thead>

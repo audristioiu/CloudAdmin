@@ -270,12 +270,13 @@ func (p *PostgreSqlRepo) DeleteUserData(username string) error {
 func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 	newApplicationData := domain.ApplicationData{}
 	insertStatement := `INSERT INTO apps (name, description, is_running, created_timestamp, updated_timestamp,flag_arguments, 
-						param_arguments,is_main,subgroup_files, owner, namespace, schedule_type, port) 
-						VALUES ($1, $2, $3, $4, $5, $6 ,$7, $8, $9, $10, $11, $12, $13) 
+						param_arguments,is_main,subgroup_files, owner, namespace, schedule_type, port, ip_address) 
+						VALUES ($1, $2, $3, $4, $5, $6 ,$7, $8, $9, $10, $11, $12, $13, $14) 
 						RETURNING name`
 	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, zeronull.Text(appData.Description), appData.IsRunning, appData.CreatedTimestamp,
 		appData.UpdatedTimestamp, zeronull.Text(appData.FlagArguments), zeronull.Text(appData.ParamArguments), appData.IsMain, appData.SubgroupFiles,
-		appData.Owner, zeronull.Text(appData.Namespace), zeronull.Text(appData.ScheduleType), zeronull.Int8(int64(*appData.Port)))
+		appData.Owner, zeronull.Text(appData.Namespace), zeronull.Text(appData.ScheduleType), zeronull.Int8(int64(*appData.Port)),
+		zeronull.Text(*appData.IpAddress))
 	err := row.Scan(&newApplicationData.Name)
 	if err != nil {
 		p.psqlLogger.Error(" could not insert app", zap.Error(err))
@@ -294,7 +295,9 @@ func (p *PostgreSqlRepo) GetAllApps() ([]*domain.ApplicationData, error) {
 						COALESCE(param_arguments, '') as param_arguments,
 						is_main,subgroup_files,owner,
 						COALESCE(namespace, '') as namespace,
-						COALESCE(schedule_type, '') as schedule_type FROM apps`
+						COALESCE(schedule_type, '') as schedule_type,
+						COALESCE(port, 0) as port, 
+						COALESCE(ip_address, '') as ip_address FROM apps`
 
 	rows, err := p.conn.Query(p.ctx, selectStatement)
 	if err != nil {
@@ -367,7 +370,9 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 							COALESCE(param_arguments, '') as param_arguments,
 							is_main,subgroup_files,owner,
 							COALESCE(namespace, '') as namespace,
-						    COALESCE(schedule_type, '') as schedule_type FROM apps where (`
+						    COALESCE(schedule_type, '') as schedule_type,
+							COALESCE(port, 0) as port, 
+							COALESCE(ip_address, '') as ip_address FROM apps where (`
 		for i, filterParams := range filters {
 			if len(filterParams) == 3 {
 				filterParams[2] = strings.ReplaceAll(filterParams[2], `"`, "")
@@ -428,14 +433,38 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 						} else {
 							selectStatement += filterParams[0] + " IS  NOT @" + portID
 						}
-					} else {
+					} else if filterParams[1] == "=" {
 						if filterParams[2] == "NULL" {
 							selectStatement += filterParams[0] + " IS NULL"
 						} else {
 							selectStatement += filterParams[0] + " IS  @" + portID
 						}
+					} else if filterParams[1] == ">" {
+						selectStatement += filterParams[0] + " > @" + portID
+					} else if filterParams[1] == ">=" {
+						selectStatement += filterParams[0] + " >= @" + portID
+					} else if filterParams[1] == "<" {
+						selectStatement += filterParams[0] + " < @" + portID
+					} else if filterParams[1] == "<=" {
+						selectStatement += filterParams[0] + " <= @" + portID
 					}
 					filterArguments[portID] = filterParams[2]
+				} else if filterParams[0] == "ip_address" {
+					ipAddressID := filterParams[0] + strconv.Itoa(paramID)
+					if filterParams[1] == "!=" {
+						if filterParams[2] == "NULL" {
+							selectStatement += filterParams[0] + " IS NOT NULL"
+						} else {
+							selectStatement += filterParams[0] + " != @" + ipAddressID
+						}
+					} else if filterParams[1] == "=" {
+						if filterParams[2] == "NULL" {
+							selectStatement += filterParams[0] + " IS NULL"
+						} else {
+							selectStatement += filterParams[0] + " = @" + ipAddressID
+						}
+					}
+					filterArguments[ipAddressID] = filterParams[2]
 				} else {
 					selectStatement += filterParams[0] + "=@is_running"
 					filterArguments["is_running"] = filterParams[2]
@@ -483,7 +512,9 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 						COALESCE(param_arguments, '') as param_arguments,
 						is_main,subgroup_files,owner,
 						COALESCE(namespace, '') as namespace,
-						COALESCE(schedule_type, '') as schedule_type FROM apps where owner=$1 `
+						COALESCE(schedule_type, '') as schedule_type,
+						COALESCE(port, 0) as port, 
+						COALESCE(ip_address, '') as ip_address FROM apps where owner=$1 `
 		if len(sortParams) == 2 {
 			selectStatement += "ORDER BY " + sortParams[0] + " " + sortParams[1]
 		}
@@ -505,7 +536,8 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 		applicationData := &domain.ApplicationData{}
 		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning,
 			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp, &applicationData.FlagArguments, &applicationData.ParamArguments,
-			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner, &applicationData.Namespace, &applicationData.ScheduleType)
+			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner, &applicationData.Namespace, &applicationData.ScheduleType,
+			&applicationData.Port, &applicationData.IpAddress)
 		if err != nil {
 			p.psqlLogger.Error(" could not scan app", zap.Error(err))
 			return 0, 0, nil, err
@@ -528,11 +560,13 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 						param_arguments=$5,
 						namespace=COALESCE(NULLIF($6,E''), namespace),
 						schedule_type=COALESCE(NULLIF($7,E''), schedule_type),
-						port=$8
-						WHERE name=$9`
+						port=COALESCE(NULLIF($8,0), port),
+						ip_address=COALESCE(NULLIF($9,E''), ip_address)
+						WHERE name=$10`
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.UpdatedTimestamp,
-		appData.FlagArguments, appData.ParamArguments, appData.Namespace, appData.ScheduleType, zeronull.Int8(int64(*appData.Port)), appData.Name)
+		appData.FlagArguments, appData.ParamArguments, appData.Namespace, appData.ScheduleType, *appData.Port,
+		*appData.IpAddress, appData.Name)
 	if err != nil {
 		p.psqlLogger.Error(" could not update app ", zap.Error(err))
 		return err

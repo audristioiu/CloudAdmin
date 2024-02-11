@@ -53,7 +53,7 @@ const ProfilePage = () => {
         key: certs.keyFile,
       })
      await axios.post(
-        "https://localhost:443/otp/disable",
+        "https://localhost:9443/otp/disable",
       {},config, { httpsAgent : agent },);
     } catch (error) {
       setErrorMessage("Could not disable otp /" + error.response.data.message);
@@ -74,7 +74,7 @@ const ProfilePage = () => {
         key: certs.keyFile,
       })
       const response = await axios.post(
-        "https://localhost:443/otp/generate",
+        "https://localhost:9443/otp/generate",
       {},config, { httpsAgent : agent },);
       if (response.status === 200) {
         localStorage.setItem("userOTP", JSON.stringify(response.data))
@@ -103,7 +103,7 @@ const ProfilePage = () => {
 
           //trigger last time online update
           await axios.post(
-            "https://localhost:443/login",
+            "https://localhost:9443/login",
             { "username": username, "password": password },
             {
               headers: {
@@ -123,7 +123,7 @@ const ProfilePage = () => {
             },
           };
 
-          const response = await axios.get(`https://localhost:443/user/${username}`, config, { httpsAgent: agent },);
+          const response = await axios.get(`https://localhost:9443/user/${username}`, config, { httpsAgent: agent },);
           const userJobRole = response.data?.job_role;
           const userNrAppsDeployed = response.data?.nr_deployed_apps
           const birth = response.data?.birth_date;

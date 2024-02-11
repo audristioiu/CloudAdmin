@@ -181,7 +181,7 @@ func (s *Service) StartWebService() {
 	}
 
 	server := &http.Server{
-		Addr:           ":443",
+		Addr:           ":9443",
 		ReadTimeout:    30 * time.Minute,
 		WriteTimeout:   30 * time.Minute,
 		IdleTimeout:    30 * time.Minute,
@@ -198,7 +198,7 @@ func (s *Service) StartWebService() {
 	certFile := os.Getenv("CERT_FILE")
 	certKeyFile := os.Getenv("CERT_KEY_FILE")
 
-	log.Info("Started api service on port 443")
+	log.Info("Started api service on port 9443")
 
 	go func() {
 		if err = server.ListenAndServeTLS(certFile, certKeyFile); !errors.Is(err, http.ErrServerClosed) {

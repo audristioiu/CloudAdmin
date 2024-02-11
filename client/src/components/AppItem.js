@@ -6,6 +6,11 @@ function AppItem(app) {
   const [appName, setAppName] = useState(app.app.name);
   const [appDescription, setAppDescr] = useState(app.app.description);
   const [appRunningState, setAppRunning] = useState(String(app.app.is_running));
+  const [appCreatedTimestamp, setAppCreatedTimestamp] = useState(new Date(app.app.created_timestamp).toDateString())
+  const [appUpdatedTimestamp, setAppUpdateTimestamp] = useState(new Date(app.app.updated_timestamp).toDateString())
+  const [appScheduleType, setAppScheduleType] = useState(app.app.schedule_type)
+  const [appPort, setAppPort] = useState(app.app.port)
+  const [appIPAddress, setAppIPAddress] = useState(app.app.ip_address)
   const history = useNavigate();
 
   const editApp = () => {
@@ -13,7 +18,7 @@ function AppItem(app) {
     history('/editapp');
   }
 
-  const getStatusClass = () => (appRunningState ? ' active' : ' waiting');
+  const getStatusClass = () => (appRunningState ? ' active' : ' inactive');
 
   return (
     <tr>
@@ -24,6 +29,11 @@ function AppItem(app) {
           {appRunningState ? "Active" : "Not running"}
         </span>
       </td>
+      <td>{appCreatedTimestamp}</td>
+      <td>{appUpdatedTimestamp}</td>
+      <td>{appScheduleType}</td>
+      <td>{appPort}</td>
+      <td>{appIPAddress}</td>
       <td>
         <button className='button-3' onClick={editApp}>
           Edit App

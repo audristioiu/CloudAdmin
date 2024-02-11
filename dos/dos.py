@@ -3,7 +3,7 @@ import requests
 from queue import Queue
 
 NUM_THREADS = 4
-URL = "https://localhost:443/app/aggregates"
+URL = "https://localhost:9443/app/aggregates"
 
 def make_request(url):
     try:

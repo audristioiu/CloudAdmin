@@ -1,6 +1,8 @@
 package domain
 
-import "time"
+import (
+	"time"
+)
 
 // UserData represents user information
 type UserData struct {
@@ -54,6 +56,7 @@ type ApplicationData struct {
 	Owner            string    `json:"owner"`
 	Namespace        string    `json:"namespace,omitempty"`
 	Port             *int      `json:"port,omitempty"`
+	IpAddress        *string   `json:"ip_address,omitempty"`
 	ScheduleType     string    `json:"schedule_type,omitempty"`
 	SubgroupFiles    []string  `json:"subgroup_files,omitempty"`
 	IsMain           bool      `json:"is_main,omitempty"`

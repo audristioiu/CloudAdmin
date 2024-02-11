@@ -86,7 +86,7 @@ const EditProfilePage = () => {
               };
 
               await axios.post(
-                "https://localhost:443/login",
+                "https://localhost:9443/login",
                 { "username": username, "password": oldPassword },
                 config,
                 { httpsAgent: agent },
@@ -100,13 +100,13 @@ const EditProfilePage = () => {
             localStorage.setItem("userPass", password);
           }
 
-          const response = await axios.put(`https://localhost:443/user/`, updatedData, config, { httpsAgent: agent },);
+          const response = await axios.put(`https://localhost:9443/user/`, updatedData, config, { httpsAgent: agent },);
           if (response.status === 200) {
             // Profile updated successfully, navigate back to profile page
             navigate('/profile');
           }
         } else {
-          const response = await axios.put(`https://localhost:443/user/`, updatedData, config, { httpsAgent: agent },);
+          const response = await axios.put(`https://localhost:9443/user/`, updatedData, config, { httpsAgent: agent },);
           if (response.status === 200) {
             // Profile updated successfully, navigate back to profile page
             navigate('/profile');

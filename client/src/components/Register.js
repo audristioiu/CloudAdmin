@@ -57,7 +57,7 @@ function Register() {
           key: certs.keyFile,
         })
         await axios.post(
-          "https://localhost:443/register/user",
+          "https://localhost:9443/register/user",
           { "username": username, "password": password, "email": userEmail },
           config,
           { httpsAgent: agent },

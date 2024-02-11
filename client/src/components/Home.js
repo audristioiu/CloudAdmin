@@ -25,7 +25,7 @@ function Home() {
 
         if (username) {
           const response = await axios.get(
-            'https://localhost:443/app/aggregates',
+            'https://localhost:9443/app/aggregates',
             {
               headers: {
                 'Content-type': 'application/json',

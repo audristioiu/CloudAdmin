@@ -192,7 +192,7 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 			logger.Error("invalid fql value", zap.String("literal", t.Literal))
 			return nil
 		}
-		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || t.Type == fql.TokenGroup {
+		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || t.Type == fql.TokenGroup || t.Type == fql.TokenNumber {
 			if t.Type == fql.TokenGroup {
 				for _, literal := range strings.Split(t.Literal, " ") {
 					if literal == "&&" || literal == "||" {

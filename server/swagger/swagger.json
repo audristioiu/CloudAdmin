@@ -1043,6 +1043,9 @@
           "port": {
             "type": "int32"
           },
+          "ip_address": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },

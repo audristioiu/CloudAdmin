@@ -7,6 +7,7 @@ import (
 	"cloudadmin/priority_queue"
 	schedule_alghoritms "cloudadmin/schedule_algorithms"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -1102,8 +1103,9 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	multipartReader, _ := request.Request.MultipartReader()
 	multipartReadForm, _ := multipartReader.ReadForm(int64(1000000))
 
-	//init port
+	//init port and ip address
 	port := 0
+	ipAddr := ""
 
 	formFilesName := multipartReadForm.File["file"]
 	if len(formFilesName) == 0 {
@@ -1321,6 +1323,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				appsUploaded = append(appsUploaded, app.Name)
 				app.Description = appsDescription
 				app.Port = &port
+				app.IpAddress = &ipAddr
 				err = api.psqlRepo.InsertAppData(app)
 				if err != nil {
 					errorData.Message = "Internal error/ insert app data in postgres"
@@ -1354,6 +1357,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			mainAppData.Description = appsDescription
 			mainAppData.SubgroupFiles = append(mainAppData.SubgroupFiles, subGroupMainFiles...)
 			mainAppData.Port = &port
+			mainAppData.IpAddress = &ipAddr
 			err = api.psqlRepo.InsertAppData(&mainAppData)
 			if err != nil {
 				errorData.Message = "Internal error/ insert main app data in postgres"
@@ -1636,6 +1640,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					appData.SubgroupFiles = []string{}
 					appData.Owner = username
 					appData.Port = &port
+					appData.IpAddress = &ipAddr
 
 					if slices.Contains(allAppsNames, appData.Name) {
 						api.apiLogger.Error(" App  already exists", zap.String("app_name", appData.Name))
@@ -1852,6 +1857,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 				errorData.Message = "Internal error / retrieving apps"
 				errorData.StatusCode = http.StatusInternalServerError
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
+				response.WriteEntity(appsInfo)
 				return
 
 			}
@@ -1861,6 +1867,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			errorData.Message = "No apps found"
 			errorData.StatusCode = http.StatusNotFound
 			appsInfo.Errors = append(appsInfo.Errors, errorData)
+			response.WriteEntity(appsInfo)
 			return
 		}
 		if len(appNamesList) > 0 {
@@ -2016,10 +2023,6 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 
 	nowTime := time.Now()
 	appData.UpdatedTimestamp = nowTime
-	port := 0
-	if appData.Port == nil {
-		appData.Port = &port
-	}
 
 	err = api.psqlRepo.UpdateAppData(&appData)
 	if err != nil {
@@ -2346,6 +2349,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
+		return
 	}
 	if len(appNamesList) > 0 {
 		for _, appData := range appsData {
@@ -2458,11 +2462,12 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	// create deployments for each app and take into account schedulerType
 	for i, pairImageTag := range pairNames {
+		var publicIp string
 		tagName := pairImageTag[0]
 		imageName := strings.ToLower(strings.ReplaceAll(pairImageTag[1], "_", "-"))
 		app := appsInfo.Response[i]
 		if scheduleType == "random_scheduler" {
-			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go", "",
+			publicIp, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
 				[]string{}, int32(serverPort), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / creating deployment"
@@ -2480,7 +2485,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				return
 			}
 		} else if scheduleType != "normal" {
-			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go", "",
+			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
 				[]string{}, int32(0), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / creating deployment"
@@ -2490,7 +2495,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				return
 			}
 		} else {
-			err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", "", "",
+			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", "",
 				[]string{}, int32(0), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / creating deployment"
@@ -2511,7 +2516,10 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		updatedAppData.IsRunning = true
 		updatedAppData.UpdatedTimestamp = time.Now()
 		port := int(serverPort)
+		ipAdress := fmt.Sprintf("http://%s", publicIp)
+		updatedAppData.IpAddress = &ipAdress
 		updatedAppData.Port = &port
+
 		err = api.psqlRepo.UpdateAppData(&updatedAppData)
 		if err != nil {
 			errorData.Message = "Internal error / failed to update app"

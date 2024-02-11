@@ -21,7 +21,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 // KubernetesClient represents info about Kubernetes client
@@ -129,7 +129,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 				// "--lock-object-name=" + scheduleTypeName+"-deployment",
 			}
 
-			err = k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName, "default", scheduleTypeName+"-deployment", "",
+			_, err = k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName, "default", scheduleTypeName+"-deployment",
 				"", schedulerCommands, int32(0), int32(1))
 			if err != nil {
 				k.kubeLogger.Error("failed to create deployment for scheduler", zap.Error(err), zap.String("schedule_type", scheduleType))
@@ -175,8 +175,8 @@ func (k *KubernetesClient) DeleteNamespace(userNameSpace string) error {
 	return nil
 }
 
-// CreateNodePort exposes port using NodePort
-func (k *KubernetesClient) CreateNodePort(imageName, namespace string, port int32) error {
+// CreateLoadBalancer exposes port usingLoadBalancer
+func (k *KubernetesClient) CreateLoadBalancer(imageName, namespace string, port int32) (string, error) {
 	nodeport := apiv1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      imageName + "-service",
@@ -196,28 +196,45 @@ func (k *KubernetesClient) CreateNodePort(imageName, namespace string, port int3
 			Selector: map[string]string{
 				"app": imageName + "-deployment",
 			},
-			Type: apiv1.ServiceTypeNodePort,
+			Type: apiv1.ServiceTypeLoadBalancer,
 		},
 	}
 	svc, err := k.kubeClient.CoreV1().Services(namespace).Create(k.ctx, &nodeport, metav1.CreateOptions{})
 	if err != nil {
-		k.kubeLogger.Error("failed to create nodeort service", zap.Error(err))
-		return err
+		k.kubeLogger.Error("failed to create load balancer service", zap.Error(err))
+		return "", err
 	}
-	k.kubeLogger.Info("Created nodeport service", zap.String("deployment_name", svc.GetName()))
-	return nil
+	k.kubeLogger.Info("Created balancer service", zap.String("load_balancer_name", svc.GetName()))
+
+	// get load balancer details
+	var ip string
+	for {
+		getSvc, err := k.kubeClient.CoreV1().Services(namespace).Get(k.ctx, svc.GetName(), metav1.GetOptions{})
+		if err != nil {
+			k.kubeLogger.Error("failed to get load balancer service", zap.Error(err))
+			return "", err
+		}
+		if len(getSvc.Status.LoadBalancer.Ingress) > 0 {
+			ip = getSvc.Status.LoadBalancer.Ingress[0].IP
+			break
+		} else {
+			k.kubeLogger.Warn("waiting for load balancer ingress")
+		}
+
+	}
+	return ip, nil
 }
 
 // CreateDeployment creates a deployment for image in the required namespace with a specific nr of replicas
-func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName, schedulerName,
-	configMapName string, schedulerCommands []string, portNr, nrReplicas int32) error {
+func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName,
+	schedulerName string, schedulerCommands []string, portNr, nrReplicas int32) (string, error) {
 	var cpuLimit, memLimit, cpuReq, memReq string
-	if schedulerName == "random_scheduler" {
-		//todo fix
-		cpuLimit = "500Mi"
-		memLimit = "500Mi"
-		cpuReq = "250Mi"
-		memReq = "250Mi"
+	if schedulerName == "random-scheduler-go" {
+		//todo recalculate
+		cpuLimit = "500m"
+		memLimit = "128Mi"
+		cpuReq = "250m"
+		memReq = "64Mi"
 	}
 
 	deploymentsClient := k.kubeClient.AppsV1().Deployments(namespace)
@@ -252,10 +269,7 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 			},
 		},
 	}
-	// todo
-	// if len(schedulerCommands) > 0 {
-	// 	deployment.Spec.Template.Spec.Containers[0].Command = schedulerCommands
-	// }
+
 	if serviceName != "" {
 		deployment.Spec.Template.Spec.ServiceAccountName = serviceName
 	}
@@ -266,28 +280,7 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 		deployment.Spec.Template.Spec.Containers[0].Ports = []apiv1.ContainerPort{{HostPort: portNr, ContainerPort: portNr}}
 	}
 
-	if configMapName != "" {
-		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = []apiv1.VolumeMount{
-			{
-				Name:      "config-volume",
-				MountPath: "/config-volume",
-			},
-		}
-		deployment.Spec.Template.Spec.Volumes = []apiv1.Volume{
-			{
-				Name: "config-volume",
-				VolumeSource: apiv1.VolumeSource{
-					ConfigMap: &apiv1.ConfigMapVolumeSource{
-						LocalObjectReference: apiv1.LocalObjectReference{
-							Name: configMapName,
-						},
-					},
-				},
-			},
-		}
-	}
-
-	if schedulerName == "random_scheduler" {
+	if schedulerName == "random-scheduler-go" {
 		deployment.Spec.Template.Spec.Containers[0].Resources.Limits = apiv1.ResourceList{
 			"cpu":    resource.MustParse(cpuLimit),
 			"memory": resource.MustParse(memLimit),
@@ -301,23 +294,19 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 	result, err := deploymentsClient.Create(k.ctx, deployment, metav1.CreateOptions{})
 	if err != nil && !strings.Contains(err.Error(), "exists") {
 		k.kubeLogger.Error("failed to create deployment", zap.Error(err))
-		return err
+		return "", err
 	}
-
+	var publicIp string
 	if portNr != int32(0) {
-		deployment.Spec.Template.Spec.Containers[0].Ports = []apiv1.ContainerPort{{HostPort: portNr, ContainerPort: portNr}}
-		err := k.CreateNodePort(imageName, namespace, portNr)
+		loadBalancerIP, err := k.CreateLoadBalancer(imageName, namespace, portNr)
 		if err != nil {
-			return err
+			return "", err
 		}
-		// err = k.PortForward(imageName, namespace, portNr)
-		// if err != nil {
-		// 	return err
-		// }
+		publicIp = loadBalancerIP
 
 	}
 	k.kubeLogger.Info("Created deployment", zap.String("deployment_name", result.GetName()))
-	return nil
+	return publicIp, nil
 }
 
 // ListDeployments lists deployments
@@ -421,11 +410,10 @@ func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) (string,
 
 // CreateAutoScaler creates a horizontal pod auto scaler for deploymentName (todo not working)
 func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) (*hpav2.HorizontalPodAutoscaler, error) {
-	targetUtilization := int32(70)
+	//todo recalculate
+	memoryTargetUtilization := int32(70)
+	cpuTargetUtilization := int32(50)
 	autoscaler := &hpav2.HorizontalPodAutoscaler{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "autoscaling/v1",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploymentName + "-hpa",
 			Namespace: namespace,
@@ -446,7 +434,7 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 						Name: "cpu",
 						Target: hpav2.MetricTarget{
 							Type:               "Utilization",
-							AverageUtilization: pointer.Int32(targetUtilization),
+							AverageUtilization: ptr.To[int32](cpuTargetUtilization),
 						},
 					},
 				},
@@ -456,14 +444,13 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 						Name: "memory",
 						Target: hpav2.MetricTarget{
 							Type:               "Utilization",
-							AverageUtilization: pointer.Int32(targetUtilization),
+							AverageUtilization: ptr.To[int32](memoryTargetUtilization),
 						},
 					},
 				},
 			},
 		},
 	}
-
 	apply, err := k.kubeClient.AutoscalingV2().HorizontalPodAutoscalers(namespace).
 		Create(k.ctx, autoscaler, metav1.CreateOptions{})
 
