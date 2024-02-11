@@ -172,6 +172,7 @@ function MyApps() {
               <option value="updated_timestamp">UpdatedTimestamp</option>
               <option value="port">Port</option>
               <option value="ip_address">IPAddress</option>
+              <option value="schedule_type">ScheduleType</option>
               <option value="custom_filter">CustomFilter</option>
             </select>
           </label>

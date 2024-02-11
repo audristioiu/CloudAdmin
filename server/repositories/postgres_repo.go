@@ -382,31 +382,28 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 					knamePostgresID := filterParams[0] + strconv.Itoa(paramID)
 					if filterParams[1] == "!=" {
 						selectStatement += "name NOT ILIKE @" + knamePostgresID
-						filterArguments[knamePostgresID] = "%" + filterParams[2] + "%"
 					} else {
 						selectStatement += "name ILIKE  @" + knamePostgresID
-						filterArguments[knamePostgresID] = "%" + filterParams[2] + "%"
 					}
+					filterArguments[knamePostgresID] = "%" + filterParams[2] + "%"
 
-				} else if filterParams[0] == "description" {
+				} else if filterParams[0] == "description" || filterParams[0] == "ip_address" || filterParams[0] == "schedule_type" {
 					descriptionPostgresID := filterParams[0] + strconv.Itoa(paramID)
 					if filterParams[1] == "!=" {
 						if filterParams[2] == "NULL" {
-							selectStatement += "(" + filterParams[0] + " NOT ILIKE @" + descriptionPostgresID + " OR description IS NOT NULL)"
+							selectStatement += "(" + filterParams[0] + " NOT ILIKE @" + descriptionPostgresID + " OR " + filterParams[0] + " IS NOT NULL)"
 						} else {
 							selectStatement += filterParams[0] + " NOT ILIKE @" + descriptionPostgresID
 						}
 
-						filterArguments[descriptionPostgresID] = "%" + filterParams[2] + "%"
 					} else {
 						if filterParams[2] == "NULL" {
-							selectStatement += "(" + filterParams[0] + " ILIKE @" + descriptionPostgresID + " OR description IS NULL)"
+							selectStatement += "(" + filterParams[0] + " ILIKE @" + descriptionPostgresID + " OR " + filterParams[0] + " IS NULL)"
 						} else {
 							selectStatement += filterParams[0] + " ILIKE @" + descriptionPostgresID
 						}
-
-						filterArguments[descriptionPostgresID] = "%" + filterParams[2] + "%"
 					}
+					filterArguments[descriptionPostgresID] = "%" + filterParams[2] + "%"
 
 				} else if filterParams[0] == "created_timestamp" || filterParams[0] == "updated_timestamp" {
 					timestampPostgresID := filterParams[0] + strconv.Itoa(paramID)
@@ -431,13 +428,13 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 						if filterParams[2] == "NULL" {
 							selectStatement += filterParams[0] + " IS NOT NULL"
 						} else {
-							selectStatement += filterParams[0] + " IS  NOT @" + portID
+							selectStatement += filterParams[0] + " != @" + portID
 						}
 					} else if filterParams[1] == "=" {
 						if filterParams[2] == "NULL" {
 							selectStatement += filterParams[0] + " IS NULL"
 						} else {
-							selectStatement += filterParams[0] + " IS  @" + portID
+							selectStatement += filterParams[0] + " = @" + portID
 						}
 					} else if filterParams[1] == ">" {
 						selectStatement += filterParams[0] + " > @" + portID
@@ -449,22 +446,6 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 						selectStatement += filterParams[0] + " <= @" + portID
 					}
 					filterArguments[portID] = filterParams[2]
-				} else if filterParams[0] == "ip_address" {
-					ipAddressID := filterParams[0] + strconv.Itoa(paramID)
-					if filterParams[1] == "!=" {
-						if filterParams[2] == "NULL" {
-							selectStatement += filterParams[0] + " IS NOT NULL"
-						} else {
-							selectStatement += filterParams[0] + " != @" + ipAddressID
-						}
-					} else if filterParams[1] == "=" {
-						if filterParams[2] == "NULL" {
-							selectStatement += filterParams[0] + " IS NULL"
-						} else {
-							selectStatement += filterParams[0] + " = @" + ipAddressID
-						}
-					}
-					filterArguments[ipAddressID] = filterParams[2]
 				} else {
 					selectStatement += filterParams[0] + "=@is_running"
 					filterArguments["is_running"] = filterParams[2]
