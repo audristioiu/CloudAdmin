@@ -226,7 +226,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.QueryParameter("appnames", "name of the apps").DataType("string").AllowEmptyValue(true).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("filter",
-				"filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(AND-&&,OR-||) or separate").
+				"filter apps using fql filter(AND-&&,OR-||) or using simple field filtering").
 				DataType("string").AllowEmptyValue(true)).
 			Param(ws.QueryParameter("sort", "sort applications by name,created_timestamp or updated_timestamp").DataType("string").AllowEmptyValue(true)).
 			Param(ws.QueryParameter("limit", "limit number of applications shown").DataType("integer").AllowEmptyValue(true)).

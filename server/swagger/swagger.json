@@ -80,7 +80,7 @@
           {
             "name": "filter",
             "in": "query",
-            "description": "filter apps by name(keyword), description(keyword), is_running, created/updated timestamp combined(AND-&&,OR-||) or separate",
+            "description": "filter apps using fql filter(AND-&&,OR-||) or using simple field filtering",
             "allowEmptyValue": true,
             "schema": {
               "type": "string"
@@ -1017,7 +1017,9 @@
           "flag_arguments",
           "param_arguments",
           "is_main",
-          "subgroup_files"
+          "subgroup_files",
+          "port",
+          "ip_address"
         ],
         "type": "object",
         "properties": {
@@ -1192,7 +1194,12 @@
       },
       "domain.UserData": {
         "required": [
-          "username"
+          "username",
+          "full_name",
+          "email",
+          "birth_date",
+          "job_role",
+          "applications"
         ],
         "type": "object",
         "properties": {
@@ -1205,7 +1212,7 @@
           "birth_date": {
             "type": "string"
           },
-          "city_address": {
+          "job_role": {
             "type": "string"
           },
           "email": {

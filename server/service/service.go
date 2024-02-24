@@ -8,6 +8,8 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	vt "github.com/VirusTotal/vt-go"
+	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -124,7 +127,7 @@ func (s *Service) StartWebService() {
 		log.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
 		return
 	}
-	log.Debug("Initialize graphite for metrics")
+	log.Debug("Initialized graphite for metrics")
 
 	requestCount := make(map[string]int)
 	maxRequestPerMinute := 1000
@@ -210,6 +213,53 @@ func (s *Service) StartWebService() {
 
 		log.Debug("Stopped serving new connections.")
 	}()
+	kubernetesMetrics := make([]string, 0)
+
+	//goroutine to gather and send kubernetes metrics regarind pods and nodes to Grafana using Graphite
+	nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
+	go func() {
+		for {
+
+			if len(nodeMetricsMap) > 0 {
+				for node, nodeMetrics := range nodeMetricsMap {
+					nodeCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.cpu_usage", node), nil)
+					nodeMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.mem_usage", node), nil)
+					cpuQuantity := math.Round(nodeMetrics[0]*100) / 100
+					memQuantity := math.Round(nodeMetrics[1]*100) / 100
+					nodeCPUMetrics.Update(cpuQuantity)
+					nodeMemoryMetrics.Update(memQuantity)
+					graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
+					kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.cpu_usage", node))
+					kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.mem_usage", node))
+				}
+			}
+
+			podMetricsMap, _ := kubernetesClient.ListPodsMetrics()
+			if len(podMetricsMap) > 0 {
+				for namepace, podContainerMetricsMap := range podMetricsMap {
+					for podName, podMetrics := range podContainerMetricsMap {
+						for _, podMetricElem := range podMetrics {
+							podCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.cpu_usage",
+								namepace, podName, podMetricElem.PodContainerName), nil)
+							podMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.mem_usage",
+								namepace, podName, podMetricElem.PodContainerName), nil)
+
+							cpuQuantity := math.Round(podMetricElem.CPUMemoryMetrics[0]*100) / 100
+							memQuantity := math.Round(podMetricElem.CPUMemoryMetrics[1]*100) / 100
+
+							podCPUMetrics.Update(cpuQuantity)
+							podMemoryMetrics.Update(memQuantity)
+							graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
+							kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.cpu_usage", namepace, podName, podMetricElem.PodContainerName))
+							kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.mem_usage", namepace, podName, podMetricElem.PodContainerName))
+						}
+
+					}
+				}
+			}
+			time.Sleep(time.Second * 10)
+		}
+	}()
 
 	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -220,6 +270,9 @@ func (s *Service) StartWebService() {
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Error("HTTP shutdown error: %v", zap.Error(err))
+	}
+	for _, metric := range kubernetesMetrics {
+		metrics.Unregister(metric)
 	}
 
 	log.Debug("Graceful shutdown complete.")

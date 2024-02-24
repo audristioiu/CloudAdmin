@@ -107,6 +107,12 @@ type GetLogsFromPod struct {
 	AppName      string `json:"app_name"`
 }
 
+// PodContainerMetrics represents info regarding metrics of a pod container
+type PodContainerMetrics struct {
+	CPUMemoryMetrics []float64
+	PodContainerName string
+}
+
 // DockerFile represents fields used to create a Dockerfile
 type DockerFile struct {
 	User       string

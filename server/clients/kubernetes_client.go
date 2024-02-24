@@ -2,6 +2,7 @@ package clients
 
 import (
 	"bytes"
+	"cloudadmin/domain"
 	"cloudadmin/helpers"
 	"context"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
+	metricsKube "k8s.io/metrics/pkg/client/clientset/versioned"
 	"k8s.io/utils/ptr"
 )
 
@@ -28,6 +30,7 @@ import (
 type KubernetesClient struct {
 	ctx                 context.Context
 	kubeClient          *client.Clientset
+	metricsKubeClient   *metricsKube.Clientset
 	kubeLogger          *zap.Logger
 	schedulerRegisterID string
 }
@@ -47,12 +50,128 @@ func NewKubernetesClient(ctx context.Context, logger *zap.Logger, kubeConfig, sc
 		logger.Error("failed to init kube client", zap.Error(err))
 		return nil
 	}
+	metrics, err := metricsKube.NewForConfig(cfg)
+	if err != nil {
+		logger.Error("failed to init kube metrics client", zap.Error(err))
+		return nil
+	}
 	return &KubernetesClient{
 		ctx:                 ctx,
 		kubeLogger:          logger,
 		kubeClient:          clientset,
+		metricsKubeClient:   metrics,
 		schedulerRegisterID: schedulerID,
 	}
+}
+
+// ListPodsMetrics gets pods metrics
+func (k *KubernetesClient) ListPodsMetrics() (map[string]map[string][]domain.PodContainerMetrics, error) {
+	podMetricsMap := make(map[string]map[string][]domain.PodContainerMetrics, 0)
+	cpuUsageTotal := int64(0)
+	memUsageTotal := int64(0)
+	namespaces := k.ListNamespaces()
+	for _, namespace := range namespaces {
+		if strings.Contains(namespace, "namespace-") || namespace == "default" {
+			containerMetricsMap := make(map[string][]domain.PodContainerMetrics, 0)
+			podsFromNamespace := k.ListPods(namespace)
+			for _, podName := range podsFromNamespace {
+				podMetrics, err := k.metricsKubeClient.MetricsV1beta1().PodMetricses(namespace).Get(k.ctx, podName, metav1.GetOptions{})
+				if err != nil {
+					k.kubeLogger.Error("failed to list metrics for pods", zap.Error(err))
+					return nil, nil
+				}
+				for _, podContainer := range podMetrics.Containers {
+					cpuUsageTotal += podContainer.Usage.Cpu().MilliValue()
+					memUsageTotal += podContainer.Usage.Memory().Value()
+				}
+			}
+			for _, podName := range podsFromNamespace {
+				podMetrics, err := k.metricsKubeClient.MetricsV1beta1().PodMetricses(namespace).Get(k.ctx, podName, metav1.GetOptions{})
+				if err != nil {
+					k.kubeLogger.Error("failed to list metrics for pods", zap.Error(err))
+					return nil, nil
+				}
+				podCPUMemoryMetrics := make([]domain.PodContainerMetrics, 0)
+				for _, podContainer := range podMetrics.Containers {
+					cpuPercentage := float64(podContainer.Usage.Cpu().MilliValue()) / float64(cpuUsageTotal) * 100
+					memoryPercentage := float64(podContainer.Usage.Memory().Value()) / float64(memUsageTotal) * 100
+					podCPUMemoryMetrics = append(podCPUMemoryMetrics, domain.PodContainerMetrics{
+
+						CPUMemoryMetrics: []float64{
+							cpuPercentage,
+							memoryPercentage,
+							float64(podContainer.Usage.Cpu().MilliValue()),
+							float64(podContainer.Usage.Memory().Value() / 1e6),
+						},
+						PodContainerName: podContainer.Name,
+					})
+				}
+				containerMetricsMap[podName] = podCPUMemoryMetrics
+			}
+			podMetricsMap[namespace] = containerMetricsMap
+		}
+
+	}
+	// return podMetricsList
+	return podMetricsMap, nil
+}
+
+// ListNodesMetrics gets node metrics
+func (k *KubernetesClient) ListNodesMetrics() (map[string][]float64, error) {
+	nodeMetricsMap := make(map[string][]float64, 0)
+	nodes := k.ListNodes()
+	for _, node := range nodes {
+		nodeMetrics, err := k.metricsKubeClient.MetricsV1beta1().NodeMetricses().Get(k.ctx, node.Name, metav1.GetOptions{})
+		if err != nil {
+			k.kubeLogger.Error("failed to get metrics for node", zap.String("node", node.Name), zap.Error(err))
+			return nil, nil
+		}
+		nodeCPU := float64(nodeMetrics.Usage.Cpu().MilliValue()) / float64(node.Status.Capacity.Cpu().MilliValue())
+		nodeMemory := float64(nodeMetrics.Usage.Memory().Value()) / float64(node.Status.Capacity.Memory().Value())
+		nodeMetricsMap[nodeMetrics.Name] = []float64{
+			nodeCPU,
+			nodeMemory,
+			float64(nodeMetrics.Usage.Cpu().MilliValue()),
+			float64(nodeMetrics.Usage.Memory().Value()) / 1e6,
+		}
+	}
+
+	return nodeMetricsMap, nil
+}
+
+// GetNodeCPUMetric retrieves node cpu metric as percentage for a node
+func (k *KubernetesClient) GetNodeCPUMetric(nodeName string, totalCPU int64) (float64, error) {
+	nodeMetrics, err := k.metricsKubeClient.MetricsV1beta1().NodeMetricses().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to get metrics for node", zap.Error(err))
+		return 0, err
+	}
+
+	cpuPercentage := float64(nodeMetrics.Usage.Cpu().MilliValue()) / float64(totalCPU) * 100
+
+	return cpuPercentage, nil
+}
+
+// GetNodeMemoryMetric retrieves node memory metric as percentage for a node
+func (k *KubernetesClient) GetNodeMemoryMetric(nodeName string, totalMemory int64) (float64, error) {
+	nodeMetrics, err := k.metricsKubeClient.MetricsV1beta1().NodeMetricses().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		return 0, err
+	}
+
+	memPercentage := float64(nodeMetrics.Usage.Memory().Value()) / float64(totalMemory) * 100
+
+	return memPercentage, nil
+}
+
+// ListNodes lists nodes from kubernetes
+func (k *KubernetesClient) ListNodes() []apiv1.Node {
+	nsList, err := k.kubeClient.CoreV1().Nodes().List(k.ctx, metav1.ListOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to list nodes", zap.Error(err))
+		return nil
+	}
+	return nsList.Items
 }
 
 // CreateNamespace creates new namespace for user
@@ -372,6 +491,20 @@ func (k *KubernetesClient) DeleteDeployment(deployName, namespace string) error 
 	}
 	k.kubeLogger.Info("Deleted deployment", zap.String("deployment_name", deployName))
 	return nil
+}
+
+// ListPods lists pods from a namespace from kubernetes
+func (k *KubernetesClient) ListPods(namespace string) []string {
+	podsList, err := k.kubeClient.CoreV1().Pods(namespace).List(k.ctx, metav1.ListOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to list pods", zap.Error(err))
+		return []string{}
+	}
+	pods := make([]string, 0)
+	for _, pod := range podsList.Items {
+		pods = append(pods, pod.Name)
+	}
+	return pods
 }
 
 // GetLogsForPodName iterates through replicas of podName and returns logs
