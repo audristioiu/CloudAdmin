@@ -2,15 +2,11 @@ package service
 
 import (
 	"cloudadmin/api"
-	"cloudadmin/clients"
 	"cloudadmin/helpers"
 	"cloudadmin/repositories"
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
-	"math"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,7 +14,6 @@ import (
 	"time"
 
 	vt "github.com/VirusTotal/vt-go"
-	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -92,42 +87,42 @@ func (s *Service) StartWebService() {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
 
-	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+	// dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
 
 	// initialize clients for kubernetes and docker
-	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
-	kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
-	if kubernetesClient == nil {
-		log.Fatal("[FATAL] Error in creating kubernetes client")
-		return
-	}
-	log.Debug("Kubernetes client initialized")
+	// kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
+	// kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
+	// if kubernetesClient == nil {
+	// 	log.Fatal("[FATAL] Error in creating kubernetes client")
+	// 	return
+	// }
+	// log.Debug("Kubernetes client initialized")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
-	dockerUsername := os.Getenv("DOCKER_USERNAME")
-	dockerPassword := os.Getenv("DOCKER_PASSWORD")
-	if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
-		log.Fatal("[FATAL] docker registry_id/username/pass not found")
-		return
-	}
+	// dockerUsername := os.Getenv("DOCKER_USERNAME")
+	// dockerPassword := os.Getenv("DOCKER_PASSWORD")
+	// if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
+	// 	log.Fatal("[FATAL] docker registry_id/username/pass not found")
+	// 	return
+	// }
 
-	dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
-	if dockerClient == nil {
-		log.Fatal("[FATAL] Error in creating docker client")
-		return
-	}
-	log.Debug("Docker client initialized")
+	// dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
+	// if dockerClient == nil {
+	// 	log.Fatal("[FATAL] Error in creating docker client")
+	// 	return
+	// }
+	// log.Debug("Docker client initialized")
 
 	// initialize tcp address for graphite
-	graphiteHost := os.Getenv("GRAPHITE_HOST")
-	graphiteAddr, err := net.ResolveTCPAddr("tcp", graphiteHost)
-	if err != nil {
-		log.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
-		return
-	}
-	log.Debug("Initialized graphite for metrics")
+	// graphiteHost := os.Getenv("GRAPHITE_HOST")
+	// graphiteAddr, err := net.ResolveTCPAddr("tcp", graphiteHost)
+	// if err != nil {
+	// 	log.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
+	// 	return
+	// }
+	// log.Debug("Initialized graphite for metrics")
 
 	requestCount := make(map[string]int)
 	maxRequestPerMinute := 1000
@@ -146,8 +141,8 @@ func (s *Service) StartWebService() {
 	}
 
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient,
-		graphiteAddr, requestCount, maxRequestPerMinute, vtClient)
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, nil, nil,
+		nil, requestCount, maxRequestPerMinute, vtClient)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -164,7 +159,7 @@ func (s *Service) StartWebService() {
 	// Optionally, you may need to enable CORS for the UI to work.
 	cors := restful.CrossOriginResourceSharing{
 		AllowedHeaders: []string{"Content-Type", "Accept", "USER-AUTH", "USER-UUID"},
-		AllowedDomains: []string{"https://localhost:3000"},
+		AllowedDomains: []string{"http://localhost:3000"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		CookiesAllowed: false,
 		Container:      restful.DefaultContainer}
@@ -216,50 +211,50 @@ func (s *Service) StartWebService() {
 	kubernetesMetrics := make([]string, 0)
 
 	//goroutine to gather and send kubernetes metrics regarind pods and nodes to Grafana using Graphite
-	nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
-	go func() {
-		for {
+	// nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
+	// go func() {
+	// 	for {
 
-			if len(nodeMetricsMap) > 0 {
-				for node, nodeMetrics := range nodeMetricsMap {
-					nodeCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.cpu_usage", node), nil)
-					nodeMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.mem_usage", node), nil)
-					cpuQuantity := math.Round(nodeMetrics[0]*100) / 100
-					memQuantity := math.Round(nodeMetrics[1]*100) / 100
-					nodeCPUMetrics.Update(cpuQuantity)
-					nodeMemoryMetrics.Update(memQuantity)
-					graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
-					kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.cpu_usage", node))
-					kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.mem_usage", node))
-				}
-			}
+	// 		if len(nodeMetricsMap) > 0 {
+	// 			for node, nodeMetrics := range nodeMetricsMap {
+	// 				nodeCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.cpu_usage", node), nil)
+	// 				nodeMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.mem_usage", node), nil)
+	// 				cpuQuantity := math.Round(nodeMetrics[0]*100) / 100
+	// 				memQuantity := math.Round(nodeMetrics[1]*100) / 100
+	// 				nodeCPUMetrics.Update(cpuQuantity)
+	// 				nodeMemoryMetrics.Update(memQuantity)
+	// 				graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
+	// 				kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.cpu_usage", node))
+	// 				kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.mem_usage", node))
+	// 			}
+	// 		}
 
-			podMetricsMap, _ := kubernetesClient.ListPodsMetrics()
-			if len(podMetricsMap) > 0 {
-				for namepace, podContainerMetricsMap := range podMetricsMap {
-					for podName, podMetrics := range podContainerMetricsMap {
-						for _, podMetricElem := range podMetrics {
-							podCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.cpu_usage",
-								namepace, podName, podMetricElem.PodContainerName), nil)
-							podMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.mem_usage",
-								namepace, podName, podMetricElem.PodContainerName), nil)
+	// 		podMetricsMap, _ := kubernetesClient.ListPodsMetrics()
+	// 		if len(podMetricsMap) > 0 {
+	// 			for namepace, podContainerMetricsMap := range podMetricsMap {
+	// 				for podName, podMetrics := range podContainerMetricsMap {
+	// 					for _, podMetricElem := range podMetrics {
+	// 						podCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.cpu_usage",
+	// 							namepace, podName, podMetricElem.PodContainerName), nil)
+	// 						podMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.mem_usage",
+	// 							namepace, podName, podMetricElem.PodContainerName), nil)
 
-							cpuQuantity := math.Round(podMetricElem.CPUMemoryMetrics[0]*100) / 100
-							memQuantity := math.Round(podMetricElem.CPUMemoryMetrics[1]*100) / 100
+	// 						cpuQuantity := math.Round(podMetricElem.CPUMemoryMetrics[0]*100) / 100
+	// 						memQuantity := math.Round(podMetricElem.CPUMemoryMetrics[1]*100) / 100
 
-							podCPUMetrics.Update(cpuQuantity)
-							podMemoryMetrics.Update(memQuantity)
-							graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
-							kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.cpu_usage", namepace, podName, podMetricElem.PodContainerName))
-							kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.mem_usage", namepace, podName, podMetricElem.PodContainerName))
-						}
+	// 						podCPUMetrics.Update(cpuQuantity)
+	// 						podMemoryMetrics.Update(memQuantity)
+	// 						graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
+	// 						kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.cpu_usage", namepace, podName, podMetricElem.PodContainerName))
+	// 						kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.mem_usage", namepace, podName, podMetricElem.PodContainerName))
+	// 					}
 
-					}
-				}
-			}
-			time.Sleep(time.Second * 10)
-		}
-	}()
+	// 				}
+	// 			}
+	// 		}
+	// 		time.Sleep(time.Second * 10)
+	// 	}
+	// }()
 
 	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)

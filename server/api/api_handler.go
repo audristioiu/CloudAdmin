@@ -111,46 +111,46 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 
-	if len(userData.Password) < 16 {
-		api.apiLogger.Error(" password too short")
-		errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
-		api.apiLogger.Error(" password does not contain digits")
-		errorData.Message = "Bad Request/ Password does not contain digits"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if !unicode.IsUpper(rune(userData.Password[0])) {
-		api.apiLogger.Error(" password does not start with uppercase")
-		errorData.Message = "Bad Request/ Password does not start with uppercase"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if !helpers.HasSymbol(userData.Password) {
-		api.apiLogger.Error(" password does not have special characters")
-		errorData.Message = "Bad Request/ Password does not have special characters"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if strings.Contains(userData.Password, userData.UserName) {
-		api.apiLogger.Error(" password contains user")
-		errorData.Message = "Bad Request/ Password contains user"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
+	// if len(userData.Password) < 16 {
+	// 	api.apiLogger.Error(" password too short")
+	// 	errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+	// if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+	// 	api.apiLogger.Error(" password does not contain digits")
+	// 	errorData.Message = "Bad Request/ Password does not contain digits"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+	// if !unicode.IsUpper(rune(userData.Password[0])) {
+	// 	api.apiLogger.Error(" password does not start with uppercase")
+	// 	errorData.Message = "Bad Request/ Password does not start with uppercase"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+	// if !helpers.HasSymbol(userData.Password) {
+	// 	api.apiLogger.Error(" password does not have special characters")
+	// 	errorData.Message = "Bad Request/ Password does not have special characters"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+	// if strings.Contains(userData.Password, userData.UserName) {
+	// 	api.apiLogger.Error(" password contains user")
+	// 	errorData.Message = "Bad Request/ Password contains user"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
 
 	userRetrievedData, _ := api.psqlRepo.GetUserData(userData.UserName)
 	if userRetrievedData != nil {
@@ -242,56 +242,56 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	if len(userData.Password) < 16 {
-		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-		api.apiLogger.Error(" password too short")
-		errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
-		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-		api.apiLogger.Error(" password does not contain digits")
-		errorData.Message = "Bad Request/ Password does not contain digits"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if !unicode.IsUpper(rune(userData.Password[0])) {
-		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-		api.apiLogger.Error(" password does not start with uppercase")
-		errorData.Message = "Bad Request/ Password does not start with uppercase"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if !helpers.HasSymbol(userData.Password) {
-		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-		api.apiLogger.Error(" password does not have special characters")
-		errorData.Message = "Bad Request/ Password does not have special characters"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	if strings.Contains(userData.Password, userData.UserName) {
-		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-		api.apiLogger.Error(" password contains user")
-		errorData.Message = "Bad Request/ Password contains user"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
+	// if len(userData.Password) < 16 {
+	// 	failedLoginMetrics.Mark(1)
+	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	api.apiLogger.Error(" password too short")
+	// 	errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+	// if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+	// 	failedLoginMetrics.Mark(1)
+	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	api.apiLogger.Error(" password does not contain digits")
+	// 	errorData.Message = "Bad Request/ Password does not contain digits"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+	// if !unicode.IsUpper(rune(userData.Password[0])) {
+	// 	failedLoginMetrics.Mark(1)
+	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	api.apiLogger.Error(" password does not start with uppercase")
+	// 	errorData.Message = "Bad Request/ Password does not start with uppercase"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+	// if !helpers.HasSymbol(userData.Password) {
+	// 	failedLoginMetrics.Mark(1)
+	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	api.apiLogger.Error(" password does not have special characters")
+	// 	errorData.Message = "Bad Request/ Password does not have special characters"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+	// if strings.Contains(userData.Password, userData.UserName) {
+	// 	failedLoginMetrics.Mark(1)
+	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	api.apiLogger.Error(" password contains user")
+	// 	errorData.Message = "Bad Request/ Password contains user"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
 
 	reqUrl, _ := request.Request.URL.Parse(request.Request.URL.Host + userPath + "/" + userData.UserName)
 	marshalledRequest, err := json.Marshal(reqUrl)
