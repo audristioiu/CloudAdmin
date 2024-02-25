@@ -128,7 +128,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Doc("Delete user").
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("username", "username of the account").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
+			Param(ws.QueryParameter("usernames", "usernames to delete").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
@@ -281,7 +281,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
-			Filter(api.AdminAuthenticate).
+			Filter(api.BasicAuthenticate).
 			To(api.DeleteApp).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).

@@ -537,8 +537,8 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 						description=COALESCE(NULLIF($1,E''), description), 
 						is_running=COALESCE(NULLIF($2,FALSE), is_running),
 						updated_timestamp=$3,
-						flag_arguments=$4,
-						param_arguments=$5,
+						flag_arguments=COALESCE(NULLIF($4,E''), flag_arguments),
+						param_arguments=COALESCE(NULLIF($5,E''), param_arguments),
 						namespace=COALESCE(NULLIF($6,E''), namespace),
 						schedule_type=COALESCE(NULLIF($7,E''), schedule_type),
 						port=COALESCE(NULLIF($8,0), port),
@@ -546,8 +546,8 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 						WHERE name=$10`
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.UpdatedTimestamp,
-		appData.FlagArguments, appData.ParamArguments, appData.Namespace, appData.ScheduleType, *appData.Port,
-		*appData.IpAddress, appData.Name)
+		appData.FlagArguments, appData.ParamArguments, appData.Namespace, appData.ScheduleType, zeronull.Int8(int64(*appData.Port)),
+		zeronull.Text(*appData.IpAddress), appData.Name)
 	if err != nil {
 		p.psqlLogger.Error(" could not update app ", zap.Error(err))
 		return err

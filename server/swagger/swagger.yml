@@ -605,9 +605,9 @@ paths:
         required: true
         schema:
           type: string
-      - name: username
+      - name: usernames
         in: path
-        description: username of the account
+        description: usernames to delete
         required: true
         schema:
           type: string
