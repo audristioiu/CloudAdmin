@@ -12,6 +12,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,6 +29,11 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
+
+/*
+Endpoint : /debug/pprof for profilling data over server
+go tool pprof -pdf .\profile_cpu.prof > profile_cpu.pdf (also use cpu profiler)
+*/
 
 // Service describes the structure used for starting the web service
 type Service struct {

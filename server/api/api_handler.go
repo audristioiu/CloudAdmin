@@ -32,20 +32,25 @@ var (
 	//map of users with their specific cached requests as value
 	cachedRequests = make(map[string][]string, 0)
 	// register metrics for graphite client
-	getAppsMetric     = metrics.GetOrRegisterMeter("applications.get", nil)
-	updateAppsMetric  = metrics.GetOrRegisterMeter("applications.update", nil)
-	registerAppMetric = metrics.GetOrRegisterMeter("applications.register", nil)
+	getAppsMetric        = metrics.GetOrRegisterMeter("applications.get", nil)
+	getAppsLatencyMetric = metrics.GetOrRegisterTimer("get_apps_latency.response", nil)
+	updateAppsMetric     = metrics.GetOrRegisterMeter("applications.update", nil)
+	registerAppMetric    = metrics.GetOrRegisterMeter("applications.register", nil)
 
 	malwareFileMetric = metrics.GetOrRegisterMeter("applications.malware", nil)
 	safeFileMetric    = metrics.GetOrRegisterMeter("applications.safe", nil)
 
-	scheduleAppsMetric  = metrics.GetOrRegisterMeter("applications.schedule", nil)
-	getPodResultsMetric = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
+	scheduleAppsMetric        = metrics.GetOrRegisterMeter("applications.schedule", nil)
+	scheduleAppsLatencyMetric = metrics.GetOrRegisterTimer("schedule_apps_latency.response", nil)
+	getPodResultsMetric       = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
 
 	loginMetrics       = metrics.GetOrRegisterMeter("users_login", nil)
 	failedLoginMetrics = metrics.GetOrRegisterMeter("users_failed_login", nil)
 	getUserMetric      = metrics.GetOrRegisterMeter("users.get.profile", nil)
 	updateUserMetric   = metrics.GetOrRegisterMeter("users.update.profile", nil)
+	userLatencyMeric   = metrics.GetOrRegisterTimer("users_get_profile_latency.response", nil)
+
+	totalRequestsMetric = metrics.GetOrRegisterCounter("total_requests.count", nil)
 
 	mutex sync.Mutex
 )
@@ -197,6 +202,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	registerResponse.Message = "User registered succesfully"
 	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(registerResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // UserLogin verifies user credentials
@@ -484,14 +490,14 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	newUserData.UserTimeout = nil
 	newUserData.OTPData = domain.OneTimePassData{}
 	loginMetrics.Mark(1)
+	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	response.WriteEntity(newUserData)
-
 }
 
 // GetUserProfile returns user profile based on username
 func (api *API) GetUserProfile(request *restful.Request, response *restful.Response) {
-
+	startTime := time.Now()
 	errorData := domain.ErrorResponse{}
 
 	//calculate key and use cache to get the response
@@ -570,7 +576,10 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		userData.UserID = ""
 		response.WriteEntity(userData)
 	}
+	endTime := time.Since(startTime)
+	userLatencyMeric.Update(time.Duration(endTime.Microseconds()))
 	getUserMetric.Mark(1)
+	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 }
@@ -686,6 +695,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 	updateUserMetric.Mark(1)
+	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
@@ -845,6 +855,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 	deleteResponse.Message = "Users deleted succesfully"
 	deleteResponse.ResourcesAffected = append(deleteResponse.ResourcesAffected, listUsersName...)
 	response.WriteEntity(deleteResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // GenerateOTPToken generates OTP token
@@ -901,6 +912,7 @@ func (api *API) GenerateOTPToken(request *restful.Request, response *restful.Res
 		URL: key.URL(),
 	}
 	response.WriteEntity(otpResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // VerifyOTPToken checks otp token
@@ -958,6 +970,7 @@ func (api *API) VerifyOTPToken(request *restful.Request, response *restful.Respo
 	updateResponse.Message = "User otp enabled succesfully"
 	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(updateResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // ValidateOTPToken validates otp token
@@ -999,6 +1012,7 @@ func (api *API) ValidateOTPToken(request *restful.Request, response *restful.Res
 	updateResponse.Message = "User otp validated succesfully"
 	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(updateResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // DisableOTP disables otp
@@ -1048,6 +1062,7 @@ func (api *API) DisableOTP(request *restful.Request, response *restful.Response)
 	updateResponse.Message = "User otp disabled succesfully"
 	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(updateResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // UploadApp uploads app to s3
@@ -1727,6 +1742,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	registerAppMetric.Mark(1)
+	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	registerResponse := domain.QueryResponse{}
@@ -1737,7 +1753,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 // GetAppsInfo retrieves apps information
 func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response) {
-
+	startTime := time.Now()
 	errorData := domain.ErrorResponse{}
 
 	userIDHeader := request.HeaderParameter("USER-UUID")
@@ -1919,7 +1935,11 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		api.apiLogger.Debug(" Apps  found in cache")
 		response.WriteEntity(appsData)
 	}
+
+	endTime := time.Since(startTime)
+	getAppsLatencyMetric.Update(time.Duration(endTime.Microseconds()))
 	getAppsMetric.Mark(1)
+	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 }
@@ -2072,6 +2092,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	updateAppsMetric.Mark(1)
+	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
@@ -2232,6 +2253,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	deleteResponse.Message = "Apps deleted succesfully"
 	deleteResponse.ResourcesAffected = append(deleteResponse.ResourcesAffected, appNamesList...)
 	response.WriteEntity(deleteResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 func (api *API) GetAppsAggregates(request *restful.Request, response *restful.Response) {
@@ -2293,11 +2315,13 @@ func (api *API) GetAppsAggregates(request *restful.Request, response *restful.Re
 	appInfo.QueryInfo.MainAppsTotalCount = int64(totalMainAppsCount)
 	appInfo.QueryInfo.RunningAppsTotalCount = int64(totalRunningAppsCount)
 	response.WriteEntity(appInfo)
+	totalRequestsMetric.Inc(1)
 
 }
 
 // ScheduleApps schedule apps
 func (api *API) ScheduleApps(request *restful.Request, response *restful.Response) {
+	startTime := time.Now()
 	errorData := domain.ErrorResponse{}
 	dirNames := make([]string, 0)
 	appnames := request.QueryParameter("appnames")
@@ -2592,8 +2616,10 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	for _, dir := range deleteDirNames {
 		os.RemoveAll(dir)
 	}
-
+	endTime := time.Since(startTime)
+	scheduleAppsLatencyMetric.Update(time.Duration(endTime.Microseconds()))
 	scheduleAppsMetric.Mark(1)
+	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	scheduleResponse := domain.QueryResponse{}
@@ -2701,6 +2727,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	}
 
 	getPodResultsMetric.Mark(1)
+	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}
