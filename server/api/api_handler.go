@@ -1872,7 +1872,23 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		}
 
 		limit := request.QueryParameter("limit")
+		if regexp.MustCompile(`\D`).MatchString(limit) {
+			api.apiLogger.Error(" Invalid limit", zap.Any("limit", limit))
+			errorData.Message = "Bad Request /Invalid limit"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
 		offset := request.QueryParameter("offset")
+		if regexp.MustCompile(`\D`).MatchString(offset) {
+			api.apiLogger.Error(" Invalid offset", zap.Any("offset", offset))
+			errorData.Message = "Bad Request /Invalid offset"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
 
 		appnames := request.QueryParameter("appnames")
 		if appnames == "" {
@@ -2039,6 +2055,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	nrReplicas := request.QueryParameter("nr_replicas")
 	maxReplicas := request.QueryParameter("max_nr_replicas")
 	newImage := request.QueryParameter("new_image")
+
 	if nrReplicas != "" || newImage != "" || maxReplicas != "" {
 		var appInfo domain.ApplicationData
 
@@ -2063,6 +2080,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 			response.WriteHeader(http.StatusBadRequest)
 			response.WriteEntity(errorData)
 		} else {
+
 			splitAppName := strings.Split(appInfo.Name, ".")
 			imageName := strings.ReplaceAll(splitAppName[0]+"-"+splitAppName[1], "_", "-")
 			nrReplicasInteger, _ := strconv.ParseInt(nrReplicas, 10, 32)
@@ -2454,7 +2472,13 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	}
 
 	serverPort, _ := strconv.ParseInt(request.QueryParameter("server_port"), 0, 32)
-
+	if serverPort <= int64(0) || serverPort > int64(65535) {
+		errorData.Message = "Bad request / invalid port"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
 	taskItems := make([]priority_queue.TaskItem, 0)
 	pairNames := make([][]string, 0)
 	deleteDirNames := make([]string, 0)
