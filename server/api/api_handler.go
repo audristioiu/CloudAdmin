@@ -1184,6 +1184,14 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				return
 			}
 
+			if !strings.HasSuffix(fileName.Filename, ".zip") {
+				errorData.Message = "Bad Request/Only zip supported"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
+
 			r, err := zip.OpenReader(fileName.Filename)
 			if err != nil {
 				api.apiLogger.Error(" Couldn't open zipReader", zap.Error(err))
@@ -1440,6 +1448,14 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				errorData.Message = "Internal error/ could not copy file"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+
+			if !strings.HasSuffix(fileName.Filename, ".zip") {
+				errorData.Message = "Bad Request/Only zip supported"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
 				response.WriteEntity(errorData)
 				return
 			}
