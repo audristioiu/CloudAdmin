@@ -18,13 +18,13 @@ const Navbar = () => {
     <>
       <div className='nav'>
         <div className='nav-menu'>
-          <NavLink to='/home' exact activeClassName="active" className="nav-link">
+          <NavLink to='/home' activeclassname="active" className="nav-link">
             Home
           </NavLink>
-          <NavLink to='/profile' exact activeClassName="active" className="nav-link">
+          <NavLink to='/profile' activeclassname="active" className="nav-link">
             Profile
           </NavLink>
-          <NavLink to='/myapps' exact activeClassName="active" className="nav-link">
+          <NavLink to='/myapps' activeclassname="active" className="nav-link">
             MyApps
           </NavLink>
           <button className='logout-btn' onClick={logout}>

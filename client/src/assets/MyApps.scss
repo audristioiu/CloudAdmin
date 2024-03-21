@@ -146,13 +146,14 @@ button {
   tbody th,
   tbody td {
     border: none;
-    padding: 30px;
+    padding: 15px 40px;
     font-size: 14px;
     background: #141e30;
     text-align: center;
 
     &.status span {
       position: relative;
+      display: inline-block;
       border-radius: 30px;
       padding: 4px 10px 4px 25px;
 
