@@ -16,7 +16,7 @@ const Navbar = () => {
     localStorage.removeItem('userPass');
     localStorage.removeItem('userInfo');
 
-    history.push('/');
+    history('/main');
   };
 
   return (
@@ -24,30 +24,18 @@ const Navbar = () => {
       <Nav>
         <Bars />
         <NavMenu>
-          <NavLink to='/home' activeStyle>
+          <NavLink to='/home'>
             Home
           </NavLink>
-          <NavLink to='/profile' activeStyle>
+          <NavLink to='/profile'>
             Profile
           </NavLink>
-          <NavLink to='/myapps' activeStyle>
+          <NavLink to='/myapps'>
             MyApps
           </NavLink>
           <button className='logout-btn' onClick={logout}>
             Logout
           </button>
-          {/* cred ca trebuie un logout + cele de schedule si dashboards*/}
-          {/* <NavLink to='/logout' activeStyle>
-            Teams
-          </NavLink>
-          <NavLink to='/blogs' activeStyle>
-            Blogs
-          </NavLink>
-          <NavLink to='/sign-up' activeStyle>
-            Sign Up
-          </NavLink> */}
-          {/* Second Nav */}
-          {/* <NavBtnLink to='/sign-in'>Sign In</NavBtnLink> */}
         </NavMenu>
       </Nav>
     </>

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from 'axios';
 import { Agent } from 'https';
 import certs from '../Certs/certs.js';
+import '../assets/Error.scss';
 
 function EditApp() {
 
@@ -78,7 +79,7 @@ function EditApp() {
       history("/myapps");
 
     } catch (error) {
-      setErrorMessage('Failed to update APP. Please try again. /' + error.response.data.message);
+      setErrorMessage('Failed to update APP. Please try again. /' + error.message);
     }
   };
 
@@ -171,7 +172,7 @@ function EditApp() {
           Edit</a>
 
       )}
-      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
   )
 }

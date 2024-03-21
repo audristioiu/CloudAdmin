@@ -6,7 +6,8 @@ import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import {Agent} from 'https';
 import certs from '../../Certs/certs';
-import '../Profile.scss';
+import '../../assets/Profile.scss';
+import '../../assets/Error.scss';
 import ReactInputVerificationCode from "react-input-verification-code";
 const styles = {
     heading3: `text-xl font-semibold text-gray-900 p-4 border-b`,
@@ -90,7 +91,7 @@ const OneTimePassword = () => {
             
           } catch (error) {
             console.log(error)
-            setErrorMessage("Could not verify otp /" + error.response.data.message);
+            setErrorMessage("Could not verify otp");
           }
          
       }
@@ -169,7 +170,7 @@ const OneTimePassword = () => {
                   />
                   </StyledReactInputVerificationCode>
                   <p className="mt-2 text-xs text-red-600">
-                  {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
+                  {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
                   </p>
     
                   <div className={styles.buttonGroup}>

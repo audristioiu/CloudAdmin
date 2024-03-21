@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import './MyApps.scss';
+import '../assets/MyApps.scss';
 
 function AppItem(app) {
   const [appName, setAppName] = useState(app.app.name);

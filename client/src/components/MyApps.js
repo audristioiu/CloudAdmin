@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AppItem from './AppItem';
-import './MyApps.scss';
+import '../assets/MyApps.scss';
+import '../assets/Error.scss';
 import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 
@@ -55,7 +56,7 @@ function MyApps() {
       try {
         await axios.post('https://localhost:9443/register/app', formData, config_app, { httpsAgent: agent });
       } catch (error) {
-        setErrorMessage(`Failed to upload app. ${error.response?.data?.message}`);
+        setErrorMessage(`Failed to upload app.`);
       }
     }
   };
@@ -136,7 +137,7 @@ function MyApps() {
         setApps(responseApps.data.Response);
       }
     } catch (error) {
-      setErrorMessage(`Could not retrieve your apps. /${error.response?.data?.message}`);
+      setErrorMessage(`Could not retrieve your apps.`);
       setApps([]);
     }
   };
@@ -236,7 +237,7 @@ function MyApps() {
         </button>
       </form>
 
-      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
 
   );

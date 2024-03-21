@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import user_photo from '../user.png';
 import { Agent } from 'https';
 import certs from '../Certs/certs.js';
+import '../assets/Error.scss';
 
 const EditProfilePage = () => {
   const [jobRole, setJobRole] = useState('');
@@ -92,7 +93,7 @@ const EditProfilePage = () => {
                 { httpsAgent: agent },
               );
             } catch (error) {
-              setErrorMessage("Wrong old password / " + error.response.data.message);
+              setErrorMessage("Wrong old password / " + error.message);
               return
             };
 
@@ -114,7 +115,7 @@ const EditProfilePage = () => {
         }
       }
     } catch (error) {
-      setErrorMessage('Error updating profile. Please try again. /' + error.response.data.message);
+      setErrorMessage('Error updating profile. Please try again. /' + error.message);
     }
   };
 
@@ -217,7 +218,7 @@ const EditProfilePage = () => {
           Update
         </a>
       </form>
-      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
   );
 

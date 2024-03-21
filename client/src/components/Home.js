@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Agent } from 'https';
 import certs from '../Certs/certs';
-import './Login.scss';
+import '../assets/Login.scss';
 
 function Home() {
   const [userDetails, setUserDetails] = useState({
@@ -52,7 +52,7 @@ function Home() {
           });
         }
       } catch (error) {
-        setErrorMessage(`Could not retrieve user details. /${error.response?.data?.message}`);
+        setErrorMessage(`Could not retrieve user details.`);
       }
     };
 
@@ -73,6 +73,7 @@ function Home() {
           <li>Total number of running applications: {userDetails.nrTotalRunningApps} </li>
         </ul>
       </div>
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
   );
 }
