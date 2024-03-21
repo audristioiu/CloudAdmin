@@ -1,11 +1,6 @@
 import React from 'react';
-import {
-  Nav,
-  NavLink,
-  Bars,
-  NavMenu,
-} from './NavbarElements';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, NavLink } from 'react-router-dom';
+import '../assets/Navbar.scss';
   
 const Navbar = () => {
   const history = useNavigate();
@@ -21,23 +16,22 @@ const Navbar = () => {
 
   return (
     <>
-      <Nav>
-        <Bars />
-        <NavMenu>
-          <NavLink to='/home'>
+      <div className='nav'>
+        <div className='nav-menu'>
+          <NavLink to='/home' exact activeClassName="active" className="nav-link">
             Home
           </NavLink>
-          <NavLink to='/profile'>
+          <NavLink to='/profile' exact activeClassName="active" className="nav-link">
             Profile
           </NavLink>
-          <NavLink to='/myapps'>
+          <NavLink to='/myapps' exact activeClassName="active" className="nav-link">
             MyApps
           </NavLink>
           <button className='logout-btn' onClick={logout}>
             Logout
           </button>
-        </NavMenu>
-      </Nav>
+        </div>
+      </div>
     </>
   );
 };
