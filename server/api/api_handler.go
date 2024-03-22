@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -341,7 +342,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 					dbUserData.Password = ""
 					err = api.psqlRepo.UpdateUserData(dbUserData)
 					if err != nil {
-						errorData.Message = "Internal error / updating user data in postgres"
+						errorData.Message = "Internal error / error in updating user data in postgres"
 						errorData.StatusCode = http.StatusInternalServerError
 						response.WriteHeader(http.StatusInternalServerError)
 						response.WriteEntity(errorData)
@@ -365,7 +366,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 						dbUserData.Password = ""
 						err = api.psqlRepo.UpdateUserData(dbUserData)
 						if err != nil {
-							errorData.Message = "Internal error / updating user data in postgres"
+							errorData.Message = "Internal error / error in updating user data in postgres"
 							errorData.StatusCode = http.StatusInternalServerError
 							response.WriteHeader(http.StatusInternalServerError)
 							response.WriteEntity(errorData)
@@ -391,7 +392,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		dbUserData.Password = ""
 		err = api.psqlRepo.UpdateUserData(dbUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.Message = "Internal error / error in updating user data in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -425,7 +426,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		dbUserData.Password = ""
 		err = api.psqlRepo.UpdateUserData(dbUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.Message = "Internal error / error in updating user data in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -447,7 +448,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		newUserData = helpers.GenerateRole(dbUserData)
 		err = api.psqlRepo.UpdateUserRoleData(newUserData.Role, newUserData.UserID, newUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating role in postgres"
+			errorData.Message = "Internal error / error in updating role in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -463,7 +464,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 		err = api.psqlRepo.UpdateUserLastTimeOnlineData(*newUserData.LastTimeOnline, newUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating last_time in postgres"
+			errorData.Message = "Internal error / error in updating last_time in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -634,7 +635,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	}
 
 	if userData.Role != "" || userData.UserID != "" || len(userData.Applications) > 0 || userData.UserLimitLoginAttempts > 0 ||
-		userData.UserLimitTimeout > 0 {
+		userData.UserLimitTimeout > 0 || !reflect.DeepEqual(userData.OTPData, domain.OneTimePassData{}) {
 		api.apiLogger.Error(" Wrong fields to update")
 		errorData.Message = "Bad Request/ wrong fields , you can only update birth_date ,job_role,email,  want_notify or password"
 		errorData.StatusCode = http.StatusBadRequest
@@ -670,7 +671,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 			response.WriteEntity(errorData)
 			return
 		} else {
-			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.Message = "Internal error / error in updating user data in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -757,6 +758,24 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		}
 
 		for _, userApp := range userApps {
+			if api.s3Client != nil {
+				s3FilesName, err := api.s3Client.ListFileFolder(userApp)
+				if err != nil {
+					errorData.Message = "Internal error / error in retrieving files from s3"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				err = api.s3Client.DeleteFiles(s3FilesName)
+				if err != nil {
+					errorData.Message = "Internal error / error in deleting files from s3"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+			}
 			err = api.psqlRepo.DeleteAppData(userApp, username)
 			if err != nil {
 				api.apiLogger.Error(" App could not be deleted/not found ", zap.String("app_name", userApp))
@@ -781,7 +800,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 		if err != nil {
 			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-			errorData.Message = "Internal error / retrieving apps"
+			errorData.Message = "Internal error / error in retrieving apps"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -841,7 +860,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 				response.WriteEntity(errorData)
 				return
 			} else {
-				errorData.Message = "Internal error / delete user data in postgres"
+				errorData.Message = "Internal error / error in delete user data in postgres"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -1203,6 +1222,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 			// Iterate through the files in the archive,
 			// printing some of their contents.
+			s3Key := strings.Split(fileName.Filename, ".")[0]
 			for i, f := range r.File {
 				appData := domain.ApplicationData{}
 
@@ -1215,6 +1235,16 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteHeader(http.StatusInternalServerError)
 					response.WriteEntity(errorData)
 					return
+				}
+				if api.s3Client != nil {
+					err = api.s3Client.UploadFile(s3Key, rc)
+					if err != nil {
+						errorData.Message = "Internal error/ upload s3"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
 				}
 				if api.vtClient != nil {
 					// scan file using virus total
@@ -1304,7 +1334,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					api.apiLogger.Debug("got app description", zap.String("app_descr", appsDescription))
 
 				} else {
-					//+ write in s3
 					nowTime := time.Now()
 					appData.CreatedTimestamp = nowTime
 					appData.UpdatedTimestamp = nowTime
@@ -1471,7 +1500,9 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 			// Iterate through the files in the archive,
 			// printing some of their contents.
+			s3Key := strings.Split(fileName.Filename, ".")[0]
 			for i, f := range r.File {
+
 				api.apiLogger.Debug("Writting information for file", zap.String("file_name", f.Name))
 				rc, err := f.Open()
 				if err != nil {
@@ -1481,6 +1512,16 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteHeader(http.StatusInternalServerError)
 					response.WriteEntity(errorData)
 					return
+				}
+				if api.s3Client != nil {
+					err = api.s3Client.UploadFile(s3Key, rc)
+					if err != nil {
+						errorData.Message = "Internal error/ upload s3"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
 				}
 				if api.vtClient != nil {
 					// scan file using virus total
@@ -1734,10 +1775,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						response.WriteEntity(errorData)
 						return
 					}
-				} else {
-					//upload in s3
-					api.apiLogger.Info("upload s3")
-					api.apiLogger.Info(string(descr))
 
 				}
 
@@ -1909,12 +1946,12 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		if err != nil {
 			if strings.Contains(err.Error(), "fql") {
 				api.apiLogger.Error(" Invalid fql filter for get apps", zap.Error(err))
-				errorData.Message = "Bad Request / Invalid fql filter"
+				errorData.Message = "Bad Request / " + err.Error()
 				errorData.StatusCode = http.StatusBadRequest
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
 			} else {
 				api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-				errorData.Message = "Internal error / retrieving apps"
+				errorData.Message = "Internal error / error retrieving apps"
 				errorData.StatusCode = http.StatusInternalServerError
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
 				response.WriteEntity(appsInfo)
@@ -2062,7 +2099,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 		if err != nil {
 			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-			errorData.Message = "Internal error / retrieving apps"
+			errorData.Message = "Internal error / error in retrieving apps"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2110,7 +2147,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 			response.WriteEntity(errorData)
 			return
 		} else {
-			errorData.Message = "Internal error / updating app data in postgres"
+			errorData.Message = "Internal error / error in updating app data in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2210,7 +2247,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-		errorData.Message = "Internal error / retrieving apps"
+		errorData.Message = "Internal error / error in retrieving apps"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -2223,7 +2260,26 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 
 	for _, appName := range appNamesList {
-		err := api.psqlRepo.DeleteAppData(strings.TrimSpace(appName), username)
+		if api.s3Client != nil {
+			s3FilesName, err := api.s3Client.ListFileFolder(appName)
+			if err != nil {
+				errorData.Message = "Internal error / error in retrieving files from s3"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			err = api.s3Client.DeleteFiles(s3FilesName)
+			if err != nil {
+				errorData.Message = "Internal error / error in deleting files from s3"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+		}
+
+		err = api.psqlRepo.DeleteAppData(strings.TrimSpace(appName), username)
 		if err != nil {
 			if strings.Contains(err.Error(), "no row found") {
 				api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
@@ -2233,7 +2289,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				response.WriteEntity(errorData)
 				return
 			} else {
-				errorData.Message = "Internal Error / Delete app"
+				errorData.Message = "Internal Error / error Delete app"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2242,7 +2298,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		}
 		err = api.psqlRepo.DeleteUserAppsData(strings.TrimSpace(appName), username)
 		if err != nil {
-			errorData.Message = "Internal Error / Delete app from user"
+			errorData.Message = "Internal Error / error in Delete app from user"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2273,6 +2329,24 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
 				return
+			}
+			if app.IpAddress != nil {
+				err := api.kubeClient.DeleteAutoScaler(deployName, app.Namespace)
+				if err != nil {
+					errorData.Message = "Internal error/ failed to delete autoscaler"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
+				if err != nil {
+					errorData.Message = "Internal error/ failed to delete load balancer"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
 			}
 		}
 	}
@@ -2450,7 +2524,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-		errorData.Message = "Internal error / retrieving apps"
+		errorData.Message = "Internal error / error in retrieving apps"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -2472,13 +2546,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	}
 
 	serverPort, _ := strconv.ParseInt(request.QueryParameter("server_port"), 0, 32)
-	if serverPort <= int64(0) || serverPort > int64(65535) {
-		errorData.Message = "Bad request / invalid port"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
+
 	taskItems := make([]priority_queue.TaskItem, 0)
 	pairNames := make([][]string, 0)
 	deleteDirNames := make([]string, 0)
@@ -2486,10 +2554,32 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	// push images to docker registry and retrieve task items
 	for _, app := range appsInfo.Response {
 		dirName := strings.Split(app.Name, ".")[0]
-		newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, int32(serverPort), app, api.apiLogger)
+		filesFromAppFolder := make([]string, 0)
+		if api.s3Client != nil {
+			dirNameFiles, err := api.s3Client.ListFileFolder(dirName)
+			if err != nil {
+				errorData.Message = "Internal error / error in listing files from s3"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+			}
+			err = api.s3Client.DownloadFiles(dirName, dirNameFiles)
+			if err != nil {
+				errorData.Message = "Internal error / error in downloading files from s3"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+			}
+			for _, fileName := range dirNameFiles {
+				name := strings.Split(fileName, dirName+"/")
+				filesFromAppFolder = append(filesFromAppFolder, name[1])
+			}
+		}
+
+		newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, filesFromAppFolder, int32(serverPort), app, api.apiLogger)
 		if err != nil {
 			api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
-			errorData.Message = "Internal error / generating docker file"
+			errorData.Message = "Internal error / error in generating docker file"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2502,7 +2592,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		if math.Trunc(time.Since(app.UpdatedTimestamp).Seconds()) <= float64(10) || app.UpdatedTimestamp.UnixNano() == app.CreatedTimestamp.UnixNano() {
 			err = api.dockerClient.BuildImage(imageName)
 			if err != nil {
-				errorData.Message = "Internal error / building image"
+				errorData.Message = "Internal error / error in building image"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2510,7 +2600,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 			tagName, err = api.dockerClient.PushImage(imageName)
 			if err != nil {
-				errorData.Message = "Internal error / pushing image"
+				errorData.Message = "Internal error / error in pushing image"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2534,7 +2624,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	userNameSpace, err = api.kubeClient.CreateNamespace("namespace-"+strings.ReplaceAll(username, "_", "-"), scheduleType)
 	if err != nil {
-		errorData.Message = "Internal error / creating namespace"
+		errorData.Message = "Internal error / error in creating namespace"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -2544,7 +2634,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 		file, err := os.Create("tasks_duration.json")
 		if err != nil {
-			errorData.Message = "Internal error /  create task duration file"
+			errorData.Message = "Internal error /  error in create task duration file"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2553,7 +2643,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 		err = os.WriteFile(file.Name(), fileData, 0644)
 		if err != nil {
-			errorData.Message = "Internal error /  write to task duration file"
+			errorData.Message = "Internal error /  error in write to task duration file"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2562,7 +2652,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 		tasksPQ, err := schedule_alghoritms.CreatePriorityQueueBasedOnTasksDuration(file.Name(), api.apiLogger)
 		if err != nil {
-			errorData.Message = "Internal error / failed priority queue"
+			errorData.Message = "Internal error / failed to crete priority queue"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2578,10 +2668,17 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		imageName := strings.ToLower(strings.ReplaceAll(pairImageTag[1], "_", "-"))
 		app := appsInfo.Response[i]
 		if scheduleType == "random_scheduler" {
+			if serverPort <= int64(0) || serverPort > int64(65535) {
+				errorData.Message = "Bad request / invalid port"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
 			publicIp, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
 				[]string{}, int32(serverPort), int32(nrReplicas))
 			if err != nil {
-				errorData.Message = "Internal error / creating deployment"
+				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2589,7 +2686,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 			_, err = api.kubeClient.CreateAutoScaler(imageName, userNameSpace, int32(1), int32(5))
 			if err != nil {
-				errorData.Message = "Internal error / creating auto scaler"
+				errorData.Message = "Internal error / error in creating auto scaler"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2599,7 +2696,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
 				[]string{}, int32(0), int32(nrReplicas))
 			if err != nil {
-				errorData.Message = "Internal error / creating deployment"
+				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2609,7 +2706,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", "",
 				[]string{}, int32(0), int32(nrReplicas))
 			if err != nil {
-				errorData.Message = "Internal error / creating deployment"
+				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2627,8 +2724,12 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		updatedAppData.IsRunning = true
 		updatedAppData.UpdatedTimestamp = time.Now()
 		port := int(serverPort)
-		ipAdress := fmt.Sprintf("http://%s", publicIp)
-		updatedAppData.IpAddress = &ipAdress
+		var ipAddress string
+		if publicIp != "" {
+			ipAddress = fmt.Sprintf("http://%s", publicIp)
+		}
+
+		updatedAppData.IpAddress = &ipAddress
 		updatedAppData.Port = &port
 
 		err = api.psqlRepo.UpdateAppData(&updatedAppData)
@@ -2643,7 +2744,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	}
 
 	for _, dir := range dirNames {
-		err := api.dockerClient.ListContainersAndDelete(dir)
+		err := api.dockerClient.ListImagesAndDelete(dir)
 		if err != nil {
 			errorData.Message = "Internal error / failed to delete containers"
 			errorData.StatusCode = http.StatusInternalServerError
@@ -2652,6 +2753,12 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			return
 		}
 	}
+
+	//clear all the cache for that specific user
+	for _, cachedReq := range cachedRequests[username] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[username] = make([]string, 0)
 
 	for _, dir := range deleteDirNames {
 		os.RemoveAll(dir)
@@ -2683,19 +2790,18 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		return
 	}
 
-	podName := request.QueryParameter("pod_name")
-	if podName == "" {
-		api.apiLogger.Error(" Couldn't read pod name query parameter")
-		errorData.Message = "Bad Request/ empty pod name"
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
 
-	splitPodName := strings.Split(podName, "-deployment")[0]
-	splitApp := strings.Split(splitPodName, "-"+splitPodName[len(splitPodName)-2:])
-	appName := strings.ReplaceAll(splitApp[0]+"."+splitPodName[len(splitPodName)-2:], "-", "_")
+	podName := strings.ReplaceAll(appName, "_", "-")
+	podName = strings.ReplaceAll(podName, ".", "-") + "-deployment"
 
 	userData, err := api.psqlRepo.GetUserData(username)
 	if err != nil {
@@ -2745,7 +2851,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-		errorData.Message = "Internal error / retrieving apps"
+		errorData.Message = "Internal error / error in retrieving apps"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -2764,6 +2870,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
+		return
 	}
 
 	getPodResultsMetric.Mark(1)
@@ -2771,7 +2878,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}
-	podLogsResponse.PrintMessage = podLogs
+	podLogsResponse.PrintMessage = strings.Join(podLogs, "\n\n\n\n")
 	podLogsResponse.AppName = podName
 	response.WriteEntity(podLogsResponse)
 

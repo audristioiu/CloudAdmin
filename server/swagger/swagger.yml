@@ -314,7 +314,7 @@ paths:
               properties:
                 type:
                   type: array
-                  description: zip archives which contains the code and description
+                  description: zip archives which contain the code and description
                     files(same name for both,description being txt)
                   items:
                     type: string
@@ -473,9 +473,9 @@ paths:
         required: true
         schema:
           type: string
-      - name: pod_name
+      - name: app_name
         in: query
-        description: pod name for which you want to get logs for
+        description: app name for which you want to get logs for
         required: true
         schema:
           type: string

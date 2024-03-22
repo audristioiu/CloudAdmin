@@ -147,12 +147,30 @@ func (s *Service) StartWebService() {
 			log.Fatal("[FATAL] Failed to create new virus total client")
 			return
 		}
+		log.Debug("Initialized VT Client")
 	} else {
 		vtClient = nil
 	}
 
+	var s3Client *clients.S3Client
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
+	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
+	awsRegion := os.Getenv("AWS_S3_REGION")
+	awsBucket := os.Getenv("AWS_S3_BUCKET")
+	disableS3 := os.Getenv("DISABLE_S3")
+	if disableS3 != "true" {
+		s3Client, err = clients.NewS3Client(ctx, awsAccessKey, awsSecretKey, awsBucket, awsRegion, log)
+		if err != nil {
+			log.Fatal("[FATAL] Error in creating s3 client")
+			return
+		}
+		log.Debug("Initialized S3 Client")
+	} else {
+		s3Client = nil
+	}
+
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient,
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient, s3Client,
 		graphiteAddr, requestCount, maxRequestPerMinute, vtClient)
 	apiManager.RegisterRoutes(ws)
 

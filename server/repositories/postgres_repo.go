@@ -360,9 +360,9 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 	var rows pgx.Rows
 	filterArguments := make(pgx.NamedArgs, 0)
 	//Parse fql filter
-	filters := helpers.ParseFQLFilter(filterConditions, p.psqlLogger)
-	if filters == nil {
-		return 0, 0, nil, fmt.Errorf("could not parse fql filter")
+	filters, err := helpers.ParseFQLFilter(filterConditions, p.psqlLogger)
+	if err != nil {
+		return 0, 0, nil, err
 	}
 	if len(filters) > 0 && len(filters[0]) >= 3 {
 		selectStatement := `SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp, 

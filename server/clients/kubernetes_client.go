@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"go.uber.org/zap"
+
 	appsv1 "k8s.io/api/apps/v1"
 	hpav2 "k8s.io/api/autoscaling/v2"
 	apiv1 "k8s.io/api/core/v1"
@@ -344,6 +345,21 @@ func (k *KubernetesClient) CreateLoadBalancer(imageName, namespace string, port 
 	return ip, nil
 }
 
+// DeleteLoadBalancer deletes load balancer from the required namespace
+func (k *KubernetesClient) DeleteLoadBalancer(serviceName, namespace string) error {
+	servicesClient := k.kubeClient.CoreV1().Services(namespace)
+	deletePolicy := metav1.DeletePropagationForeground
+	err := servicesClient.Delete(k.ctx, serviceName+"-service", metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})
+	if err != nil {
+		k.kubeLogger.Error("failed to delete load balancer", zap.String("lb_name", serviceName), zap.Error(err))
+		return err
+	}
+	k.kubeLogger.Info("Deleted service", zap.String("lb_name", serviceName))
+	return nil
+}
+
 // CreateDeployment creates a deployment for image in the required namespace with a specific nr of replicas
 func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName,
 	schedulerName string, schedulerCommands []string, portNr, nrReplicas int32) (string, error) {
@@ -508,42 +524,50 @@ func (k *KubernetesClient) ListPods(namespace string) []string {
 }
 
 // GetLogsForPodName iterates through replicas of podName and returns logs
-func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) (string, error) {
+func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) ([]string, error) {
 	logList := make([]string, 0)
 	podsClient := k.kubeClient.CoreV1().Pods(namespace)
-	pods, err := podsClient.List(k.ctx, metav1.ListOptions{LabelSelector: "app=" + podName})
-	if err != nil {
-		k.kubeLogger.Error("failed to list pods", zap.Error(err))
-		return "", err
-	}
-	for _, pod := range pods.Items {
-		logFromPod := podsClient.GetLogs(pod.Name, &apiv1.PodLogOptions{})
-		podLogs, err := logFromPod.Stream(k.ctx)
+	for {
+		pods, err := podsClient.List(k.ctx, metav1.ListOptions{LabelSelector: "app=" + podName})
 		if err != nil {
-			k.kubeLogger.Error("failed to get stream", zap.Error(err))
-			return "", err
+			k.kubeLogger.Error("failed to list pods", zap.Error(err))
+			return nil, err
 		}
-		defer podLogs.Close()
+		for _, pod := range pods.Items {
 
-		buf := new(bytes.Buffer)
-		_, err = io.Copy(buf, podLogs)
-		if err != nil {
-			k.kubeLogger.Error("error in copy information from podLogs to buf", zap.Error(err))
-			return "", err
+			if pod.Status.Phase == apiv1.PodPending {
+				k.kubeLogger.Warn("waiting for pod to be ready")
+			} else {
+				logFromPod := podsClient.GetLogs(pod.Name, &apiv1.PodLogOptions{})
+				podLogs, err := logFromPod.Stream(k.ctx)
+				if err != nil {
+					k.kubeLogger.Error("failed to get stream", zap.Error(err))
+					return nil, err
+				}
+				defer podLogs.Close()
+
+				buf := new(bytes.Buffer)
+				_, err = io.Copy(buf, podLogs)
+				if err != nil {
+					k.kubeLogger.Error("error in copy information from podLogs to buf", zap.Error(err))
+					return nil, err
+				}
+				str := buf.String()
+				logList = append(logList, str)
+			}
 		}
-		str := buf.String()
-		logList = append(logList, str)
-	}
-	if len(logList) == 0 {
-		return "", fmt.Errorf("failed to get logs")
-	}
+		if len(logList) == 0 {
+			return nil, fmt.Errorf("no pods found")
+		} else {
+			break
+		}
 
-	return logList[0], nil
+	}
+	return logList, nil
 }
 
 // CreateAutoScaler creates a horizontal pod auto scaler for deploymentName (todo not working)
 func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) (*hpav2.HorizontalPodAutoscaler, error) {
-	//todo recalculate
 	memoryTargetUtilization := int32(70)
 	cpuTargetUtilization := int32(50)
 	autoscaler := &hpav2.HorizontalPodAutoscaler{
@@ -567,7 +591,7 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 						Name: "cpu",
 						Target: hpav2.MetricTarget{
 							Type:               "Utilization",
-							AverageUtilization: ptr.To[int32](cpuTargetUtilization),
+							AverageUtilization: ptr.To(cpuTargetUtilization),
 						},
 					},
 				},
@@ -577,7 +601,7 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 						Name: "memory",
 						Target: hpav2.MetricTarget{
 							Type:               "Utilization",
-							AverageUtilization: ptr.To[int32](memoryTargetUtilization),
+							AverageUtilization: ptr.To(memoryTargetUtilization),
 						},
 					},
 				},
@@ -602,7 +626,7 @@ func (k *KubernetesClient) UpdateAutoScaler(deploymentName string, namespace str
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Retrieve the latest version of HPA before attempting update
 		// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver
-		result, getErr := k.kubeClient.AutoscalingV1().HorizontalPodAutoscalers(namespace).Get(k.ctx, deploymentName+"-hpa", metav1.GetOptions{})
+		result, getErr := k.kubeClient.AutoscalingV2().HorizontalPodAutoscalers(namespace).Get(k.ctx, deploymentName+"-hpa", metav1.GetOptions{})
 		if getErr != nil {
 			k.kubeLogger.Error("failed to get hpa", zap.Error(getErr))
 			return getErr
@@ -616,7 +640,7 @@ func (k *KubernetesClient) UpdateAutoScaler(deploymentName string, namespace str
 			result.Spec.MaxReplicas = maxReplicas
 		}
 
-		_, updateErr := k.kubeClient.AutoscalingV1().HorizontalPodAutoscalers(namespace).Update(k.ctx, result, metav1.UpdateOptions{})
+		_, updateErr := k.kubeClient.AutoscalingV2().HorizontalPodAutoscalers(namespace).Update(k.ctx, result, metav1.UpdateOptions{})
 		if updateErr != nil {
 			k.kubeLogger.Error("failed to update hpa", zap.Error(updateErr))
 			return updateErr
@@ -629,4 +653,19 @@ func (k *KubernetesClient) UpdateAutoScaler(deploymentName string, namespace str
 	}
 
 	k.kubeLogger.Debug("Sucesfully updated autoscaler", zap.String("app_name", deploymentName))
+}
+
+// DeleteAutoScaler deletes autoscaler from the required namespace
+func (k *KubernetesClient) DeleteAutoScaler(autoScalerName, namespace string) error {
+	autoScalersClient := k.kubeClient.AutoscalingV2().HorizontalPodAutoscalers(namespace)
+	deletePolicy := metav1.DeletePropagationForeground
+	err := autoScalersClient.Delete(k.ctx, autoScalerName+"-hpa", metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})
+	if err != nil {
+		k.kubeLogger.Error("failed to delete autoscaler", zap.String("autoscaler_name", autoScalerName), zap.Error(err))
+		return err
+	}
+	k.kubeLogger.Info("Deleted autoscaler", zap.String("autoscaler_name", autoScalerName))
+	return nil
 }

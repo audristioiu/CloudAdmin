@@ -169,7 +169,7 @@ description=NULL&&is_running="false"||kname="test"&&created_timestamp<"1day"
 */
 
 // ParseFQLFilter returns filters in slice of slices of strings
-func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
+func ParseFQLFilter(fqlString string, logger *zap.Logger) ([][]string, error) {
 	s := fql.NewScanner(strings.NewReader(fqlString))
 
 	listFilters := make([][]string, 20)
@@ -182,15 +182,24 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 			logger.Debug("End of parsing")
 			break
 		}
-
+		fmt.Println(t.Type)
+		fmt.Println(t.Literal)
 		if err != nil {
 			logger.Error("error in scanning", zap.Error(err))
-			return nil
+			return nil, err
 		}
-		if t.Type == fql.TokenWS || (t.Type == fql.TokenText && t.Literal == "NULL") ||
-			(t.Type == fql.TokenIdentifier && !slices.Contains(GetAppsFilters, t.Literal) && t.Literal != "NULL") {
+		if t.Type == fql.TokenWS {
 			logger.Error("invalid fql value", zap.String("literal", t.Literal))
-			return nil
+			return nil, fmt.Errorf("invalid fql value , no whitespace allowed")
+		}
+		if t.Type == fql.TokenText && t.Literal == "NULL" {
+			logger.Error("invalid fql value for text token", zap.String("literal", t.Literal))
+			return nil, fmt.Errorf("invalid fql value for text token . NULL is not allowed ")
+		}
+		if t.Type == fql.TokenIdentifier && !slices.Contains(GetAppsFilters, t.Literal) && t.Literal != "NULL" {
+			logger.Error("invalid fql value for identifier token", zap.String("literal", t.Literal))
+			return nil, fmt.Errorf("invalid fql value for identifier token . Text is not allowed")
+
 		}
 		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || t.Type == fql.TokenGroup || t.Type == fql.TokenNumber {
 			if t.Type == fql.TokenGroup {
@@ -221,7 +230,6 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 							separatedLiteral = strings.Split(literal, "<")
 							separator = "<"
 						}
-
 						listFilters[idx] = append(listFilters[idx], separatedLiteral[0])
 						listFilters[idx] = append(listFilters[idx], separator)
 						listFilters[idx] = append(listFilters[idx], separatedLiteral[1])
@@ -245,7 +253,19 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 	}
 
 	logger.Debug("got list of filters", zap.Any("filter list", listFilters))
-	return listFilters
+	for _, filter := range listFilters {
+		if len(filter) == 3 {
+			if filter[0] == "port" && regexp.MustCompile(`\D`).MatchString(filter[2]) {
+				logger.Error("invalid fql value for port", zap.String("port_value", filter[2]))
+				return nil, fmt.Errorf("invalid fql value for port . Text is not allowed")
+			}
+			if strings.Contains(filter[0], "timestamp") && !regexp.MustCompile(`[0-9]{2}[day]`).MatchString(filter[2]) {
+				logger.Error("invalid fql value for created_timestamp", zap.String("timestamp_value", filter[2]))
+				return nil, fmt.Errorf("invalid fql value for timestamp . Format is not allowed")
+			}
+		}
+	}
+	return listFilters, nil
 }
 
 // WriteDockerFile writes parameters for Dockerfile
@@ -546,10 +566,12 @@ func copy(src, dst string) (int64, error) {
 }
 
 // GenerateDockerFile returns name of the dockerfile created using app info + task item
-func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domain.ApplicationData, logger *zap.Logger) (string, []priority_queue.TaskItem, error) {
-
-	var taskExecutionTime []priority_queue.TaskItem
-
+func GenerateDockerFile(dirName,
+	scheduleType string,
+	files []string,
+	port int32,
+	appData *domain.ApplicationData,
+	logger *zap.Logger) (string, []priority_queue.TaskItem, error) {
 	mkDirName := dirName + "-" + strings.Split(appData.Name, ".")[1]
 	var packageJs []string
 	var inOutFiles []string
@@ -557,53 +579,77 @@ func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domai
 	hasPkg := false
 	hasReqs := false
 	hasGoMod := false
-	//todo luat fisier de pe local(in viitor s3) si scris la locatie
-	err := os.Mkdir(mkDirName, 0666)
-	if err != nil {
-		logger.Error("failed to create directory", zap.Error(err))
-		return "", nil, err
-	}
 	path, _ := os.Getwd()
 	path = strings.ReplaceAll(path, "CloudAdmin", "")
 	path = strings.ReplaceAll(path, "server", "")
 	path = filepath.Join(path, filepath.Base(mkDirName)) + "\\"
-	_, err = copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
-	if err != nil {
-		logger.Error("failed to copy", zap.Error(err))
-		return "", nil, err
-	}
+	var taskExecutionTime []priority_queue.TaskItem
+	if len(files) == 0 {
 
-	for _, subApp := range appData.SubgroupFiles {
-		_, err = copy(path+subApp, filepath.Join(mkDirName, filepath.Base(subApp)))
+		//todo luat fisier de pe local(in viitor s3) si scris la locatie
+		err := os.Mkdir(mkDirName, 0666)
+		if err != nil {
+			logger.Error("failed to create directory", zap.Error(err))
+			return "", nil, err
+		}
+
+		_, err = copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
 		if err != nil {
 			logger.Error("failed to copy", zap.Error(err))
 			return "", nil, err
 		}
-	}
-	//check if extra files does exist in directory
-	_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".in")
-	if err == nil {
-		copy(path+strings.Split(appData.Name, ".")[0]+".in", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".in")))
-		inFile := strings.Split(appData.Name, ".")[0] + ".in"
-		inOutFiles = append(inOutFiles, inFile+" "+inFile)
-	}
-	_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".out")
-	if err == nil {
-		copy(path+strings.Split(appData.Name, ".")[0]+".out", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".out")))
-		outFile := strings.Split(appData.Name, ".")[0] + ".out"
-		inOutFiles = append(inOutFiles, outFile+" "+outFile)
-	}
-	_, err = os.Stat(path + "package.json")
-	if err == nil {
-		hasPkg = true
-	}
-	_, err = os.Stat(path + "requirements.txt")
-	if err == nil {
-		hasReqs = true
-	}
-	_, err = os.Stat(path + "go.mod")
-	if err == nil {
-		hasGoMod = true
+
+		for _, subApp := range appData.SubgroupFiles {
+			_, err = copy(path+subApp, filepath.Join(mkDirName, filepath.Base(subApp)))
+			if err != nil {
+				logger.Error("failed to copy", zap.Error(err))
+				return "", nil, err
+			}
+		}
+		//check if extra files does exist in directory
+		_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".in")
+		if err == nil {
+			copy(path+strings.Split(appData.Name, ".")[0]+".in", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".in")))
+			inFile := strings.Split(appData.Name, ".")[0] + ".in"
+			inOutFiles = append(inOutFiles, inFile+" "+inFile)
+		}
+		_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".out")
+		if err == nil {
+			copy(path+strings.Split(appData.Name, ".")[0]+".out", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".out")))
+			outFile := strings.Split(appData.Name, ".")[0] + ".out"
+			inOutFiles = append(inOutFiles, outFile+" "+outFile)
+		}
+		_, err = os.Stat(path + "package.json")
+		if err == nil {
+			hasPkg = true
+		}
+		_, err = os.Stat(path + "requirements.txt")
+		if err == nil {
+			hasReqs = true
+		}
+		_, err = os.Stat(path + "go.mod")
+		if err == nil {
+			hasGoMod = true
+		}
+	} else {
+		for _, file := range files {
+			if strings.Contains(file, ".in") || strings.Contains(file, ".out") {
+				inOutFiles = append(inOutFiles, file)
+			}
+			if strings.Contains(file, "package.json") {
+				hasPkg = true
+				packageJs = []string{"package.json package.json", "package-lock.json package-lock.json"}
+				runJs = "npm install"
+			}
+			if strings.Contains(file, "requirements.txt") {
+				hasReqs = true
+				runPy = "pip install -r requirements.txt"
+			}
+			if strings.Contains(file, "go.mod") {
+				hasGoMod = true
+				runGo = "go mod download"
+			}
+		}
 	}
 	dockFile, err := os.Create(filepath.Join(mkDirName, filepath.Base("Dockerfile")))
 	if err != nil {

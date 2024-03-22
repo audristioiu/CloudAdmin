@@ -35,6 +35,7 @@ type API struct {
 	profiler            *repositories.ProfilingService
 	dockerClient        *clients.DockerClient
 	kubeClient          *clients.KubernetesClient
+	s3Client            *clients.S3Client
 	graphiteAddr        *net.TCPAddr
 	requestCount        map[string]int
 	maxRequestPerMinute int
@@ -43,7 +44,7 @@ type API struct {
 
 // NewAPI returns an API object
 func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger,
-	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient,
+	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient, s3Client *clients.S3Client,
 	graphiteAddr *net.TCPAddr, requestCount map[string]int, maxRequestPerMinute int, vtClient *vt.Client) *API {
 	return &API{
 		ctx:                 ctx,
@@ -53,6 +54,7 @@ func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cach
 		profiler:            cpuProfiler,
 		dockerClient:        dockerClient,
 		kubeClient:          kubeClient,
+		s3Client:            s3Client,
 		graphiteAddr:        graphiteAddr,
 		requestCount:        requestCount,
 		maxRequestPerMinute: maxRequestPerMinute,
@@ -206,7 +208,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("is_complex", "flag complex app split in multi source files").DataType("boolean").Required(false).AllowEmptyValue(false)).
-			Param(ws.FormParameter("type", "zip archive which contains the code and description files(same name for both,description being txt,order for every app is source_code,then description)").AllowMultiple(true).
+			Param(ws.FormParameter("type", "zip archives which contain the code and description files(same name for both,description being txt,order for every app is source_code,then description)").AllowMultiple(true).
 				DataType("file").Required(true).AllowMultiple(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
@@ -314,7 +316,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			GET(getPodResultPath).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("pod_name", "pod name for which you want to get logs for").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(false)).
+			Param(ws.QueryParameter("app_name", "app name for which you want to get logs for").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(false)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
 			Doc("Get pod results").
 			Metadata(restfulspec.KeyOpenAPITags, tags).
