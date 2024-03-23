@@ -460,7 +460,7 @@ func (k *KubernetesClient) ListDeployments(namespace string) []string {
 }
 
 // UpdateDeployments updates deployment with nrReplicas and new Image
-func (k *KubernetesClient) UpdateDeployment(deployName, namespace, newImage string, nrReplicas int32) {
+func (k *KubernetesClient) UpdateDeployment(deployName, namespace, newImage string, nrReplicas int32) error {
 
 	deploymentsClient := k.kubeClient.AppsV1().Deployments(namespace)
 
@@ -489,9 +489,10 @@ func (k *KubernetesClient) UpdateDeployment(deployName, namespace, newImage stri
 	})
 	if retryErr != nil {
 		k.kubeLogger.Error("failed on retrier", zap.Error(retryErr))
-		return
+		return retryErr
 	}
 	k.kubeLogger.Debug("Succesfully updated deployment", zap.String("deployment", deployName))
+	return nil
 }
 
 // DeleteDeployment deletes deployment from the required namespace
@@ -622,7 +623,7 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 }
 
 // UpdateAutoScaler updates auto scaler with min and max replicas
-func (k *KubernetesClient) UpdateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) {
+func (k *KubernetesClient) UpdateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) error {
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Retrieve the latest version of HPA before attempting update
 		// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver
@@ -649,10 +650,11 @@ func (k *KubernetesClient) UpdateAutoScaler(deploymentName string, namespace str
 	})
 	if retryErr != nil {
 		k.kubeLogger.Error("failed on retrier", zap.Error(retryErr))
-		return
+		return retryErr
 	}
 
 	k.kubeLogger.Debug("Sucesfully updated autoscaler", zap.String("app_name", deploymentName))
+	return nil
 }
 
 // DeleteAutoScaler deletes autoscaler from the required namespace

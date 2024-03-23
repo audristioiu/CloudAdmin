@@ -30,13 +30,15 @@ import (
 )
 
 var (
-	//map of users with their specific cached requests as value
+	// map of users with their specific cached requests as value
 	cachedRequests = make(map[string][]string, 0)
-	// register metrics for graphite client
-	getAppsMetric        = metrics.GetOrRegisterMeter("applications.get", nil)
-	getAppsLatencyMetric = metrics.GetOrRegisterTimer("get_apps_latency.response", nil)
-	updateAppsMetric     = metrics.GetOrRegisterMeter("applications.update", nil)
-	registerAppMetric    = metrics.GetOrRegisterMeter("applications.register", nil)
+	// metrics for graphite client
+	getAppsMetric           = metrics.GetOrRegisterMeter("applications.get", nil)
+	getAppsLatencyMetric    = metrics.GetOrRegisterTimer("get_apps_latency.response", nil)
+	updateAppsMetric        = metrics.GetOrRegisterMeter("applications.update", nil)
+	failedUpdateAppMetric   = metrics.GetOrRegisterMeter("applications.failed_update", nil)
+	registerAppMetric       = metrics.GetOrRegisterMeter("applications.register", nil)
+	failedRegisterAppMetric = metrics.GetOrRegisterMeter("applications.failed_register", nil)
 
 	malwareFileMetric = metrics.GetOrRegisterMeter("applications.malware", nil)
 	safeFileMetric    = metrics.GetOrRegisterMeter("applications.safe", nil)
@@ -45,11 +47,14 @@ var (
 	scheduleAppsLatencyMetric = metrics.GetOrRegisterTimer("schedule_apps_latency.response", nil)
 	getPodResultsMetric       = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
 
-	loginMetrics       = metrics.GetOrRegisterMeter("users_login", nil)
-	failedLoginMetrics = metrics.GetOrRegisterMeter("users_failed_login", nil)
-	getUserMetric      = metrics.GetOrRegisterMeter("users.get.profile", nil)
-	updateUserMetric   = metrics.GetOrRegisterMeter("users.update.profile", nil)
-	userLatencyMeric   = metrics.GetOrRegisterTimer("users_get_profile_latency.response", nil)
+	loginMetrics             = metrics.GetOrRegisterMeter("users_login", nil)
+	failedLoginMetrics       = metrics.GetOrRegisterMeter("users_failed_login", nil)
+	getUserMetric            = metrics.GetOrRegisterMeter("users.get.profile", nil)
+	updateUserMetric         = metrics.GetOrRegisterMeter("users.update.profile", nil)
+	failedUpdateUserMetric   = metrics.GetOrRegisterMeter("users.failed_update_profile", nil)
+	registerUserMetric       = metrics.GetOrRegisterMeter("users.register", nil)
+	failedRegisterUserMetric = metrics.GetOrRegisterMeter("users.failed_register", nil)
+	userLatencyMeric         = metrics.GetOrRegisterTimer("users_get_profile_latency.response", nil)
 
 	totalRequestsMetric = metrics.GetOrRegisterCounter("total_requests.count", nil)
 
@@ -119,6 +124,8 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	}
 
 	if len(userData.Password) < 16 {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" password too short")
 		errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
 		errorData.StatusCode = http.StatusBadRequest
@@ -127,6 +134,8 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 	if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" password does not contain digits")
 		errorData.Message = "Bad Request/ Password does not contain digits"
 		errorData.StatusCode = http.StatusBadRequest
@@ -135,6 +144,8 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 	if !unicode.IsUpper(rune(userData.Password[0])) {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" password does not start with uppercase")
 		errorData.Message = "Bad Request/ Password does not start with uppercase"
 		errorData.StatusCode = http.StatusBadRequest
@@ -143,6 +154,8 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 	if !helpers.HasSymbol(userData.Password) {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" password does not have special characters")
 		errorData.Message = "Bad Request/ Password does not have special characters"
 		errorData.StatusCode = http.StatusBadRequest
@@ -151,6 +164,8 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 	if strings.Contains(userData.Password, userData.UserName) {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" password contains user")
 		errorData.Message = "Bad Request/ Password contains user"
 		errorData.StatusCode = http.StatusBadRequest
@@ -203,7 +218,10 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	registerResponse.Message = "User registered succesfully"
 	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(registerResponse)
+	registerUserMetric.Mark(1)
 	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+
 }
 
 // UserLogin verifies user credentials
@@ -635,26 +653,64 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	}
 
 	if userData.Role != "" || userData.UserID != "" || len(userData.Applications) > 0 || userData.UserLimitLoginAttempts > 0 ||
-		userData.UserLimitTimeout > 0 || !reflect.DeepEqual(userData.OTPData, domain.OneTimePassData{}) {
+		userData.UserLimitTimeout > 0 || userData.UserTimeout != nil ||
+		userData.NrDeployedApps != 0 || userData.WantNotify || userData.UserLocked ||
+		!reflect.DeepEqual(userData.OTPData, domain.OneTimePassData{}) {
+		failedUpdateUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" Wrong fields to update")
-		errorData.Message = "Bad Request/ wrong fields , you can only update birth_date ,job_role,email,  want_notify or password"
+		errorData.Message = "Bad Request/ wrong fields to update"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
 	if userData.Password != "" {
-		if len(userData.Password) < 8 {
+		if len(userData.Password) < 16 {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 			api.apiLogger.Error(" password too short")
-			errorData.Message = "Bad Request/ Password too short"
+			errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+			api.apiLogger.Error(" password does not contain digits")
+			errorData.Message = "Bad Request/ Password does not contain digits"
 			errorData.StatusCode = http.StatusBadRequest
 			response.WriteHeader(http.StatusBadRequest)
 			response.WriteEntity(errorData)
 			return
 		}
 		if !unicode.IsUpper(rune(userData.Password[0])) {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 			api.apiLogger.Error(" password does not start with uppercase")
 			errorData.Message = "Bad Request/ Password does not start with uppercase"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		if !helpers.HasSymbol(userData.Password) {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+			api.apiLogger.Error(" password does not have special characters")
+			errorData.Message = "Bad Request/ Password does not have special characters"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		if strings.Contains(userData.Password, userData.UserName) {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+			api.apiLogger.Error(" password contains user")
+			errorData.Message = "Bad Request/ Password contains user"
 			errorData.StatusCode = http.StatusBadRequest
 			response.WriteHeader(http.StatusBadRequest)
 			response.WriteEntity(errorData)
@@ -785,16 +841,6 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 				response.WriteEntity(errorData)
 				return
 			}
-			execName := strings.Split(userApp, ".")[0]
-			extensionName := strings.Split(userApp, ".")[1]
-			err = api.dockerClient.ListImagesAndDelete(execName + "_" + extensionName)
-			if err != nil {
-				errorData.Message = "Internal error/ failed to remove images"
-				errorData.StatusCode = http.StatusInternalServerError
-				response.WriteHeader(http.StatusInternalServerError)
-				response.WriteEntity(errorData)
-				return
-			}
 		}
 
 		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
@@ -811,7 +857,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 			if app.IsRunning {
 				execName := strings.Split(app.Name, ".")[0]
 				extensionName := strings.Split(app.Name, ".")[1]
-				deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName + "-" + extensionName + "-deployment")
+				deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName)
 				err = api.kubeClient.DeleteDeployment(deployName, app.Namespace)
 				if err != nil {
 					errorData.Message = "Internal error/ failed to delete deployment"
@@ -1204,6 +1250,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			}
 
 			if !strings.HasSuffix(fileName.Filename, ".zip") {
+				failedRegisterAppMetric.Mark(1)
+				go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 				errorData.Message = "Bad Request/Only zip supported"
 				errorData.StatusCode = http.StatusBadRequest
 				response.WriteHeader(http.StatusBadRequest)
@@ -1218,6 +1266,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
+				return
 			}
 
 			// Iterate through the files in the archive,
@@ -1301,6 +1350,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 					if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
 						malwareFileMetric.Mark(1)
+						failedRegisterAppMetric.Mark(1)
 						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Warn("malware detected")
 						errorData.Message = "Bad request/ malware detected "
@@ -1345,14 +1395,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					appData.Description = appsDescription
 					appData.Name = f.Name
 					appData.Owner = username
-					regexCompiler, err := regexp.Compile("main")
-					if err != nil {
-						api.apiLogger.Error(" Couldn't compile regex ", zap.Error(err))
-						errorData.Message = "Internal Error/  Couldn't compile regex"
-						errorData.StatusCode = http.StatusInternalServerError
-						response.WriteHeader(http.StatusInternalServerError)
-						response.WriteEntity(errorData)
-					}
+					regexCompiler, _ := regexp.Compile("main")
 					if regexCompiler.MatchString(string(descr)) {
 						mainAppData.CreatedTimestamp = appData.CreatedTimestamp
 						mainAppData.UpdatedTimestamp = appData.UpdatedTimestamp
@@ -1376,6 +1419,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			for _, app := range appsData {
 
 				if slices.Contains(allAppsNames, app.Name) {
+					failedRegisterAppMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 					api.apiLogger.Error(" App  already exists", zap.String("app_name", app.Name))
 					errorData.Message = "App already exists"
 					errorData.StatusCode = http.StatusFound
@@ -1409,6 +1454,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			}
 
 			if slices.Contains(userData.Applications, mainAppData.Name) {
+				failedRegisterAppMetric.Mark(1)
+				go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 				api.apiLogger.Error(" App  already exists", zap.String("app_name", mainAppData.Name))
 				errorData.Message = "App already exists"
 				errorData.StatusCode = http.StatusFound
@@ -1482,6 +1529,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			}
 
 			if !strings.HasSuffix(fileName.Filename, ".zip") {
+				failedRegisterAppMetric.Mark(1)
+				go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 				errorData.Message = "Bad Request/Only zip supported"
 				errorData.StatusCode = http.StatusBadRequest
 				response.WriteHeader(http.StatusBadRequest)
@@ -1496,6 +1545,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
+				return
 			}
 
 			// Iterate through the files in the archive,
@@ -1578,6 +1628,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 					if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
 						malwareFileMetric.Mark(1)
+						failedRegisterAppMetric.Mark(1)
 						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Warn("malware detected")
 						errorData.Message = "Bad request/ malware detected "
@@ -1603,6 +1654,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						errorData.StatusCode = http.StatusInternalServerError
 						response.WriteHeader(http.StatusInternalServerError)
 						response.WriteEntity(errorData)
+						return
 					}
 
 					mainAppData, subApps, appTxt, err := helpers.CreateFilesFromDir(f.Name, api.apiLogger)
@@ -1612,6 +1664,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						errorData.StatusCode = http.StatusInternalServerError
 						response.WriteHeader(http.StatusInternalServerError)
 						response.WriteEntity(errorData)
+						return
 					}
 
 					subGroupMainFiles := make([]string, 0)
@@ -1619,6 +1672,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					for _, app := range subApps {
 
 						if slices.Contains(allAppsNames, app.Name) {
+							failedRegisterAppMetric.Mark(1)
+							go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 							api.apiLogger.Error(" App  already exists", zap.String("app_name", app.Name))
 							errorData.Message = "App already exists"
 							errorData.StatusCode = http.StatusFound
@@ -1649,6 +1704,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 
 					if slices.Contains(allAppsNames, mainAppData.Name) {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" App  already exists", zap.String("app_name", mainAppData.Name))
 						errorData.Message = "App already exists"
 						errorData.StatusCode = http.StatusFound
@@ -1660,6 +1717,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					indexFile := strings.Index(appTxt, ".")
 					indexApp := strings.Index(mainAppData.Name, ".")
 					if indexFile == -1 || indexApp == -1 {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
 						errorData.Message = "Bad Request/ Wrong archive format"
 						errorData.StatusCode = http.StatusBadRequest
@@ -1670,6 +1729,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					trimmedFileName := appTxt[:indexFile]
 					trimmedAppName := mainAppData.Name[:indexFile]
 					if trimmedFileName != trimmedAppName {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
 						errorData.Message = "Bad Request/ Wrong archive format"
 						errorData.StatusCode = http.StatusBadRequest
@@ -1727,6 +1788,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					appData.IpAddress = &ipAddr
 
 					if slices.Contains(allAppsNames, appData.Name) {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" App  already exists", zap.String("app_name", appData.Name))
 						errorData.Message = "App already exists"
 						errorData.StatusCode = http.StatusFound
@@ -1738,6 +1801,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					indexFile := strings.Index(r.File[i].Name, ".")
 					indexApp := strings.Index(appData.Name, ".")
 					if indexFile == -1 || indexApp == -1 {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
 						errorData.Message = "Bad Request/ Wrong archive format"
 						errorData.StatusCode = http.StatusBadRequest
@@ -1748,6 +1813,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					trimmedFileName := r.File[i].Name[:indexFile]
 					trimmedAppName := appData.Name[:indexFile]
 					if trimmedFileName != trimmedAppName {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
 						errorData.Message = "Bad Request/ Wrong archive format"
 						errorData.StatusCode = http.StatusBadRequest
@@ -2103,6 +2170,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
+			return
 		}
 		for _, app := range appsData {
 			if appData.Name == app.Name {
@@ -2111,24 +2179,57 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 			}
 		}
 		if !appInfo.IsRunning && (nrReplicas != "" || newImage != "" || maxReplicas != "") {
+			failedUpdateAppMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 			api.apiLogger.Error(" Bad Request / app is not running")
 			errorData.Message = " Bad Request / app is not running"
 			errorData.StatusCode = http.StatusBadRequest
 			response.WriteHeader(http.StatusBadRequest)
 			response.WriteEntity(errorData)
+			return
 		} else {
 
 			splitAppName := strings.Split(appInfo.Name, ".")
 			imageName := strings.ReplaceAll(splitAppName[0]+"-"+splitAppName[1], "_", "-")
 			nrReplicasInteger, _ := strconv.ParseInt(nrReplicas, 10, 32)
 			maxReplicasInteger, _ := strconv.ParseInt(maxReplicas, 10, 32)
+			newImage = strings.ToLower(strings.ReplaceAll(request.QueryParameter("new_image"), "_", "-"))
 			if appInfo.ScheduleType == "random_scheduler" {
-				api.kubeClient.UpdateAutoScaler(imageName, appInfo.Namespace, int32(nrReplicasInteger), int32(maxReplicasInteger))
+				err = api.kubeClient.UpdateAutoScaler(imageName, appInfo.Namespace, int32(nrReplicasInteger), int32(maxReplicasInteger))
+				if err != nil {
+					failedUpdateAppMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					api.apiLogger.Error("error in updating autoscaler", zap.Error(err))
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
 			} else {
-				api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, int32(nrReplicasInteger))
+				err = api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, int32(nrReplicasInteger))
+				if err != nil {
+					failedUpdateAppMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					api.apiLogger.Error("error in updating autoscaler", zap.Error(err))
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
 			}
 
 		}
+	}
+	if len(appData.SubgroupFiles) > 0 || appData.ScheduleType != "" || appData.Namespace != "" || appData.Owner != "" || appData.IsMain ||
+		appData.IsRunning {
+		failedUpdateAppMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" Wrong fields to update")
+		errorData.Message = "Bad Request/ wrong fields to update"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
 	}
 
 	nowTime := time.Now()
@@ -2304,17 +2405,6 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 			response.WriteEntity(errorData)
 			return
 		}
-		execName := strings.Split(appName, ".")[0]
-		extensionName := strings.Split(appName, ".")[1]
-		err = api.dockerClient.ListImagesAndDelete(execName + "_" + extensionName)
-		if err != nil {
-			errorData.Message = "Internal error/ failed to remove images"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
-
 	}
 
 	for _, app := range appsData {
@@ -2562,6 +2652,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
+				return
 			}
 			err = api.s3Client.DownloadFiles(dirName, dirNameFiles)
 			if err != nil {
@@ -2569,6 +2660,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
+				return
 			}
 			for _, fileName := range dirNameFiles {
 				name := strings.Split(fileName, dirName+"/")
