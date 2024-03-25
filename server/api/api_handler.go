@@ -2680,7 +2680,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		imageName := newDirName
 		var tagName string
 
-		//if app was not updated within the last 10 seconds or update_timestamp = created_timestamp,don't build image
+		//if app was not updated within the last 10 seconds or update_timestamp != created_timestamp,don't build image
 		if math.Trunc(time.Since(app.UpdatedTimestamp).Seconds()) <= float64(10) || app.UpdatedTimestamp.UnixNano() == app.CreatedTimestamp.UnixNano() {
 			err = api.dockerClient.BuildImage(imageName)
 			if err != nil {
@@ -2827,6 +2827,16 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		err = api.psqlRepo.UpdateAppData(&updatedAppData)
 		if err != nil {
 			errorData.Message = "Internal error / failed to update app"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		userData.NrDeployedApps = userData.NrDeployedApps + 1
+		err = api.psqlRepo.UpdateUserData(userData)
+		if err != nil {
+			errorData.Message = "Internal error / failed to update user"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)

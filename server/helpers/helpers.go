@@ -182,8 +182,7 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) ([][]string, error) {
 			logger.Debug("End of parsing")
 			break
 		}
-		fmt.Println(t.Type)
-		fmt.Println(t.Literal)
+
 		if err != nil {
 			logger.Error("error in scanning", zap.Error(err))
 			return nil, err
@@ -1128,9 +1127,10 @@ func CreatePQ(items []priority_queue.TaskItem) priority_queue.PriorityQueue {
 	for _, task := range items {
 		taskDuration, _ := time.ParseDuration(task.Duration)
 		tasksPriorityQueue[i] = &priority_queue.Item{
-			Name:         task.Name,
-			TaskDuration: taskDuration,
-			Index:        i,
+			Name:                task.Name,
+			TaskDuration:        taskDuration,
+			InitialTaskDuration: taskDuration,
+			Index:               i,
 		}
 		i++
 	}

@@ -6,6 +6,7 @@ import (
 	"container/heap"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -30,18 +31,19 @@ func CreatePriorityQueueBasedOnTasksDuration(fileName string, logger *zap.Logger
 }
 
 // RoundRobinShortestJobFirstAlgorithm uses a constant min(minimum burst time) and decreases every execution with this value.
-// Tasks with duration equal to 0 or below are added to a slice of string which will be the order of application
+// Tasks with duration equal to 0 or below are added to a slice of string which will be the order of applications
 func RoundRobinShortestJobFirstAlgorithm(pq priority_queue.PriorityQueue, pairNames [][]string, logger *zap.Logger) [][]string {
 
 	newPairNames := make([][]string, 0)
 	firstElem := heap.Pop(&pq).(*priority_queue.Item)
 	for firstElem != nil {
 		newItem := &priority_queue.Item{
-			Name:         firstElem.Name,
-			TaskDuration: firstElem.TaskDuration,
+			Name:                firstElem.Name,
+			InitialTaskDuration: firstElem.InitialTaskDuration,
+			TaskDuration:        firstElem.TaskDuration,
 		}
 		heap.Push(&pq, newItem)
-		pq.Update(newItem, newItem.Name, newItem.TaskDuration)
+		pq.Update(newItem, newItem.Name, newItem.TaskDuration, newItem.InitialTaskDuration)
 		count := 0
 		lenPQ := pq.Len()
 		for count != lenPQ && lenPQ != -1 {
@@ -50,16 +52,20 @@ func RoundRobinShortestJobFirstAlgorithm(pq priority_queue.PriorityQueue, pairNa
 			if durationDiff <= float64(0) {
 				for _, pair := range pairNames {
 					if pair[1] == strings.ReplaceAll(item.Name, ".", "-") {
-						newPairNames = append(newPairNames, pair)
+						auxPair := pair
+						floatDuration := strconv.FormatFloat(item.InitialTaskDuration.Seconds(), 'f', 3, 64)
+						auxPair = append(auxPair, floatDuration)
+						newPairNames = append(newPairNames, auxPair)
 					}
 				}
 			} else {
 				newItem := &priority_queue.Item{
-					Name:         item.Name,
-					TaskDuration: priority_queue.Duration(float64(durationDiff)),
+					Name:                item.Name,
+					InitialTaskDuration: item.InitialTaskDuration,
+					TaskDuration:        priority_queue.Duration(float64(durationDiff)),
 				}
 				heap.Push(&pq, newItem)
-				pq.Update(newItem, newItem.Name, newItem.TaskDuration)
+				pq.Update(newItem, newItem.Name, newItem.TaskDuration, newItem.InitialTaskDuration)
 			}
 			count++
 		}

@@ -49,8 +49,9 @@ func Duration(f float64) time.Duration {
 }
 
 // Update modifies the priority and value of an Item in the queue.
-func (pq *PriorityQueue) Update(item *Item, Name string, duration time.Duration) {
+func (pq *PriorityQueue) Update(item *Item, Name string, duration, initialDuration time.Duration) {
 	item.Name = Name
 	item.TaskDuration = duration
+	item.InitialTaskDuration = initialDuration
 	heap.Fix(pq, item.Index)
 }

@@ -129,6 +129,7 @@ func (s *RandomScheduler) ScheduleOne() {
 func (s *RandomScheduler) findFit(pod *v1.Pod) (string, error) {
 	nodes, err := s.nodeLister.List(labels.Everything())
 	if err != nil {
+		log.Println("failed to list nodes", err.Error())
 		return "", err
 	}
 
@@ -159,7 +160,7 @@ func (s *RandomScheduler) emitEvent(p *v1.Pod, message string) error {
 	_, err := s.clientset.CoreV1().Events(p.Namespace).Create(context.Background(), &v1.Event{
 		Count:          1,
 		Message:        message,
-		Reason:         "Scheduled",
+		Reason:         "RandomScheduled",
 		LastTimestamp:  metav1.NewTime(timestamp),
 		FirstTimestamp: metav1.NewTime(timestamp),
 		Type:           "Normal",
@@ -177,6 +178,7 @@ func (s *RandomScheduler) emitEvent(p *v1.Pod, message string) error {
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
+		log.Println("failed to create event", err.Error())
 		return err
 	}
 	return nil
@@ -206,8 +208,8 @@ func (s *RandomScheduler) predicatesApply(node *v1.Node, pod *v1.Pod) bool {
 }
 
 func randomPredicate(node *v1.Node, pod *v1.Pod) bool {
-	r := rand.Intn(2)
-	return r == 0
+	r := rand.Intn(100)
+	return r%2 == 0
 }
 
 func (s *RandomScheduler) prioritize(nodes []*v1.Node, pod *v1.Pod) map[string]int {

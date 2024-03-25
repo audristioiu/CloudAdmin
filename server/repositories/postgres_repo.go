@@ -309,7 +309,8 @@ func (p *PostgreSqlRepo) GetAllApps() ([]*domain.ApplicationData, error) {
 		applicationData := &domain.ApplicationData{}
 		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning,
 			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp, &applicationData.FlagArguments, &applicationData.ParamArguments,
-			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner, &applicationData.Namespace, &applicationData.ScheduleType)
+			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner, &applicationData.Namespace, &applicationData.ScheduleType,
+			&applicationData.Port, &applicationData.IpAddress)
 		if err != nil {
 			p.psqlLogger.Error(" could not scan app", zap.Error(err))
 			return nil, err
