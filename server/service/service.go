@@ -229,7 +229,7 @@ func (s *Service) StartWebService() {
 
 	go func() {
 		if err = server.ListenAndServeTLS(certFile, certKeyFile); !errors.Is(err, http.ErrServerClosed) {
-			log.Error("HTTP server error", zap.Error(err))
+			log.Error("HTTPS server error", zap.Error(err))
 		}
 		for _, metric := range helpers.MetricsName {
 			metrics.Unregister(metric)
