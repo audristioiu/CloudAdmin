@@ -59,7 +59,7 @@ func NewDockerClient(ctx context.Context, logger *zap.Logger, dockerID, dockerUs
 
 // BuildImage builds image located in dirName
 func (dock *DockerClient) BuildImage(dirName string) error {
-	//todo remove
+
 	path, _ := os.Getwd()
 	tar, err := archive.TarWithOptions(path+`\`+dirName, &archive.TarOptions{})
 	if err != nil {

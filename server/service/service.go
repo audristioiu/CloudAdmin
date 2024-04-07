@@ -73,7 +73,7 @@ func (s *Service) StartWebService() {
 		return
 	}
 
-	log.Debug("Local Ristretto Cache initalized")
+	log.Debug("Initalized local Ristretto Cache")
 
 	psqlUser := os.Getenv("POSTGRES_USER")
 	psqlPass := os.Getenv("POSTGRES_PASSWORD")
@@ -87,13 +87,13 @@ func (s *Service) StartWebService() {
 		log.Fatal("[FATAL] Error in starting postgres service")
 		return
 	}
-	log.Debug("Postgres Repo initialized")
+	log.Debug("Initalized Postgres Repo")
 
 	var profilerRepo *repositories.ProfilingService
 	activateCPUProfiler := os.Getenv("ACTIVATE_CPU_PROFILER")
 	if activateCPUProfiler == "true" {
 		profilerRepo = repositories.NewProfileService("profile_cpu.prof", log)
-		log.Debug("Profiling Repo initialized")
+		log.Debug("Initialized Profiling Repo")
 	} else {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
@@ -107,7 +107,7 @@ func (s *Service) StartWebService() {
 		log.Fatal("[FATAL] Error in creating kubernetes client")
 		return
 	}
-	log.Debug("Kubernetes client initialized")
+	log.Debug("Initialized Kubernetes client")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
@@ -124,7 +124,7 @@ func (s *Service) StartWebService() {
 		log.Fatal("[FATAL] Error in creating docker client")
 		return
 	}
-	log.Debug("Docker client initialized")
+	log.Debug("Initialized Docker client")
 
 	// initialize tcp address for graphite
 	graphiteHost := os.Getenv("GRAPHITE_HOST")
@@ -138,7 +138,7 @@ func (s *Service) StartWebService() {
 	requestCount := make(map[string]int)
 	maxRequestPerMinute := 1000
 
-	// initialize virus total client
+	// initialize Virus Total Client
 	var vtClient *vt.Client
 	vtAPIKey := os.Getenv("VIRUSTOTAL_KEY")
 	if vtAPIKey != "" {
@@ -152,6 +152,7 @@ func (s *Service) StartWebService() {
 		vtClient = nil
 	}
 
+	// initialize S3 Client
 	var s3Client *clients.S3Client
 	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
 	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
@@ -169,9 +170,13 @@ func (s *Service) StartWebService() {
 		s3Client = nil
 	}
 
+	// initialize Grafana Client
+
+	grafanaHTTPClient := clients.NewGrafanaClient(ctx, os.Getenv("GF_HOST"), log)
+	log.Debug("Initialized Grafana Client")
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient, s3Client,
-		graphiteAddr, requestCount, maxRequestPerMinute, vtClient)
+		graphiteAddr, requestCount, maxRequestPerMinute, vtClient, grafanaHTTPClient)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -239,7 +244,7 @@ func (s *Service) StartWebService() {
 	}()
 	kubernetesMetrics := make([]string, 0)
 
-	//goroutine to gather and send kubernetes metrics regarind pods and nodes to Grafana using Graphite
+	//goroutine to gather and send kubernetes metrics regarding pods and nodes to Grafana using Graphite
 	activateKubeMetrics := os.Getenv("ACTIVATE_KUBERNETES_METRICS")
 	if activateKubeMetrics == "true" {
 		nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
@@ -248,18 +253,18 @@ func (s *Service) StartWebService() {
 
 				if len(nodeMetricsMap) > 0 {
 					for node, nodeMetrics := range nodeMetricsMap {
+
 						nodeCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.cpu_usage", node), nil)
 						nodeMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.mem_usage", node), nil)
 						cpuQuantity := math.Round(nodeMetrics[0]*100) / 100
 						memQuantity := math.Round(nodeMetrics[1]*100) / 100
 						nodeCPUMetrics.Update(cpuQuantity)
 						nodeMemoryMetrics.Update(memQuantity)
-						graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
 						kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.cpu_usage", node))
 						kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.mem_usage", node))
 					}
 				}
-
 				podMetricsMap, _ := kubernetesClient.ListPodsMetrics()
 				if len(podMetricsMap) > 0 {
 					for namepace, podContainerMetricsMap := range podMetricsMap {
@@ -270,12 +275,12 @@ func (s *Service) StartWebService() {
 								podMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.mem_usage",
 									namepace, podName, podMetricElem.PodContainerName), nil)
 
-								cpuQuantity := math.Round(podMetricElem.CPUMemoryMetrics[0]*100) / 100
-								memQuantity := math.Round(podMetricElem.CPUMemoryMetrics[1]*100) / 100
+								cpuQuantity := math.Round(podMetricElem.CPUMemoryMetrics[2])
+								memQuantity := math.Round(podMetricElem.CPUMemoryMetrics[3])
 
 								podCPUMetrics.Update(cpuQuantity)
 								podMemoryMetrics.Update(memQuantity)
-								graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
+								go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
 								kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.cpu_usage", namepace, podName, podMetricElem.PodContainerName))
 								kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.mem_usage", namepace, podName, podMetricElem.PodContainerName))
 							}

@@ -79,7 +79,6 @@ func (k *KubernetesClient) ListPodsMetrics() (map[string]map[string][]domain.Pod
 				podMetrics, err := k.metricsKubeClient.MetricsV1beta1().PodMetricses(namespace).Get(k.ctx, podName, metav1.GetOptions{})
 				if err != nil {
 					k.kubeLogger.Error("failed to list metrics for pods", zap.Error(err))
-					return nil, nil
 				}
 				for _, podContainer := range podMetrics.Containers {
 					cpuUsageTotal += podContainer.Usage.Cpu().MilliValue()
@@ -125,7 +124,6 @@ func (k *KubernetesClient) ListNodesMetrics() (map[string][]float64, error) {
 		nodeMetrics, err := k.metricsKubeClient.MetricsV1beta1().NodeMetricses().Get(k.ctx, node.Name, metav1.GetOptions{})
 		if err != nil {
 			k.kubeLogger.Error("failed to get metrics for node", zap.String("node", node.Name), zap.Error(err))
-			return nil, nil
 		}
 		nodeCPU := float64(nodeMetrics.Usage.Cpu().MilliValue()) / float64(node.Status.Capacity.Cpu().MilliValue())
 		nodeMemory := float64(nodeMetrics.Usage.Memory().Value()) / float64(node.Status.Capacity.Memory().Value())
@@ -136,7 +134,6 @@ func (k *KubernetesClient) ListNodesMetrics() (map[string][]float64, error) {
 			float64(nodeMetrics.Usage.Memory().Value()) / 1e6,
 		}
 	}
-
 	return nodeMetricsMap, nil
 }
 
@@ -273,6 +270,7 @@ func (k *KubernetesClient) ListNamespaces() []string {
 		k.kubeLogger.Error("failed to list namespaces", zap.Error(err))
 		return []string{}
 	}
+
 	namespaces := make([]string, 0)
 	for _, namespace := range nsList.Items {
 		namespaces = append(namespaces, namespace.Name)
@@ -364,8 +362,7 @@ func (k *KubernetesClient) DeleteLoadBalancer(serviceName, namespace string) err
 func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName,
 	schedulerName string, schedulerCommands []string, portNr, nrReplicas int32) (string, error) {
 	var cpuLimit, memLimit, cpuReq, memReq string
-	if schedulerName == "random-scheduler-go" {
-		//todo recalculate
+	if schedulerName != "" {
 		cpuLimit = "500m"
 		memLimit = "128Mi"
 		cpuReq = "250m"
@@ -414,8 +411,7 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 	if portNr != int32(0) {
 		deployment.Spec.Template.Spec.Containers[0].Ports = []apiv1.ContainerPort{{HostPort: portNr, ContainerPort: portNr}}
 	}
-
-	if schedulerName == "random-scheduler-go" {
+	if schedulerName != "" {
 		deployment.Spec.Template.Spec.Containers[0].Resources.Limits = apiv1.ResourceList{
 			"cpu":    resource.MustParse(cpuLimit),
 			"memory": resource.MustParse(memLimit),
@@ -425,7 +421,6 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 			"memory": resource.MustParse(memReq),
 		}
 	}
-
 	result, err := deploymentsClient.Create(k.ctx, deployment, metav1.CreateOptions{})
 	if err != nil && !strings.Contains(err.Error(), "exists") {
 		k.kubeLogger.Error("failed to create deployment", zap.Error(err))
@@ -460,7 +455,8 @@ func (k *KubernetesClient) ListDeployments(namespace string) []string {
 }
 
 // UpdateDeployments updates deployment with nrReplicas and new Image
-func (k *KubernetesClient) UpdateDeployment(deployName, namespace, newImage string, nrReplicas int32) error {
+func (k *KubernetesClient) UpdateDeployment(deployName, namespace, newImage, memUsage, maxMemUsage, cpuUsage,
+	maxCpuUsage string, nrReplicas int32) error {
 
 	deploymentsClient := k.kubeClient.AppsV1().Deployments(namespace)
 
@@ -473,14 +469,34 @@ func (k *KubernetesClient) UpdateDeployment(deployName, namespace, newImage stri
 			return getErr
 		}
 		if nrReplicas != int32(0) {
-			//update replica count
 			result.Spec.Replicas = &nrReplicas
 		}
 		if newImage != "" {
-			// change image version
 			result.Spec.Template.Spec.Containers[0].Image = newImage
 		}
+		if memUsage != "" && maxMemUsage != "" && cpuUsage != "" && maxCpuUsage != "" {
+			intCpuUsage, _ := strconv.ParseInt(cpuUsage[:len(cpuUsage)-1], 0, 64)
+			intMaxCpuUsage, _ := strconv.ParseInt(maxCpuUsage[:len(maxCpuUsage)-1], 0, 64)
+			intMemUsage, _ := strconv.ParseInt(memUsage[:len(memUsage)-2], 0, 64)
+			intMaxMemUsage, _ := strconv.ParseInt(maxMemUsage[:len(maxMemUsage)-2], 0, 64)
 
+			if intCpuUsage > intMaxCpuUsage {
+				return fmt.Errorf("cpu usage should be less or equal then max cpu usage")
+			}
+			if intMemUsage > intMaxMemUsage {
+				return fmt.Errorf("mem usage should be less or equal then max mem usage")
+			}
+			result.Spec.Template.Spec.Containers[0].Resources.Limits = apiv1.ResourceList{
+				"cpu":    resource.MustParse(maxCpuUsage),
+				"memory": resource.MustParse(maxMemUsage),
+			}
+			result.Spec.Template.Spec.Containers[0].Resources.Requests = apiv1.ResourceList{
+				"cpu":    resource.MustParse(cpuUsage),
+				"memory": resource.MustParse(memUsage),
+			}
+		} else {
+			k.kubeLogger.Debug("missing values to update cpu and mem usage on deployment")
+		}
 		_, updateErr := deploymentsClient.Update(k.ctx, result, metav1.UpdateOptions{})
 		if updateErr != nil {
 			k.kubeLogger.Error("failed to update hpa", zap.Error(updateErr))
@@ -567,7 +583,7 @@ func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) ([]strin
 	return logList, nil
 }
 
-// CreateAutoScaler creates a horizontal pod auto scaler for deploymentName (todo not working)
+// CreateAutoScaler creates a horizontal pod auto scaler for deploymentName
 func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) (*hpav2.HorizontalPodAutoscaler, error) {
 	memoryTargetUtilization := int32(70)
 	cpuTargetUtilization := int32(50)

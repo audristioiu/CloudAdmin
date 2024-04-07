@@ -54,7 +54,6 @@ const OneTimePasswordValidate = () => {
   }
 
     const validateOTP = async () => {
-        console.log(codeData)
         if (codeData) {
           const userInfo = JSON.parse(localStorage.getItem('userInfo'));
           try {

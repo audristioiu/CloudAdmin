@@ -17,8 +17,15 @@ function AppItem(app) {
     localStorage.setItem("appInfo", JSON.stringify({ "app_name": appName }));
     history('/editapp');
   }
-
-  const getStatusClass = () => (appRunningState ? ' active' : ' inactive');
+  const getDashboardCPU = () => {
+    localStorage.setItem("appInfo", JSON.stringify({ "app_name": appName }));
+    history('/grafana/cpu')
+  }
+  const getDashboardMemory = () => {
+    localStorage.setItem("appInfo", JSON.stringify({ "app_name": appName }));
+    history('/grafana/mem')
+  }
+  const getStatusClass = () => (appRunningState == "true" ? 'active' : 'inactive');
 
   return (
     <tr>
@@ -26,7 +33,7 @@ function AppItem(app) {
       <td>{appDescription}</td>
       <td className={"status"}>
         <span className={getStatusClass()}> 
-          {appRunningState ? "Active" : "Not running"}
+          {getStatusClass() == "active" ? "Active" : "Not running"}
         </span>
       </td>
       <td>{appCreatedTimestamp}</td>
@@ -42,6 +49,13 @@ function AppItem(app) {
         <button className='button-3'>
           Delete App
         </button>
+        { (appRunningState == "true") &&
+        (<div><button className='button-3' onClick={getDashboardCPU}>
+          Get Dashboard CPU Usage
+        </button>
+        <button className='button-3' onClick={getDashboardMemory}>
+          Get Dashboard Memory Usage
+        </button></div>)}
       </td>
     </tr>
   );

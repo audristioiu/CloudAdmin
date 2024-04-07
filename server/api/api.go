@@ -16,14 +16,15 @@ import (
 )
 
 const (
-	registerPath     = "/register"
-	loginPath        = "/login"
-	userPath         = "/user"
-	otpPath          = "/otp"
-	appPath          = "/app"
-	aggregatesPath   = "/aggregates"
-	schedulePath     = "/schedule"
-	getPodResultPath = "/getresults"
+	registerPath          = "/register"
+	loginPath             = "/login"
+	userPath              = "/user"
+	otpPath               = "/otp"
+	appPath               = "/app"
+	aggregatesPath        = "/aggregates"
+	schedulePath          = "/schedule"
+	getPodResultPath      = "/getresults"
+	grafanaDataSourcePath = "/grafana/datasource"
 )
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service + clients
@@ -40,12 +41,14 @@ type API struct {
 	requestCount        map[string]int
 	maxRequestPerMinute int
 	vtClient            *vt.Client
+	grafanaHTTPClient   *clients.GrafanaClient
 }
 
 // NewAPI returns an API object
 func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger,
 	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient, s3Client *clients.S3Client,
-	graphiteAddr *net.TCPAddr, requestCount map[string]int, maxRequestPerMinute int, vtClient *vt.Client) *API {
+	graphiteAddr *net.TCPAddr, requestCount map[string]int, maxRequestPerMinute int, vtClient *vt.Client,
+	grafanaHTTPClient *clients.GrafanaClient) *API {
 	return &API{
 		ctx:                 ctx,
 		psqlRepo:            postgresRepo,
@@ -59,6 +62,7 @@ func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cach
 		requestCount:        requestCount,
 		maxRequestPerMinute: maxRequestPerMinute,
 		vtClient:            vtClient,
+		grafanaHTTPClient:   grafanaHTTPClient,
 	}
 }
 
@@ -264,6 +268,10 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.QueryParameter("nr_replicas", "change nr replicas of the pod(only if it is running)").DataType("integer").Required(false).AllowEmptyValue(true)).
 			Param(ws.QueryParameter("max_nr_replicas", "change max nr replicas of the pod(only if it is running and for random sched)").DataType("integer").Required(false).AllowEmptyValue(true)).
 			Param(ws.QueryParameter("new_image", "change current image to a new one(only if it is running)").DataType("string").Required(false).AllowEmptyValue(true)).
+			Param(ws.QueryParameter("mem_usage", "set mem usage for deployment").DataType("string").Required(false).AllowEmptyValue(true)).
+			Param(ws.QueryParameter("cpu_usage", "set cpu usage for deployment").DataType("string").Required(false).AllowEmptyValue(true)).
+			Param(ws.QueryParameter("max_mem_usage", "set mem usage limit for deployment").DataType("string").Required(false).AllowEmptyValue(true)).
+			Param(ws.QueryParameter("max_cpu_usage", "set cpu usage limit for deployment").DataType("string").Required(false).AllowEmptyValue(true)).
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
@@ -296,7 +304,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			GET(schedulePath).
 			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("appnames", "name of the apps you want to delete").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
+			Param(ws.QueryParameter("appnames", "name of the apps you want to schedule").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("schedule_type", "type of schedulling").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("nr_replicas", "nr of replicas").DataType("int32").Required(true).AllowEmptyValue(false)).
@@ -327,7 +335,19 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Returns(http.StatusOK, "OK", domain.GetLogsFromPod{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
-
+	ws.Route(
+		ws.
+			GET(grafanaDataSourcePath).
+			Param(ws.QueryParameter("appname", "name of the app to gather data from grafana").DataType("string").Required(true)).
+			Param(ws.QueryParameter("grafana_format", "data format for data source").DataType("string").Required(true)).
+			Param(ws.QueryParameter("grafana_from", "gather data from a specific time").DataType("string").Required(true)).
+			Param(ws.QueryParameter("grafana_usage_type", "Metric to return : mem or cpu").DataType("string").Required(true)).
+			Doc("Get grafana data source data for an app").
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			To(api.GetGrafanaDashboardData).
+			Returns(http.StatusOK, "OK", []domain.GrafanaDataSourceResponse{}))
 	//activate profiler endpoints only if it is initialized
 	if api.profiler.Cpuprofile != "" {
 		ws.Route(ws.GET("/profiler/start").To(api.StartProfiler))

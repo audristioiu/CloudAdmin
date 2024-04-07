@@ -765,3 +765,9 @@ type VTResponse struct {
 		Self string `json:"self"`
 	} `json:"links"`
 }
+
+// GrafanaDataSourceResponse represents graphite results for every metric
+type GrafanaDataSourceResponse struct {
+	Target     string       `json:"target"`
+	Datapoints [][]*float64 `json:"datapoints"`
+}

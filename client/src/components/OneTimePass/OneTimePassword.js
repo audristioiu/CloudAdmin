@@ -65,7 +65,6 @@ const OneTimePassword = () => {
     }
 
     const verifyOTP = async () => {
-        console.log(codeData)
         if (codeData) {
           const userInfo = JSON.parse(localStorage.getItem('userInfo'));
           try {
@@ -83,13 +82,11 @@ const OneTimePassword = () => {
             const response = await axios.post(
               "https://localhost:9443/otp/verify",
             {"token": codeData},config, { httpsAgent : agent },);
-            console.log(response)
             if (response.status === 200) {
                 history('/profile')
             }
             
           } catch (error) {
-            console.log(error)
             setErrorMessage("Could not verify otp /" + error.response.data.message);
           }
          

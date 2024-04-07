@@ -2137,7 +2137,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	if !helpers.CheckUser(checkUserData, request.HeaderParameter("USER-AUTH")) || checkUserData.UserName != userData.UserName {
 		flag = false
 	}
-	if !flag {
+	if !flag && checkUserData.UserName != "admin" {
 		api.apiLogger.Error(" User not authorized", zap.String("user_name", username))
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
@@ -2159,8 +2159,12 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	nrReplicas := request.QueryParameter("nr_replicas")
 	maxReplicas := request.QueryParameter("max_nr_replicas")
 	newImage := request.QueryParameter("new_image")
+	memResources := request.QueryParameter("mem_usage")
+	cpuResources := request.QueryParameter("cpu_usage")
+	limitMemResources := request.QueryParameter("max_mem_usage")
+	limitCpuResources := request.QueryParameter("max_cpu_usage")
 
-	if nrReplicas != "" || newImage != "" || maxReplicas != "" {
+	if nrReplicas != "" || newImage != "" || maxReplicas != "" || cpuResources != "" {
 		var appInfo domain.ApplicationData
 
 		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
@@ -2205,12 +2209,25 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 					response.WriteEntity(errorData)
 					return
 				}
-			} else {
-				err = api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, int32(nrReplicasInteger))
+				err = api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, memResources, limitMemResources,
+					cpuResources, limitCpuResources, int32(0))
 				if err != nil {
 					failedUpdateAppMetric.Mark(1)
 					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-					api.apiLogger.Error("error in updating autoscaler", zap.Error(err))
+					api.apiLogger.Error("error in updating deployment", zap.Error(err))
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+			} else {
+				err = api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, memResources, limitMemResources,
+					cpuResources, limitCpuResources, int32(nrReplicasInteger))
+				if err != nil {
+					failedUpdateAppMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					api.apiLogger.Error("error in updating deployment", zap.Error(err))
+					errorData.Message = err.Error()
 					errorData.StatusCode = http.StatusInternalServerError
 					response.WriteHeader(http.StatusInternalServerError)
 					response.WriteEntity(errorData)
@@ -2980,10 +2997,29 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}
-	podLogsResponse.PrintMessage = strings.Join(podLogs, "\n\n\n\n")
+	podLogsResponse.PrintMessage = strings.Join(podLogs, " ")
 	podLogsResponse.AppName = podName
 	response.WriteEntity(podLogsResponse)
 
+}
+
+// GetGrafanaDashboardData retrieves grafana data based on grafana query
+func (api *API) GetGrafanaDashboardData(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	appName := strings.ReplaceAll(strings.ReplaceAll(request.QueryParameter("appname"), ".", "-"), "_", "-") + "-deployment"
+	grafanaFormat := request.QueryParameter("grafana_format")
+	grafanaFrom := request.QueryParameter("grafana_from")
+	grafanaUsageType := request.QueryParameter("grafana_usage_type")
+	dataSourceData, err := api.grafanaHTTPClient.GetDataSourceData(appName, grafanaFrom, grafanaFormat, grafanaUsageType)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	response.WriteEntity(dataSourceData)
 }
 
 // StartProfiler starts the cpu profiler

@@ -16,6 +16,8 @@ import MyApps from './components/MyApps';
 import EditApp from './components/EditApp';
 import OneTimePassword from "./components/OneTimePass/OneTimePassword";
 import OneTimePasswordValidate from "./components/OneTimePass/OneTimePasswordValidate";
+import GrafanaPanelCPU from './components/D3Grafana/GrafanaPanelCPU';
+import GrafanaPanelMem from './components/D3Grafana/GrafanaPanelMem';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -57,6 +59,9 @@ function App() {
           <MyApps />
         </>} />
         <Route path='/editapp' element={<EditApp />} />
+        <Route path='/grafana/cpu' element={<GrafanaPanelCPU />} />
+        <Route path='/grafana/mem' element={<GrafanaPanelMem />} />
+
       </Routes>
     </BrowserRouter>
   );
