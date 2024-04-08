@@ -4,12 +4,12 @@ import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 import '../assets/Error.scss';
 
-function EditApp(props) {
-  const {app} = props.app;
+function ScheduleApp(props) {
+  const { app } = props.app;
   const [appName, setAppName] = useState(app.name);
-  const [appDescription, setAppDescr] = useState("");
-  const [appFlagArguments, setAppFlags] = useState("");
-  const [appParamArguments, setAppParams] = useState("");
+  const [appScheduleType, setAppScheduleType] = useState(app.schedule_type);
+  const [appNrReplicas, setAppNrReplicas] = useState(0);
+  const [appServerPort, setAppServerPort] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
 
   let handleSubmit = async (event) => {
@@ -34,55 +34,58 @@ function EditApp(props) {
       };
 
       await axios.put(`https://localhost:9443/app`, {
-        "name": appName,
-        "description": appDescription,
-        "flag_arguments": appFlagArguments,
-        "param_arguments": appParamArguments
+        "appnames": [appName],
+        "schedule_type": appScheduleType,
+        "nr_replicas": appNrReplicas,
+        "server_port": appServerPort
       }, config,
         { httpsAgent: agent },);
 
     } catch (error) {
-      setErrorMessage('Failed to update APP. Please try again. /' + error.message);
+      setErrorMessage('Failed to schedule APP. Please try again. /' + error.message);
     }
   };
 
   return (
     <form onSubmit={handleSubmit}>
       <div className="modal-title">
-        Edit {appName}
+        Schedule {appName}
       </div>
       <div className="user-box">
-        <label>Description
-          <input
-            className='input-style app-description'
-            type='textarea'
-            value={appDescription}
-            onChange={(e) => setAppDescr(e.target.value)}
-          />
+        <label>
+          Schedule Type:
+          <select name="schedule_type" defaultValue={appScheduleType} className="input-style app-description">
+            <option value="normal">Normal</option>
+            <option value="random_scheduler">Random Scheduler</option>
+            <option value="rr_sjf_scheduler">RR SJF Scheduler</option>
+          </select>
         </label>
 
       </div>
       <div className="user-box">
-        <label>Flag Arguments
+        <label>
+          Number of replicas
           <input
             className='input-style app-description'
-            type='textarea'
-            value={appFlagArguments}
-            onChange={(e) => setAppFlags(e.target.value)}
+            type='number'
+            value={appNrReplicas}
+            onChange={(e) => setAppNrReplicas(e.target.value)}
           />
 
         </label>
 
       </div>
       <div className="user-box">
-        <label>Param Arguments
+        <label>
+          Server Port
           <input
             className='input-style app-description'
-            type='textarea'
-            value={appParamArguments}
-            onChange={(e) => setAppParams(e.target.value)}
+            type='number'
+            value={appServerPort}
+            onChange={(e) => setAppServerPort(e.target.value)}
           />
         </label>
+
       </div>
 
 
@@ -99,4 +102,4 @@ function EditApp(props) {
 }
 
 
-export default EditApp;
+export default ScheduleApp;

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Modal from 'react-modal'; // Import the modal library
 import '../assets/MyApps.scss';
 import EditApp from "./EditApp";
+import ScheduleApp from "./ScheduleApp";
 
 function AppItem(app) {
   const [appName, setAppName] = useState(app.app.name);
@@ -13,18 +14,26 @@ function AppItem(app) {
   const [appScheduleType, setAppScheduleType] = useState(app.app.schedule_type);
   const [appPort, setAppPort] = useState(app.app.port);
   const [appIPAddress, setAppIPAddress] = useState(app.app.ip_address);
-  const history = useNavigate();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const getStatusClass = () => (appRunningState ? ' active' : ' inactive');
 
-  const handleOpenModal = () => {
-    setIsModalOpen(true);
+  const handleOpenScheduleModal = () => {
+    setIsScheduleModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+  const handleOpenEditModal = () => {
+    setIsEditModalOpen(true);
+  };
+
+  const handleCloseScheduleModal = () => {
+    setIsScheduleModalOpen(false);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
   };
 
   console.log(app);
@@ -44,14 +53,28 @@ function AppItem(app) {
       <td>{appPort}</td>
       <td>{appIPAddress}</td>
       <td>
-        <button className='button-3' onClick={handleOpenModal}>
+      <button className='button-3' onClick={handleOpenScheduleModal}>
+          Schedule App
+        </button>
+
+        <Modal 
+           isOpen={isScheduleModalOpen}
+           contentLabel="onRequestClose Example"
+           onRequestClose={handleCloseScheduleModal}
+           className="Modal"
+           overlayClassName="Overlay"
+        >
+          <ScheduleApp app={app} />
+        </Modal>
+
+        <button className='button-3' onClick={handleOpenEditModal}>
           Edit App
         </button>
 
         <Modal 
-           isOpen={isModalOpen}
+           isOpen={isEditModalOpen}
            contentLabel="onRequestClose Example"
-           onRequestClose={handleCloseModal}
+           onRequestClose={handleCloseEditModal}
            className="Modal"
            overlayClassName="Overlay"
         >

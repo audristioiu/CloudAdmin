@@ -195,7 +195,7 @@ label {
 .Modal {
   position: absolute;
   width: 500px;
-  height: 400px;
+  height: 500px;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
@@ -237,22 +237,33 @@ label {
 }
 
 .Modal .user-box label {
-  position: absolute;
-  top:0;
-  left: 0;
+  display: block;
   padding: 10px 0;
   font-size: 16px;
-  color: #fff;
-  pointer-events: none;
-  transition: .5s;
+  color: #03e9f4;
+  clear: both;
 }
 
-.Modal .user-box input:focus ~ label,
-.Modal .user-box input:valid ~ label {
-  top: -20px;
-  left: 0;
-  color: #03e9f4;
-  font-size: 12px;
+.Modal select {
+  position: relative;
+  min-width: 200px;
+  display: block;
+  padding: 7px 40px 7px 12px;
+  border: 1px solid #e8eaed;
+  border-radius: 5px;
+  background: white;
+  box-shadow: 0 1px 3px -2px #9098a9;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+  transition: all 150ms ease;
+}
+
+.Modal .modal-title {
+  font-size: 30px;
+  text-align: center;
+  color: #0bced8;
+  padding-bottom: 40px;
 }
 
 .Modal a {
