@@ -137,6 +137,7 @@ function MyApps() {
         setApps(responseApps.data.Response);
       }
     } catch (error) {
+      console.log(error);
       setErrorMessage(`Could not retrieve your apps.`);
       setApps([]);
     }

@@ -558,7 +558,7 @@ func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domai
 	hasReqs := false
 	hasGoMod := false
 	//todo luat fisier de pe local(in viitor s3) si scris la locatie
-	err := os.Mkdir(mkDirName, 0666)
+	err := os.Mkdir(mkDirName, 0777)
 	if err != nil {
 		logger.Error("failed to create directory", zap.Error(err))
 		return "", nil, err
@@ -566,7 +566,7 @@ func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domai
 	path, _ := os.Getwd()
 	path = strings.ReplaceAll(path, "CloudAdmin", "")
 	path = strings.ReplaceAll(path, "server", "")
-	path = filepath.Join(path, filepath.Base(mkDirName)) + "\\"
+	path = filepath.Join(path, filepath.Base(mkDirName)) + "/"
 	_, err = copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
 	if err != nil {
 		logger.Error("failed to copy", zap.Error(err))

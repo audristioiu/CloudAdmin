@@ -61,7 +61,7 @@ func NewDockerClient(ctx context.Context, logger *zap.Logger, dockerID, dockerUs
 func (dock *DockerClient) BuildImage(dirName string) error {
 	//todo remove
 	path, _ := os.Getwd()
-	tar, err := archive.TarWithOptions(path+`\`+dirName, &archive.TarOptions{})
+	tar, err := archive.TarWithOptions(path+`/`+dirName, &archive.TarOptions{})
 	if err != nil {
 		dock.dockerLogger.Error("failed to create tar with options", zap.Error(err))
 		return err

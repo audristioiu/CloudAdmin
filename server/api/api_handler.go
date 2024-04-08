@@ -20,7 +20,6 @@ import (
 	"unicode"
 
 	"github.com/VirusTotal/vt-go"
-	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/pquerna/otp/totp"
 	metrics "github.com/rcrowley/go-metrics"
@@ -233,7 +232,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 	if userData.Password == "" {
 		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		// // go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" Couldn't read password query parameter")
 		errorData.Message = "Bad Request/ empty password"
 		errorData.StatusCode = http.StatusBadRequest
@@ -244,7 +243,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 	// if len(userData.Password) < 16 {
 	// 	failedLoginMetrics.Mark(1)
-	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	// 	api.apiLogger.Error(" password too short")
 	// 	errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
 	// 	errorData.StatusCode = http.StatusBadRequest
@@ -254,7 +253,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	// }
 	// if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
 	// 	failedLoginMetrics.Mark(1)
-	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	// 	api.apiLogger.Error(" password does not contain digits")
 	// 	errorData.Message = "Bad Request/ Password does not contain digits"
 	// 	errorData.StatusCode = http.StatusBadRequest
@@ -264,7 +263,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	// }
 	// if !unicode.IsUpper(rune(userData.Password[0])) {
 	// 	failedLoginMetrics.Mark(1)
-	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	// 	api.apiLogger.Error(" password does not start with uppercase")
 	// 	errorData.Message = "Bad Request/ Password does not start with uppercase"
 	// 	errorData.StatusCode = http.StatusBadRequest
@@ -274,7 +273,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	// }
 	// if !helpers.HasSymbol(userData.Password) {
 	// 	failedLoginMetrics.Mark(1)
-	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	// 	api.apiLogger.Error(" password does not have special characters")
 	// 	errorData.Message = "Bad Request/ Password does not have special characters"
 	// 	errorData.StatusCode = http.StatusBadRequest
@@ -284,7 +283,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	// }
 	// if strings.Contains(userData.Password, userData.UserName) {
 	// 	failedLoginMetrics.Mark(1)
-	// 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	// 	api.apiLogger.Error(" password contains user")
 	// 	errorData.Message = "Bad Request/ Password contains user"
 	// 	errorData.StatusCode = http.StatusBadRequest
@@ -307,7 +306,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	dbUserData, err := api.psqlRepo.GetUserData(userData.UserName)
 	if err != nil {
 		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
@@ -318,7 +317,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 	if !helpers.CheckPasswordHash(userData.Password, dbUserData.Password) {
 		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		//rate limit mechanism + update in cache
 		if !dbUserData.UserLocked {
 			// update postgres for timeout
@@ -396,7 +395,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 		failedLoginMetrics.Mark(1)
-		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" Wrong password given. Please try again.")
 		errorData.Message = "Wrong Password"
 		errorData.StatusCode = http.StatusBadRequest
@@ -483,7 +482,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	newUserData.UserTimeout = nil
 	newUserData.OTPData = domain.OneTimePassData{}
 	loginMetrics.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	response.WriteEntity(newUserData)
 
 }
@@ -570,7 +569,7 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		response.WriteEntity(userData)
 	}
 	getUserMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 }
 
@@ -685,7 +684,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 	updateUserMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
 	updateResponse.Message = "User updated succesfully"
@@ -1235,7 +1234,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 					if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
 						malwareFileMetric.Mark(1)
-						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+						// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Warn("malware detected")
 						errorData.Message = "Bad request/ malware detected "
 						errorData.StatusCode = http.StatusBadRequest
@@ -1244,7 +1243,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						return
 					}
 					safeFileMetric.Mark(1)
-					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 				}
 
 				descr, err1 := io.ReadAll(rc)
@@ -1493,7 +1492,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 					if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
 						malwareFileMetric.Mark(1)
-						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+						// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Warn("malware detected")
 						errorData.Message = "Bad request/ malware detected "
 						errorData.StatusCode = http.StatusBadRequest
@@ -1502,7 +1501,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						return
 					}
 					safeFileMetric.Mark(1)
-					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 				}
 
 				appData := domain.ApplicationData{}
@@ -1714,7 +1713,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	registerAppMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	registerResponse := domain.QueryResponse{}
 	registerResponse.Message = "Apps uploaded succesfully"
@@ -1907,7 +1906,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		response.WriteEntity(appsData)
 	}
 	getAppsMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 }
 
@@ -2049,7 +2048,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	updateAppsMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
 	updateResponse.Message = "App updated succesfully"
@@ -2420,7 +2419,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	// create namespace using username,schedule type to deploy the scheduler + file and data if needed
 	var userNameSpace string
 
-	userNameSpace, err = api.kubeClient.CreateNamespace("namespace-"+strings.ReplaceAll(username, "_", "-"), scheduleType)
+	userNameSpace, err = api.kubeClient.CreateNamespace("namespace-"+strings.ReplaceAll(strings.ReplaceAll(username, "_", "-"), ".", "-"), scheduleType)
 	if err != nil {
 		errorData.Message = "Internal error / creating namespace"
 		errorData.StatusCode = http.StatusInternalServerError
@@ -2546,7 +2545,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	}
 
 	scheduleAppsMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	scheduleResponse := domain.QueryResponse{}
 	scheduleResponse.Message = "Apps scheduled succesfully"
@@ -2653,7 +2652,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	}
 
 	getPodResultsMetric.Mark(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}
 	podLogsResponse.PrintMessage = podLogs

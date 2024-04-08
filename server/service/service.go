@@ -2,6 +2,7 @@ package service
 
 import (
 	"cloudadmin/api"
+	"cloudadmin/clients"
 	"cloudadmin/helpers"
 	"cloudadmin/repositories"
 	"context"
@@ -87,33 +88,33 @@ func (s *Service) StartWebService() {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
 
-	// dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
 
 	// initialize clients for kubernetes and docker
-	// kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
-	// kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
-	// if kubernetesClient == nil {
-	// 	log.Fatal("[FATAL] Error in creating kubernetes client")
-	// 	return
-	// }
-	// log.Debug("Kubernetes client initialized")
+	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
+	kubernetesClient := clients.NewKubernetesClient(ctx, log, kubeConfigPath, dockerRegID)
+	if kubernetesClient == nil {
+		log.Fatal("[FATAL] Error in creating kubernetes client")
+		return
+	}
+	log.Debug("Kubernetes client initialized")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
 
-	// dockerUsername := os.Getenv("DOCKER_USERNAME")
-	// dockerPassword := os.Getenv("DOCKER_PASSWORD")
-	// if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
-	// 	log.Fatal("[FATAL] docker registry_id/username/pass not found")
-	// 	return
-	// }
+	dockerUsername := os.Getenv("DOCKER_USERNAME")
+	dockerPassword := os.Getenv("DOCKER_PASSWORD")
+	if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
+		log.Fatal("[FATAL] docker registry_id/username/pass not found")
+		return
+	}
 
-	// dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
-	// if dockerClient == nil {
-	// 	log.Fatal("[FATAL] Error in creating docker client")
-	// 	return
-	// }
-	// log.Debug("Docker client initialized")
+	dockerClient := clients.NewDockerClient(ctx, log, dockerRegID, dockerUsername, dockerPassword)
+	if dockerClient == nil {
+		log.Fatal("[FATAL] Error in creating docker client")
+		return
+	}
+	log.Debug("Docker client initialized")
 
 	// initialize tcp address for graphite
 	// graphiteHost := os.Getenv("GRAPHITE_HOST")
@@ -141,7 +142,7 @@ func (s *Service) StartWebService() {
 	}
 
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, nil, nil,
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient,
 		nil, requestCount, maxRequestPerMinute, vtClient)
 	apiManager.RegisterRoutes(ws)
 

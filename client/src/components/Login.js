@@ -45,8 +45,7 @@ function Login({ setAuth }) {
       }
      
     } catch (error) {
-      setErrorMessage("Wrong username or password. /" + error.message);
-      
+      setErrorMessage(error.response.data.message);
       return
     };
   };
