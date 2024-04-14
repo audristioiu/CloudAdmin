@@ -8,135 +8,134 @@ info:
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
-  version: 1.9.2
+  version: 1.9.5
 tags:
-- name: users
-  description: Managing users
-- name: apps
-  description: Managing apps
-- name: schedule
-  description: Schedulling apps
+  - name: users
+    description: Managing users
+  - name: apps
+    description: Managing apps
+  - name: schedule
+    description: Schedulling apps
 paths:
-  "/app":
+  /app:
     get:
       tags:
-      - apps
+        - apps
       summary: Retrieve apps information by name
       operationId: GetAppsInfo
       parameters:
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: appnames
-        in: query
-        description: name of the apps
-        allowEmptyValue: true
-        style: form
-        explode: false
-        schema:
-          type: array
-          items:
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
             type: string
-      - name: username
-        in: query
-        description: owner of the apps
-        required: true
-        schema:
-          type: string
-      - name: filter
-        in: query
-        description: filter apps using fql filter(AND-&&,OR-||) or using simple field
-          filtering
-        allowEmptyValue: true
-        schema:
-          type: string
-      - name: sort
-        in: query
-        description: sort applications by name,created_timestamp or updated_timestamp
-        allowEmptyValue: true
-        schema:
-          type: string
-      - name: limit
-        in: query
-        description: limit number of applications shown
-        allowEmptyValue: true
-        schema:
-          type: integer
-      - name: offset
-        in: query
-        description: start index from which apps will be shown
-        allowEmptyValue: true
-        schema:
-          type: integer
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: appnames
+          in: query
+          description: name of the apps
+          allowEmptyValue: true
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
+        - name: filter
+          in: query
+          description: filter apps using fql filter(AND-&&,OR-||) or using simple field filtering
+          allowEmptyValue: true
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: sort applications by name,created_timestamp or updated_timestamp
+          allowEmptyValue: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: limit number of applications shown
+          allowEmptyValue: true
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          description: start index from which apps will be shown
+          allowEmptyValue: true
+          schema:
+            type: integer
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.GetApplicationsData"
+                $ref: '#/components/schemas/domain.GetApplicationsData'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.GetApplicationsData"
+                $ref: '#/components/schemas/domain.GetApplicationsData'
         '404':
           description: App Not Found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.GetApplicationsData"
+                $ref: '#/components/schemas/domain.GetApplicationsData'
     put:
       tags:
-      - apps
+        - apps
       summary: Update app information
       operationId: UpdateApp
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: username
-        in: query
-        description: owner of the app
-        required: true
-        schema:
-          type: string
-      - name: nr_replicas
-        in: query
-        description: change nr replicas of the pod(only if it is running)
-        required: false
-        schema:
-          type: integer
-      - name: new_image
-        in: query
-        description: change current image to a new one(only if it is running)
-        required: false
-        schema:
-          type: string
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
+        - name: username
+          in: query
+          description: owner of the app
+          required: true
+          schema:
+            type: string
+        - name: nr_replicas
+          in: query
+          description: change nr replicas of the pod(only if it is running)
+          required: false
+          schema:
+            type: integer
+        - name: new_image
+          in: query
+          description: change current image to a new one(only if it is running)
+          required: false
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              "$ref": "#/components/schemas/domain.ApplicationData"
+              $ref: '#/components/schemas/domain.ApplicationData'
         required: true
       responses:
         '200':
@@ -144,178 +143,177 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.QueryResponse"
+                $ref: '#/components/schemas/domain.QueryResponse'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '404':
           description: User/Apps Not Found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
       x-codegen-request-body-name: body
     delete:
       tags:
-      - apps
+        - apps
       summary: Delete app
       operationId: DeleteApp
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: appnames
-        in: query
-        description: name of the apps you want to delete
-        required: true
-        schema:
-          type: string
-      - name: username
-        in: query
-        description: owner of the apps
-        required: true
-        schema:
-          type: string
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
+        - name: appnames
+          in: query
+          description: name of the apps you want to delete
+          required: true
+          schema:
+            type: string
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.QueryResponse"
+                $ref: '#/components/schemas/domain.QueryResponse'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '403':
           description: User not allowed as admin
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '404':
           description: User/Apps Not Found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
-  "/app/aggregates":
+                $ref: '#/components/schemas/domain.ErrorResponse'
+  /app/aggregates:
     get:
       tags:
-      - apps
+        - apps
       summary: Retrieve aggregates about applications
       operationId: GetAppsAggregates
       parameters:
-      - name: username
-        in: query
-        description: owner of the apps
-        required: true
-        schema:
-          type: string
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.AppsAggregatesInfo"
-  "/login":
+                $ref: '#/components/schemas/domain.AppsAggregatesInfo'
+  /login:
     post:
       tags:
-      - users
+        - users
       summary: Login user
       operationId: UserLogin
       requestBody:
         content:
           application/json:
             schema:
-              "$ref": "#/components/schemas/domain.UserData"
+              $ref: '#/components/schemas/domain.UserData'
         required: true
       parameters:
-      - name: old_password
-        in: query
-        description: old pass for changing password
-        required: false
-        allowEmptyValue: true
-        schema:
-          type: boolean
+        - name: old_password
+          in: query
+          description: old pass for changing password
+          required: false
+          allowEmptyValue: true
+          schema:
+            type: boolean
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.UserData"
+                $ref: '#/components/schemas/domain.UserData'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '404':
           description: User Not Found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
       x-codegen-request-body-name: body
-  "/register/app":
+  /register/app:
     post:
       tags:
-      - apps
+        - apps
       summary: Upload app to s3
       operationId: UploadApp
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: username
-        in: query
-        description: owner of the apps
-        required: true
-        schema:
-          type: string
-      - name: is_complex
-        in: query
-        description: flag for complex app split in multi source files
-        required: false
-        schema:
-          type: boolean
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
+        - name: is_complex
+          in: query
+          description: flag for complex app split in multi source files
+          required: false
+          schema:
+            type: boolean
       requestBody:
         content:
           multipart/form-data:
             schema:
               required:
-              - type
+                - type
               type: object
               properties:
                 type:
                   type: array
-                  description: zip archives which contain the code and description
-                    files(same name for both,description being txt)
+                  description: zip archives which contain the code and description files(same name for both,description being txt)
                   items:
                     type: string
                     format: binary
@@ -326,30 +324,30 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.QueryResponse"
+                $ref: '#/components/schemas/domain.QueryResponse'
         '302':
           description: Already found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
-  "/register/user":
+                $ref: '#/components/schemas/domain.ErrorResponse'
+  /register/user:
     post:
       tags:
-      - users
+        - users
       summary: Register user
       operationId: UserRegister
       requestBody:
         content:
           application/json:
             schema:
-              "$ref": "#/components/schemas/domain.UserData"
+              $ref: '#/components/schemas/domain.UserData'
         required: true
       responses:
         '200':
@@ -357,171 +355,171 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.QueryResponse"
+                $ref: '#/components/schemas/domain.QueryResponse'
         '302':
           description: Already found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
       x-codegen-request-body-name: body
-  "/schedule":
+  /schedule:
     get:
       tags:
-      - schedule
+        - schedule
       summary: Schedule apps
       operationId: ScheduleApps
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: appnames
-        in: query
-        description: name of the apps you want to schedule
-        required: true
-        allowEmptyValue: false
-        schema:
-          type: array
-          items:
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
             type: string
-      - name: username
-        in: query
-        description: owner of the apps
-        required: true
-        schema:
-          type: string
-      - name: schedule_type
-        in: query
-        description: type of schedulling
-        required: true
-        schema:
-          type: string
-      - name: nr_replicas
-        in: query
-        description: nr of replicas
-        required: true
-        schema:
-          type: integer
-      - name: server_port
-        in: query
-        description: server port for app
-        required: false
-        schema:
-          type: integer
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
+        - name: appnames
+          in: query
+          description: name of the apps you want to schedule
+          required: true
+          allowEmptyValue: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
+        - name: schedule_type
+          in: query
+          description: type of schedulling
+          required: true
+          schema:
+            type: string
+        - name: nr_replicas
+          in: query
+          description: nr of replicas
+          required: true
+          schema:
+            type: integer
+        - name: server_port
+          in: query
+          description: server port for app
+          required: false
+          schema:
+            type: integer
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.QueryResponse"
+                $ref: '#/components/schemas/domain.QueryResponse'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '403':
           description: User not allowed as admin
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '404':
           description: User/Apps Not Found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
-  "/getresults":
+                $ref: '#/components/schemas/domain.ErrorResponse'
+  /getresults:
     get:
       tags:
-      - schedule
+        - schedule
       summary: Get pod results
       operationId: GetPodResults
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: username
-        in: query
-        description: owner of the apps
-        required: true
-        schema:
-          type: string
-      - name: app_name
-        in: query
-        description: app name for which you want to get logs for
-        required: true
-        schema:
-          type: string
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
+        - name: app_name
+          in: query
+          description: app name for which you want to get logs for
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.GetLogsFromPod"
+                $ref: '#/components/schemas/domain.GetLogsFromPod'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '404':
           description: User/Apps/Pod not found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
-  "/user":
+                $ref: '#/components/schemas/domain.ErrorResponse'
+  /user:
     put:
       tags:
-      - users
+        - users
       summary: Updates user profile
       operationId: UpdateUserProfile
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              "$ref": "#/components/schemas/domain.UserData"
+              $ref: '#/components/schemas/domain.UserData'
         required: true
       responses:
         '200':
@@ -529,131 +527,131 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.QueryResponse"
+                $ref: '#/components/schemas/domain.QueryResponse'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '404':
           description: User not found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
       x-codegen-request-body-name: body
-  "/user/{username}":
     get:
       tags:
-      - users
+        - users
       summary: Retrieve user profile
       operationId: GetUserProfile
       parameters:
-      - name: username
-        in: path
-        description: username of the account
-        required: true
-        schema:
-          type: string
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
+        - name: username
+          in: query
+          description: username of the account
+          required: true
+          schema:
+            type: string
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.UserData"
+                $ref: '#/components/schemas/domain.UserData'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '404':
           description: User Not Found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
     delete:
       tags:
-      - users
+        - users
       summary: Delete user
       operationId: DeleteUser
       parameters:
-      - name: USER-AUTH
-        in: header
-        description: role used for auth
-        required: true
-        schema:
-          type: string
-      - name: USER-UUID
-        in: header
-        description: user unique id
-        required: true
-        schema:
-          type: string
-      - name: usernames
-        in: path
-        description: usernames to delete
-        required: true
-        schema:
-          type: string
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
+        - name: usernames
+          in: query
+          description: usernames to delete
+          required: true
+          schema:
+            type: string
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.QueryResponse"
+                $ref: '#/components/schemas/domain.QueryResponse'
         '400':
           description: Bad Request
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '403':
           description: User not allowed as admin
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
         '404':
           description: User Not Found
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/domain.ErrorResponse"
+                $ref: '#/components/schemas/domain.ErrorResponse'
 components:
   schemas:
     domain.ApplicationData:
       required:
-      - created_timestamp
-      - description
-      - is_running
-      - name
-      - updated_timestamp
-      - owner
-      - namespace
-      - schedule_type
-      - flag_arguments
-      - param_arguments
-      - is_main
-      - subgroup_files
-      - port
-      - ip_address
+        - created_timestamp
+        - description
+        - is_running
+        - name
+        - updated_timestamp
+        - owner
+        - namespace
+        - schedule_type
+        - flag_arguments
+        - param_arguments
+        - is_main
+        - subgroup_files
+        - port
+        - ip_address
+        - alert_ids
       type: object
       properties:
         created_timestamp:
@@ -687,6 +685,10 @@ components:
           type: array
           items:
             type: string
+        alert_ids:
+          type: array
+          items:
+            type: string
         is_main:
           type: boolean
         updated_timestamp:
@@ -694,8 +696,8 @@ components:
           format: date-time
     domain.GetLogsFromPod:
       required:
-      - print_message
-      - app_name
+        - print_message
+        - app_name
       type: object
       properties:
         print_message:
@@ -704,30 +706,30 @@ components:
           type: string
     domain.AppsAggregatesInfo:
       required:
-      - QueryInfo
+        - QueryInfo
       type: object
       properties:
         QueryInfo:
           items:
-            "$ref": "#/components/schemas/domain.GetAppInfo"
+            $ref: '#/components/schemas/domain.GetAppInfo'
     domain.AppsMetaInfo:
       required:
-      - total
-      - resources_count
+        - total
+        - resources_count
       type: object
       properties:
         total:
           type: integer
-          format: int32
+          format: integer
         resources_count:
           type: integer
-          format: int32
+          format: integer
     domain.GetAppInfo:
       required:
-      - main_apps_owner_count
-      - main_apps_total_count
-      - running_apps_owner_count
-      - running_apps_total_count
+        - main_apps_owner_count
+        - main_apps_total_count
+        - running_apps_owner_count
+        - running_apps_total_count
       properties:
         main_apps_owner_count:
           type: integer
@@ -743,41 +745,41 @@ components:
           format: int64
     domain.ErrorResponse:
       required:
-      - message
-      - status_code
+        - message
+        - status_code
       type: object
       properties:
         message:
           type: string
         status_code:
           type: integer
-          format: int32
+          format: integer
     domain.GetApplicationsData:
       required:
-      - QueryInfo
-      - Errors
-      - Response
+        - QueryInfo
+        - Errors
+        - Response
       type: object
       properties:
         Errors:
           type: array
           items:
-            "$ref": "#/components/schemas/domain.ErrorResponse"
+            $ref: '#/components/schemas/domain.ErrorResponse'
         QueryInfo:
           items:
-            "$ref": "#/components/schemas/domain.AppsMetaInfo"
+            $ref: '#/components/schemas/domain.AppsMetaInfo'
         Response:
           type: array
           items:
-            "$ref": "#/components/schemas/domain.ApplicationData"
+            $ref: '#/components/schemas/domain.ApplicationData'
     domain.UserData:
       required:
-      - username
-      - full_name
-      - email
-      - birth_date
-      - job_role
-      - applications
+        - username
+        - full_name
+        - email
+        - birth_date
+        - job_role
+        - applications
       type: object
       properties:
         applications:
@@ -810,8 +812,8 @@ components:
           type: boolean
     domain.QueryResponse:
       required:
-      - resources_affected
-      - message
+        - resources_affected
+        - message
       type: object
       properties:
         resources_affected:

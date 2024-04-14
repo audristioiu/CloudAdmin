@@ -79,6 +79,7 @@ func (k *KubernetesClient) ListPodsMetrics() (map[string]map[string][]domain.Pod
 				podMetrics, err := k.metricsKubeClient.MetricsV1beta1().PodMetricses(namespace).Get(k.ctx, podName, metav1.GetOptions{})
 				if err != nil {
 					k.kubeLogger.Error("failed to list metrics for pods", zap.Error(err))
+					continue
 				}
 				for _, podContainer := range podMetrics.Containers {
 					cpuUsageTotal += podContainer.Usage.Cpu().MilliValue()
@@ -89,7 +90,7 @@ func (k *KubernetesClient) ListPodsMetrics() (map[string]map[string][]domain.Pod
 				podMetrics, err := k.metricsKubeClient.MetricsV1beta1().PodMetricses(namespace).Get(k.ctx, podName, metav1.GetOptions{})
 				if err != nil {
 					k.kubeLogger.Error("failed to list metrics for pods", zap.Error(err))
-					return nil, nil
+					continue
 				}
 				podCPUMemoryMetrics := make([]domain.PodContainerMetrics, 0)
 				for _, podContainer := range podMetrics.Containers {

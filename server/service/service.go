@@ -171,8 +171,11 @@ func (s *Service) StartWebService() {
 	}
 
 	// initialize Grafana Client
-
-	grafanaHTTPClient := clients.NewGrafanaClient(ctx, os.Getenv("GF_HOST"), log)
+	grafanaUser := os.Getenv("GF_SECURITY_ADMIN_USER")
+	grafanaPass := os.Getenv("GF_SECURITY_ADMIN_PASSWORD")
+	grafanaHost := os.Getenv("GF_HOST")
+	grafanaDataSourceUUID := os.Getenv("GF_DATASOURCE_UUID")
+	grafanaHTTPClient := clients.NewGrafanaClient(ctx, grafanaHost, grafanaUser, grafanaPass, grafanaDataSourceUUID, log)
 	log.Debug("Initialized Grafana Client")
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient, s3Client,
@@ -274,7 +277,6 @@ func (s *Service) StartWebService() {
 									namepace, podName, podMetricElem.PodContainerName), nil)
 								podMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.mem_usage",
 									namepace, podName, podMetricElem.PodContainerName), nil)
-
 								cpuQuantity := math.Round(podMetricElem.CPUMemoryMetrics[2])
 								memQuantity := math.Round(podMetricElem.CPUMemoryMetrics[3])
 
@@ -288,7 +290,7 @@ func (s *Service) StartWebService() {
 						}
 					}
 				}
-				time.Sleep(time.Second * 10)
+				time.Sleep(time.Second * 60)
 			}
 		}()
 	}
@@ -328,7 +330,7 @@ func enrichSwaggerObject(swo *spec.Swagger) {
 					URL:  "http://mit.org",
 				},
 			},
-			Version: "1.9.2",
+			Version: "1.9.5",
 		},
 	}
 	swo.Tags = []spec.Tag{{TagProps: spec.TagProps{

@@ -16,15 +16,18 @@ import (
 )
 
 const (
-	registerPath          = "/register"
-	loginPath             = "/login"
-	userPath              = "/user"
-	otpPath               = "/otp"
-	appPath               = "/app"
-	aggregatesPath        = "/aggregates"
-	schedulePath          = "/schedule"
-	getPodResultPath      = "/getresults"
-	grafanaDataSourcePath = "/grafana/datasource"
+	registerPath            = "/register"
+	loginPath               = "/login"
+	userPath                = "/user"
+	otpPath                 = "/otp"
+	appPath                 = "/app"
+	aggregatesPath          = "/aggregates"
+	schedulePath            = "/schedule"
+	getPodResultPath        = "/getresults"
+	grafanaDataSourcePath   = "/grafana/datasource"
+	grafanaAlertPath        = "/grafana/alert"
+	grafanaUpdateAlertPath  = "/grafana/update_alert"
+	grafanaAlertTriggerPath = "/grafana/alert_trigger"
 )
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service + clients
@@ -307,8 +310,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.QueryParameter("appnames", "name of the apps you want to schedule").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(true)).
 			Param(ws.QueryParameter("username", "owner of the apps").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("schedule_type", "type of schedulling").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("nr_replicas", "nr of replicas").DataType("int32").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("server_port", "server port for app").DataType("int32").Required(false).AllowEmptyValue(true)).
+			Param(ws.QueryParameter("nr_replicas", "nr of replicas").DataType("integer").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("server_port", "server port for app").DataType("integer").Required(false).AllowEmptyValue(true)).
 			Doc("Schedule apps").
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
@@ -338,16 +341,86 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 	ws.Route(
 		ws.
 			GET(grafanaDataSourcePath).
-			Param(ws.QueryParameter("appname", "name of the app to gather data from grafana").DataType("string").Required(true)).
+			Param(ws.QueryParameter("app_name", "name of the app to gather data from grafana").DataType("string").Required(true)).
 			Param(ws.QueryParameter("grafana_format", "data format for data source").DataType("string").Required(true)).
 			Param(ws.QueryParameter("grafana_from", "gather data from a specific time").DataType("string").Required(true)).
 			Param(ws.QueryParameter("grafana_usage_type", "Metric to return : mem or cpu").DataType("string").Required(true)).
 			Doc("Get grafana data source data for an app").
-			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			To(api.GetGrafanaDashboardData).
-			Returns(http.StatusOK, "OK", []domain.GrafanaDataSourceResponse{}))
+			Returns(http.StatusOK, "OK", []domain.GrafanaDataSourceResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			GET(grafanaAlertPath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("app_name", "name of the app you want to create alerts").DataType("string").Required(true)).
+			Doc("Create alerts for app").
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.CreateAppAlert).
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User/App Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusFound, "Alert already exists", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			GET(grafanaUpdateAlertPath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("app_name", "name of the app you want to update the alert").DataType("string").Required(true)).
+			Param(ws.QueryParameter("alert_ids", "id of the alerts you want to update").DataType("string").Required(true)).
+			Param(ws.QueryParameter("alert_new_mem_value", "value to update memory query").DataType("integer").Required(true)).
+			Param(ws.QueryParameter("alert_new_cpu_value", "value to update cpu query").DataType("integer").Required(true)).
+			Doc("Update alerts for app").
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.UpdateAppAlert).
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User/App Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			DELETE(grafanaAlertPath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("app_name", "name of the app you want to delete the alert").DataType("string").Required(true)).
+			Param(ws.QueryParameter("alert_ids", "alert ids you want to delete").DataType("string").Required(true)).
+			Doc("Delete alerts for an app").
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.DeleteAppAlert).
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
+			Returns(http.StatusNotFound, "User/App/Alert Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			GET(grafanaAlertTriggerPath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("app_name", "name of the app you want to get alert details").DataType("string").Required(true)).
+			Param(ws.QueryParameter("alert_id", "id of the alert you want get trigger info ").DataType("string").Required(true)).
+			Doc("Get alert trigger details").
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.GetAlertTriggerNotification).
+			Returns(http.StatusOK, "OK", domain.AlertNotification{}).
+			Returns(http.StatusNotFound, "User/App/Alert Not Found", domain.ErrorResponse{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
 	//activate profiler endpoints only if it is initialized
 	if api.profiler.Cpuprofile != "" {
 		ws.Route(ws.GET("/profiler/start").To(api.StartProfiler))

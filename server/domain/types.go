@@ -61,6 +61,7 @@ type ApplicationData struct {
 	SubgroupFiles    []string  `json:"subgroup_files,omitempty"`
 	IsMain           bool      `json:"is_main,omitempty"`
 	IsRunning        bool      `json:"is_running"`
+	AlertIDs         []string  `json:"alert_ids,omitempty"`
 }
 
 // ErrorResponse represents error info
@@ -770,4 +771,101 @@ type VTResponse struct {
 type GrafanaDataSourceResponse struct {
 	Target     string       `json:"target"`
 	Datapoints [][]*float64 `json:"datapoints"`
+}
+
+// RelativeTimeRange represents info about time range alert
+type RelativeTimeRange struct {
+	From int64 `json:"from"`
+	To   int64 `json:"to"`
+}
+
+// Model represents struct for alert model
+type Model struct {
+	Hide          bool        `json:"hide"`
+	IntervalMs    int         `json:"intervalMs,omitempty"`
+	MaxDataPoints int         `json:"maxDataPoints,omitempty"`
+	Target        string      `json:"target,omitempty"`
+	Type          string      `json:"type,omitempty"`
+	Datasource    Datasource  `json:"datasource,omitempty"`
+	Conditions    []Condition `json:"conditions,omitempty"`
+	Expression    string      `json:"expression,omitempty"`
+	Reducer       string      `json:"reducer,omitempty"`
+	RefID         string      `json:"refId"`
+}
+
+// Data represents struct for alert data
+type Data struct {
+	RefID             string            `json:"refId"`
+	QueryType         string            `json:"queryType"`
+	RelativeTimeRange RelativeTimeRange `json:"relativeTimeRange"`
+	DatasourceUUID    string            `json:"datasourceUid"`
+	Model             Model             `json:"model"`
+	Reducer           string            `json:"reducer"`
+}
+
+// Datasource represents struct for grafana alert datasource
+type Datasource struct {
+	Type string `json:"type,omitempty"`
+	UID  string `json:"uid,omitempty"`
+}
+
+// Condition represents struct for grafana alert condition
+type Condition struct {
+	Type      string    `json:"type"`
+	Evaluator Evaluator `json:"evaluator"`
+	Operator  Operator  `json:"operator"`
+	Query     Query     `json:"query"`
+	Reducer   Reducer   `json:"reducer"`
+}
+
+// Evaluator represents struct for grafana alert evaluator
+type Evaluator struct {
+	Params []int  `json:"params"`
+	Type   string `json:"type"`
+}
+
+// Operator represents struct for grafana alert operator
+type Operator struct {
+	Type string `json:"type"`
+}
+
+// Query represents struct for grafana alert query
+type Query struct {
+	Params []string `json:"params"`
+}
+
+// Reducer represents struct for grafana alert reducer
+type Reducer struct {
+	Params []string `json:"params"`
+	Type   string   `json:"type"`
+}
+
+// Annotations represents struct for grafana alert annotations
+type Annotations struct {
+	Description string `json:"description"`
+	Summary     string `json:"summary"`
+}
+
+// GrafanaAlertInfo represents struct for creating an alert rule
+type GrafanaAlertInfo struct {
+	ID           int         `json:"id"`
+	UID          string      `json:"uid"`
+	OrgID        int         `json:"orgID"`
+	FolderUID    string      `json:"folderUID"`
+	RuleGroup    string      `json:"ruleGroup"`
+	Title        string      `json:"title"`
+	Condition    string      `json:"condition"`
+	Data         []Data      `json:"data"`
+	Updated      string      `json:"updated"`
+	NoDataState  string      `json:"noDataState"`
+	ExecErrState string      `json:"execErrState"`
+	For          string      `json:"for"`
+	Annotations  Annotations `json:"annotations"`
+	IsPaused     bool        `json:"isPaused"`
+	Provenance   string      `json:"provenance,omitempty"`
+}
+
+// AlertNotification represents struct for alert notification response
+type AlertNotification struct {
+	NewState string `json:"newState"`
 }

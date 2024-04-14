@@ -2271,7 +2271,6 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 			response.WriteEntity(errorData)
 			return
 		}
-
 	}
 
 	//clear all the cache for that specific user
@@ -2999,7 +2998,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	podLogsResponse := domain.GetLogsFromPod{}
 	podLogsResponse.PrintMessage = strings.Join(podLogs, " ")
 	podLogsResponse.AppName = podName
-	response.WriteEntity(podLogsResponse)
+	response.WriteAsJson(podLogsResponse)
 
 }
 
@@ -3007,7 +3006,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 func (api *API) GetGrafanaDashboardData(request *restful.Request, response *restful.Response) {
 	errorData := domain.ErrorResponse{}
 
-	appName := strings.ReplaceAll(strings.ReplaceAll(request.QueryParameter("appname"), ".", "-"), "_", "-") + "-deployment"
+	appName := strings.ReplaceAll(strings.ReplaceAll(request.QueryParameter("app_name"), ".", "-"), "_", "-") + "-deployment"
 	grafanaFormat := request.QueryParameter("grafana_format")
 	grafanaFrom := request.QueryParameter("grafana_from")
 	grafanaUsageType := request.QueryParameter("grafana_usage_type")
@@ -3020,6 +3019,738 @@ func (api *API) GetGrafanaDashboardData(request *restful.Request, response *rest
 		return
 	}
 	response.WriteEntity(dataSourceData)
+}
+
+func (api *API) CreateAppAlert(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	// if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+	// 	api.apiLogger.Error("App not found", zap.Any("app", appName))
+	// 	errorData.Message = "App not found"
+	// 	errorData.StatusCode = http.StatusNotFound
+	// 	response.WriteHeader(http.StatusNotFound)
+	// 	response.WriteEntity(errorData)
+	// 	return
+
+	// }
+	// _, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	// if len(appInfo[0].AlertIDs) != 0 {
+	// 	errorData.Message = "Bad Request / App has alerts"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+
+	deployAppName := strings.ReplaceAll(strings.ReplaceAll(appName, ".", "-"), "_", "-") + "-deployment"
+
+	// create mem alert for app
+	alertBody := domain.GrafanaAlertInfo{
+		OrgID:     1,
+		FolderUID: "efe8a245-bb05-4919-b8cc-9a2c9620a6e0",
+		RuleGroup: "cloud-admin-team",
+		Title:     "Mem Alert for app " + appName,
+		Condition: "C",
+		Updated:   time.Now().Format(time.RFC3339),
+		For:       "5m",
+		Annotations: domain.Annotations{
+			Description: "Mem Alert for app " + appName,
+			Summary:     "Mem Alert for app " + appName,
+		},
+		IsPaused:     false,
+		ExecErrState: "Error",
+		NoDataState:  "NoData",
+		Data: []domain.Data{
+			{
+				RefID: "A",
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+				DatasourceUUID: "P6575522ED8660310",
+				Model: domain.Model{
+					Hide:          false,
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+					RefID:         "A",
+					Target:        fmt.Sprintf(`cloudadminapi.default.*.%s.mem_usage.value`, deployAppName),
+				},
+			},
+			{
+				RefID: "B",
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+				DatasourceUUID: "__expr__",
+				Model: domain.Model{
+					Conditions: []domain.Condition{
+						{
+							Evaluator: domain.Evaluator{
+								Params: []int{},
+								Type:   "gt",
+							},
+							Operator: domain.Operator{
+								Type: "and",
+							},
+							Query: domain.Query{
+								Params: []string{"B"},
+							},
+							Reducer: domain.Reducer{
+								Params: []string{},
+								Type:   "last",
+							},
+							Type: "query",
+						},
+					},
+					Datasource: domain.Datasource{
+						Type: "__expr__",
+						UID:  "__expr__",
+					},
+					Expression:    "A",
+					Reducer:       "last",
+					Hide:          false,
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+					RefID:         "B",
+					Type:          "reduce",
+				},
+			},
+			{
+				RefID:          "C",
+				DatasourceUUID: "__expr__",
+				Model: domain.Model{
+					RefID: "C",
+					Hide:  false,
+					Type:  "threshold",
+					Datasource: domain.Datasource{
+						Type: "__expr__",
+						UID:  "__expr__",
+					},
+					Conditions: []domain.Condition{
+						{
+							Type: "query",
+							Evaluator: domain.Evaluator{
+								Params: []int{128},
+								Type:   "gt",
+							},
+							Operator: domain.Operator{
+								Type: "and",
+							},
+							Query: domain.Query{
+								Params: []string{"C"},
+							},
+							Reducer: domain.Reducer{
+								Params: []string{},
+								Type:   "last",
+							},
+						},
+					},
+					Expression:    "B",
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+				},
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+			},
+		},
+	}
+
+	respAlert, err := api.grafanaHTTPClient.CreateAlertRule(alertBody)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	alertRules := make([]string, 0)
+	alertRules = append(alertRules, respAlert.UID)
+	err = api.psqlRepo.UpdateAppAlertID(appName, respAlert.UID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no row found") {
+			api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
+			errorData.Message = "App not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		} else {
+			errorData.Message = "Internal error / error in updating app data in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+	}
+
+	// create cpu alert for app
+	alertBody.Title = "CPU Alert for app " + appName
+	alertBody.Annotations.Description = "CPU Alert for app " + appName
+	alertBody.Annotations.Summary = "CPU Alert for app " + appName
+	alertBody.Data[0].Model.Target = fmt.Sprintf(`cloudadminapi.default.*.%s.cpu_usage.value`, deployAppName)
+	alertBody.Data[2].Model.Conditions[0].Evaluator.Params[0] = 500
+
+	respAlert, err = api.grafanaHTTPClient.CreateAlertRule(alertBody)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	alertRules = append(alertRules, respAlert.UID)
+	err = api.psqlRepo.UpdateAppAlertID(appName, respAlert.UID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no row found") {
+			api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
+			errorData.Message = "App not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		} else {
+			errorData.Message = "Internal error / error in updating app data in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+	}
+
+	for _, cachedReq := range cachedRequests[username] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[username] = make([]string, 0)
+
+	createAlertResponse := domain.QueryResponse{}
+	createAlertResponse.Message = "Alerts created succesfully"
+	createAlertResponse.ResourcesAffected = append(createAlertResponse.ResourcesAffected, alertRules...)
+	response.WriteEntity(createAlertResponse)
+
+}
+
+func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	cpuNewThreshold := request.QueryParameter("alert_new_cpu_value")
+	if cpuNewThreshold == "" {
+		api.apiLogger.Error(" Couldn't read alert_new_cpu_value query parameter")
+		errorData.Message = "Bad Request/ empty alert_new_cpu_value"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	memNewThreshold := request.QueryParameter("alert_new_mem_value")
+	if memNewThreshold == "" {
+		api.apiLogger.Error(" Couldn't read alert_new_mem_value query parameter")
+		errorData.Message = "Bad Request/ empty alert_new_mem_value"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	alertRuleIDs := request.QueryParameter("alert_ids")
+	if alertRuleIDs == "" {
+		api.apiLogger.Error(" Couldn't read alert_ids query parameter")
+		errorData.Message = "Bad Request/ empty alert id"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("App not found", zap.Any("app", appName))
+		errorData.Message = "App not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+
+	}
+
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	if len(appInfo[0].AlertIDs) == 0 {
+		errorData.Message = "Bad Request / App does not have an alert created"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	deployAppName := strings.ReplaceAll(strings.ReplaceAll(appName, ".", "-"), "_", "-") + "-deployment"
+	alertUIDs := strings.Split(alertRuleIDs, ",")
+	newMemTreshholdValue, _ := strconv.ParseInt(memNewThreshold, 10, 64)
+	newCPUTreshholdValue, _ := strconv.ParseInt(cpuNewThreshold, 10, 64)
+	if newCPUTreshholdValue == int64(0) || newMemTreshholdValue == int64(0) {
+		errorData.Message = "Bad Request / Found zero values " + memNewThreshold + "," + cpuNewThreshold
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	// update mem alert
+	alertBody := domain.GrafanaAlertInfo{
+		OrgID:     1,
+		FolderUID: "efe8a245-bb05-4919-b8cc-9a2c9620a6e0",
+		RuleGroup: "cloud-admin-team",
+		Title:     "Mem Alert for app " + appName,
+		Condition: "C",
+		Updated:   time.Now().Format(time.RFC3339),
+		For:       "5m",
+		Annotations: domain.Annotations{
+			Description: "Mem Alert for app " + appName,
+			Summary:     "Mem Alert for app " + appName,
+		},
+		IsPaused:     false,
+		ExecErrState: "Error",
+		NoDataState:  "NoData",
+		Data: []domain.Data{
+			{
+				RefID: "A",
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+				DatasourceUUID: "P6575522ED8660310",
+				Model: domain.Model{
+					Hide:          false,
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+					RefID:         "A",
+					Target:        fmt.Sprintf(`cloudadminapi.default.*.%s.mem_usage.value`, deployAppName),
+				},
+			},
+			{
+				RefID: "B",
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+				DatasourceUUID: "__expr__",
+				Model: domain.Model{
+					Conditions: []domain.Condition{
+						{
+							Evaluator: domain.Evaluator{
+								Params: []int{},
+								Type:   "gt",
+							},
+							Operator: domain.Operator{
+								Type: "and",
+							},
+							Query: domain.Query{
+								Params: []string{"B"},
+							},
+							Reducer: domain.Reducer{
+								Params: []string{},
+								Type:   "last",
+							},
+							Type: "query",
+						},
+					},
+					Datasource: domain.Datasource{
+						Type: "__expr__",
+						UID:  "__expr__",
+					},
+					Expression:    "A",
+					Reducer:       "last",
+					Hide:          false,
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+					RefID:         "B",
+					Type:          "reduce",
+				},
+			},
+			{
+				RefID:          "C",
+				DatasourceUUID: "__expr__",
+				Model: domain.Model{
+					RefID: "C",
+					Hide:  false,
+					Type:  "threshold",
+					Datasource: domain.Datasource{
+						Type: "__expr__",
+						UID:  "__expr__",
+					},
+					Conditions: []domain.Condition{
+						{
+							Type: "query",
+							Evaluator: domain.Evaluator{
+								Params: []int{int(newMemTreshholdValue)},
+								Type:   "gt",
+							},
+							Operator: domain.Operator{
+								Type: "and",
+							},
+							Query: domain.Query{
+								Params: []string{"C"},
+							},
+							Reducer: domain.Reducer{
+								Params: []string{},
+								Type:   "last",
+							},
+						},
+					},
+					Expression:    "B",
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+				},
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+			},
+		},
+	}
+	err = api.grafanaHTTPClient.UpdateAlertRule(alertUIDs[0], alertBody)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	// update cpu alert
+	alertBody.Title = "CPU Alert for app " + appName
+	alertBody.Annotations.Description = "CPU Alert for app " + appName
+	alertBody.Annotations.Summary = "CPU Alert for app " + appName
+	alertBody.Data[0].Model.Target = fmt.Sprintf(`cloudadminapi.default.*.%s.cpu_usage.value`, deployAppName)
+	alertBody.Data[2].Model.Conditions[0].Evaluator.Params[0] = int(newCPUTreshholdValue)
+	alertBody.UID = alertUIDs[1]
+	err = api.grafanaHTTPClient.UpdateAlertRule(alertUIDs[1], alertBody)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	updateAlertResponse := domain.QueryResponse{}
+	updateAlertResponse.Message = "Alerts updated succesfully"
+	updateAlertResponse.ResourcesAffected = append(updateAlertResponse.ResourcesAffected, alertUIDs...)
+	response.WriteEntity(updateAlertResponse)
+}
+
+func (api *API) DeleteAppAlert(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	alertRuleIDs := request.QueryParameter("alert_ids")
+	if alertRuleIDs == "" {
+		api.apiLogger.Error(" Couldn't read alert_ids query parameter")
+		errorData.Message = "Bad Request/ empty alert id"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("App not found", zap.Any("app", appName))
+		errorData.Message = "App not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	if len(appInfo[0].AlertIDs) == 0 {
+		errorData.Message = "Bad Request / App does not have an alert created"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	alertRuleIDsList := strings.Split(alertRuleIDs, ",")
+	for _, alertRuleID := range alertRuleIDsList {
+		err = api.grafanaHTTPClient.DeleteAlertRule(alertRuleID)
+		if err != nil {
+			errorData.Message = "Bad Request/ " + err.Error()
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		err = api.psqlRepo.RemoveAppAlertID(alertRuleID, appName)
+		if err != nil {
+			errorData.Message = "Bad Request/ " + err.Error()
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+	}
+
+	deleteAlertResponse := domain.QueryResponse{}
+	deleteAlertResponse.Message = "Alerts deleted succesfully"
+	deleteAlertResponse.ResourcesAffected = append(deleteAlertResponse.ResourcesAffected, alertRuleIDsList...)
+	response.WriteEntity(deleteAlertResponse)
+}
+
+func (api *API) GetAlertTriggerNotification(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	alertRuleID := request.QueryParameter("alert_id")
+	if alertRuleID == "" {
+		api.apiLogger.Error(" Couldn't read alert_id query parameter")
+		errorData.Message = "Bad Request/ empty alert id"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("App not found", zap.Any("app", appName))
+		return
+	}
+
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	if len(appInfo[0].AlertIDs) == 0 {
+		api.apiLogger.Debug("no alerts found for app", zap.String("app_name", appName))
+		return
+	}
+
+	alertRuleInfo, err := api.grafanaHTTPClient.GetAlertRuleByID(alertRuleID)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	alertTriggerInformation, err := api.grafanaHTTPClient.GetAlertNotification(alertRuleInfo.ID)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	response.WriteEntity(alertTriggerInformation[0])
 }
 
 // StartProfiler starts the cpu profiler
