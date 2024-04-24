@@ -46,8 +46,6 @@ function AppItem(app) {
     setIsGetAppModalOpen(false);
   };
 
-  console.log(app);
-
   return (
     <tr>
       <td>{appName}</td>

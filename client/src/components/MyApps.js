@@ -14,6 +14,7 @@ function MyApps() {
   const [sortQueryInput, setSortQueryInput] = useState('')
   const [timestampInput, setTimestampInput] = useState('');
   const [timestampOn, setTimeStampOn] = useState(false);
+  const [selectedFilterType, setSelectedFilterType] = useState('normal');
   const timeRanges = {
     "1 day": "1 day",
     "3 days": "3 day",
@@ -104,10 +105,17 @@ function MyApps() {
 
   const buildSearchConfig = (config_app, typeInput, searchInput) => {
     if (searchInput.length !== 0) {
-      config_app.params = {
-        ...config_app.params,
-        [typeInput === 'custom_filter' ? 'filter' : 'appnames']: typeInput === 'name' ? searchInput : typeInput === 'custom_filter' ? searchInput : `${typeInput}=${searchInput}`,
-      };
+      if (selectedFilterType == 'normal') {
+        config_app.params = {
+          ...config_app.params,
+          'appnames': typeInput == 'name' ? searchInput : `${typeInput}=${searchInput}`,
+        };
+      } else {
+        config_app.params = {
+          ...config_app.params,
+          'filter': searchInput,
+        };
+      }
     }
 
     return config_app;
@@ -153,8 +161,8 @@ function MyApps() {
     }
   };
 
-  return (
-    <div className='myapps_container'>
+  const renderNormalFilter = () => {
+    return (
       <form onSubmit={handleSearchApp}>
         <div className='search_bar'>
           <input
@@ -208,6 +216,49 @@ function MyApps() {
           </button>
         </div>
       </form>
+    );
+  }
+
+  const renderComplexFilter = () => {
+    return (
+      <form>
+        <div className='search_bar'>
+          <input
+            type="search"
+            placeholder="Build your filter query"
+            onChange={(e) => setSearchInput(e.target.value)}
+            value={searchInput}
+          />
+          <button type="submit" className='button-3'>
+            Submit
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  const renderFilter = () => {
+    if (selectedFilterType == 'normal') {
+      return renderNormalFilter();
+    } else {
+      return renderComplexFilter();
+    }
+  }
+
+  return (
+    <div className='myapps_container'>
+      <div className="search_bar filter_type_select">
+        <label>
+          Filter Type:
+          <select name="filter_type" className="input-style filter-type" onChange={(e) => setSelectedFilterType(e.target.value)}>
+            <option value="normal">Normal</option>
+            <option value="complex">Complex</option>
+          </select>
+        </label>
+
+      </div>
+      {renderFilter()}
+
       <div className="table-container">
         <table className="table">
           <thead>
@@ -238,7 +289,7 @@ function MyApps() {
         </button>
       </form>
 
-      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+      {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </div>
 
   );
