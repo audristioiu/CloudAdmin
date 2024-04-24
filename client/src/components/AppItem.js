@@ -4,6 +4,7 @@ import Modal from 'react-modal'; // Import the modal library
 import '../assets/MyApps.scss';
 import EditApp from "./EditApp";
 import ScheduleApp from "./ScheduleApp";
+import GetApp from "./GetApp";
 
 function AppItem(app) {
   const [appName, setAppName] = useState(app.app.name);
@@ -17,6 +18,7 @@ function AppItem(app) {
 
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isGetAppModalOpen, setIsGetAppModalOpen] = useState(false);
 
   const getStatusClass = () => (appRunningState ? ' active' : ' inactive');
 
@@ -28,12 +30,20 @@ function AppItem(app) {
     setIsEditModalOpen(true);
   };
 
+  const handleOpenGetAppModal = () => {
+    setIsGetAppModalOpen(true);
+  };
+
   const handleCloseScheduleModal = () => {
     setIsScheduleModalOpen(false);
   };
 
   const handleCloseEditModal = () => {
     setIsEditModalOpen(false);
+  };
+
+  const handleCloseGetAppModal = () => {
+    setIsGetAppModalOpen(false);
   };
 
   console.log(app);
@@ -79,6 +89,20 @@ function AppItem(app) {
            overlayClassName="Overlay"
         >
           <EditApp app={app} />
+        </Modal>
+
+        <button className='button-3' onClick={handleOpenGetAppModal}>
+          Get App Stats
+        </button>
+
+        <Modal 
+           isOpen={isGetAppModalOpen}
+           contentLabel="onRequestClose Example"
+           onRequestClose={handleCloseGetAppModal}
+           className="Modal"
+           overlayClassName="Overlay"
+        >
+          <GetApp app={app} />
         </Modal>
 
         <button className='button-3'>

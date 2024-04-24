@@ -4,12 +4,10 @@ import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 import '../assets/Error.scss';
 
-function ScheduleApp(props) {
+function GetApp(props) {
   const { app } = props.app;
   const [appName, setAppName] = useState(app.name);
-  const [appScheduleType, setAppScheduleType] = useState(app.schedule_type);
-  const [appNrReplicas, setAppNrReplicas] = useState(0);
-  const [appServerPort, setAppServerPort] = useState(0);
+  const [podName, setPodName] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
   let handleSubmit = async (event) => {
@@ -33,11 +31,8 @@ function ScheduleApp(props) {
         }
       };
 
-      await axios.get(`https://localhost:9443/schedule`, {
-        "appnames": appName,
-        "schedule_type": appScheduleType,
-        "nr_replicas": appNrReplicas,
-        "server_port": appServerPort
+      await axios.get(`https://localhost:9443/getresults`, {
+        "pod_name": podName,
       }, config,
         { httpsAgent: agent },);
 
@@ -49,41 +44,19 @@ function ScheduleApp(props) {
   return (
     <form onSubmit={handleSubmit}>
       <div className="modal-title">
-        Schedule {appName}
+        Get {appName} info
       </div>
-      <div className="user-box">
-        <label>
-          Schedule Type:
-          <select name="schedule_type" defaultValue={appScheduleType} className="input-style app-description">
-            <option value="normal">Normal</option>
-            <option value="random_scheduler">Random Scheduler</option>
-            <option value="rr_sjf_scheduler">RR SJF Scheduler</option>
-          </select>
-        </label>
 
-      </div>
       <div className="user-box">
         <label>
-          Number of replicas
+          Pod Name
           <input
             className='input-style app-description'
-            type='number'
-            value={appNrReplicas}
-            onChange={(e) => setAppNrReplicas(e.target.value)}
+            type='text'
+            value={podName}
+            onChange={(e) => setPodName(e.target.value)}
           />
 
-        </label>
-
-      </div>
-      <div className="user-box">
-        <label>
-          Server Port
-          <input
-            className='input-style app-description'
-            type='number'
-            value={appServerPort}
-            onChange={(e) => setAppServerPort(e.target.value)}
-          />
         </label>
 
       </div>
@@ -102,4 +75,4 @@ function ScheduleApp(props) {
 }
 
 
-export default ScheduleApp;
+export default GetApp;
