@@ -159,7 +159,7 @@ func (s *Service) StartWebService() {
 	awsRegion := os.Getenv("AWS_S3_REGION")
 	awsBucket := os.Getenv("AWS_S3_BUCKET")
 	disableS3 := os.Getenv("DISABLE_S3")
-	if disableS3 != "true" {
+	if disableS3 == "false" {
 		s3Client, err = clients.NewS3Client(ctx, awsAccessKey, awsSecretKey, awsBucket, awsRegion, log)
 		if err != nil {
 			log.Fatal("[FATAL] Error in creating s3 client")

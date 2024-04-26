@@ -815,7 +815,8 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 
 		for _, userApp := range userApps {
 			if api.s3Client != nil {
-				s3FilesName, err := api.s3Client.ListFileFolder(userApp)
+				key := strings.ReplaceAll(strings.Split(userApp, ".")[0], "_", "-")
+				s3FilesName, err := api.s3Client.ListFileFolder(key)
 				if err != nil {
 					errorData.Message = "Internal error / error in retrieving files from s3"
 					errorData.StatusCode = http.StatusInternalServerError
@@ -823,7 +824,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 					response.WriteEntity(errorData)
 					return
 				}
-				err = api.s3Client.DeleteFiles(s3FilesName)
+				err = api.s3Client.DeleteFiles(s3FilesName, key)
 				if err != nil {
 					errorData.Message = "Internal error / error in deleting files from s3"
 					errorData.StatusCode = http.StatusInternalServerError
@@ -1271,7 +1272,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 			// Iterate through the files in the archive,
 			// printing some of their contents.
-			s3Key := strings.Split(fileName.Filename, ".")[0]
+			s3Key := strings.ReplaceAll(strings.Split(fileName.Filename, ".")[0], "_", "-")
 			for i, f := range r.File {
 				appData := domain.ApplicationData{}
 
@@ -1286,7 +1287,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					return
 				}
 				if api.s3Client != nil {
-					err = api.s3Client.UploadFile(s3Key, rc)
+					err = api.s3Client.UploadFile(s3Key, f.Name, rc)
 					if err != nil {
 						errorData.Message = "Internal error/ upload s3"
 						errorData.StatusCode = http.StatusInternalServerError
@@ -1550,7 +1551,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 			// Iterate through the files in the archive,
 			// printing some of their contents.
-			s3Key := strings.Split(fileName.Filename, ".")[0]
+			s3Key := strings.ReplaceAll(strings.Split(fileName.Filename, ".")[0], "_", "-")
 			for i, f := range r.File {
 
 				api.apiLogger.Debug("Writting information for file", zap.String("file_name", f.Name))
@@ -1564,7 +1565,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					return
 				}
 				if api.s3Client != nil {
-					err = api.s3Client.UploadFile(s3Key, rc)
+					err = api.s3Client.UploadFile(s3Key, f.Name, rc)
 					if err != nil {
 						errorData.Message = "Internal error/ upload s3"
 						errorData.StatusCode = http.StatusInternalServerError
@@ -2378,7 +2379,8 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 
 	for _, appName := range appNamesList {
 		if api.s3Client != nil {
-			s3FilesName, err := api.s3Client.ListFileFolder(appName)
+			key := strings.ReplaceAll(strings.Split(appName, ".")[0], "_", "-")
+			s3FilesName, err := api.s3Client.ListFileFolder(key)
 			if err != nil {
 				errorData.Message = "Internal error / error in retrieving files from s3"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -2386,7 +2388,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				response.WriteEntity(errorData)
 				return
 			}
-			err = api.s3Client.DeleteFiles(s3FilesName)
+			err = api.s3Client.DeleteFiles(s3FilesName, key)
 			if err != nil {
 				errorData.Message = "Internal error / error in deleting files from s3"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -2659,7 +2661,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	// push images to docker registry and retrieve task items
 	for _, app := range appsInfo.Response {
-		dirName := strings.Split(app.Name, ".")[0]
+		dirName := strings.ReplaceAll(strings.Split(app.Name, ".")[0], "_", "-")
 		filesFromAppFolder := make([]string, 0)
 		if api.s3Client != nil {
 			dirNameFiles, err := api.s3Client.ListFileFolder(dirName)

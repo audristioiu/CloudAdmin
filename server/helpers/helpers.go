@@ -538,7 +538,6 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 	return nil
 }
 
-// todo remove
 func copy(src, dst string) (int64, error) {
 	sourceFileStat, err := os.Stat(src)
 	if err != nil {
@@ -583,14 +582,12 @@ func GenerateDockerFile(dirName,
 	path = strings.ReplaceAll(path, "server", "")
 	path = filepath.Join(path, filepath.Base(mkDirName)) + "\\"
 	var taskExecutionTime []priority_queue.TaskItem
+	err := os.Mkdir(mkDirName, 0666)
+	if err != nil {
+		logger.Error("failed to create directory", zap.Error(err))
+		return "", nil, err
+	}
 	if len(files) == 0 {
-
-		//todo luat fisier de pe local(in viitor s3) si scris la locatie
-		err := os.Mkdir(mkDirName, 0666)
-		if err != nil {
-			logger.Error("failed to create directory", zap.Error(err))
-			return "", nil, err
-		}
 
 		_, err = copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
 		if err != nil {

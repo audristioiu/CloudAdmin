@@ -140,7 +140,7 @@ func (k *KubernetesClient) ListNodesMetrics() (map[string][]float64, error) {
 
 // GetNodeCPUMetric retrieves node cpu metric as percentage for a node
 func (k *KubernetesClient) GetNodeCPUMetric(nodeName string, totalCPU int64) (float64, error) {
-	nodeMetrics, err := k.metricsKubeClient.MetricsV1beta1().NodeMetricses().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	nodeMetrics, err := k.metricsKubeClient.MetricsV1beta1().NodeMetricses().Get(k.ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
 		k.kubeLogger.Error("failed to get metrics for node", zap.Error(err))
 		return 0, err
@@ -153,7 +153,7 @@ func (k *KubernetesClient) GetNodeCPUMetric(nodeName string, totalCPU int64) (fl
 
 // GetNodeMemoryMetric retrieves node memory metric as percentage for a node
 func (k *KubernetesClient) GetNodeMemoryMetric(nodeName string, totalMemory int64) (float64, error) {
-	nodeMetrics, err := k.metricsKubeClient.MetricsV1beta1().NodeMetricses().Get(context.TODO(), nodeName, metav1.GetOptions{})
+	nodeMetrics, err := k.metricsKubeClient.MetricsV1beta1().NodeMetricses().Get(k.ctx, nodeName, metav1.GetOptions{})
 	if err != nil {
 		return 0, err
 	}

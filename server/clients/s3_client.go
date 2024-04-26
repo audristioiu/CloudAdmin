@@ -4,12 +4,12 @@ import (
 	"context"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"go.uber.org/zap"
 )
@@ -43,9 +43,8 @@ func NewS3Client(ctx context.Context, accessKey, secretKey, bucket, region strin
 
 // ListFileFolder iterates through list of objects and extracts folder specified to fileName
 func (s *S3Client) ListFileFolder(fileName string) ([]string, error) {
-	key := strings.Split(fileName, ".")[0]
 	files := make([]string, 0)
-	result, err := s.s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
+	result, err := s.s3Client.ListObjectsV2(s.ctx, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucketName),
 	})
 	if err != nil {
@@ -53,7 +52,7 @@ func (s *S3Client) ListFileFolder(fileName string) ([]string, error) {
 		return nil, err
 	}
 	for _, object := range result.Contents {
-		if strings.Contains(*object.Key, key) {
+		if strings.Contains(*object.Key, fileName) {
 			files = append(files, *object.Key)
 		}
 	}
@@ -61,11 +60,11 @@ func (s *S3Client) ListFileFolder(fileName string) ([]string, error) {
 }
 
 // UploadFile uploads fileName using bucket and object
-func (s *S3Client) UploadFile(fileName string, fileBody io.Reader) error {
-
-	_, err := s.s3Client.PutObject(s.ctx, &s3.PutObjectInput{
+func (s *S3Client) UploadFile(fileDir, fileName string, fileBody io.Reader) error {
+	uploadManager := manager.NewUploader(s.s3Client)
+	_, err := uploadManager.Upload(s.ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(fileName),
+		Key:    aws.String(fileDir + "/" + fileName),
 		Body:   fileBody,
 	})
 	if err != nil {
@@ -83,32 +82,21 @@ func (s *S3Client) DownloadFiles(mkdirName string, fileNames []string) error {
 		s.s3Logger.Error("failed to create directory", zap.Error(err))
 		return err
 	}
+	downloadManager := manager.NewDownloader(s.s3Client)
 	for _, fileName := range fileNames {
-		result, err := s.s3Client.GetObject(s.ctx, &s3.GetObjectInput{
+		localPath := fileName
+		file, err := os.Create(localPath)
+		if err != nil {
+			s.s3Logger.Error("failed to create file", zap.Error(err))
+			continue
+		}
+		defer file.Close()
+		_, err = downloadManager.Download(s.ctx, file, &s3.GetObjectInput{
 			Bucket: aws.String(s.bucketName),
 			Key:    aws.String(fileName),
 		})
 		if err != nil {
-			s.s3Logger.Error("failed to get object", zap.Error(err), zap.String("file_name", fileName))
-			return err
-		}
-		defer result.Body.Close()
-		path, _ := os.Getwd()
-		path = filepath.Join(path, filepath.Base(mkdirName)) + "\\"
-		file, err := os.Create(filepath.Join(path, filepath.Base(fileName)))
-		if err != nil {
-			s.s3Logger.Error("failed to creat file", zap.Error(err))
-			return err
-		}
-		defer file.Close()
-		body, err := io.ReadAll(result.Body)
-		if err != nil {
-			s.s3Logger.Error("failed to read all body", zap.Error(err))
-			return err
-		}
-		_, err = file.Write(body)
-		if err != nil {
-			s.s3Logger.Error("failed to write body", zap.Error(err))
+			s.s3Logger.Error("failed to download object", zap.Error(err), zap.String("file_name", fileName))
 			return err
 		}
 	}
@@ -117,7 +105,7 @@ func (s *S3Client) DownloadFiles(mkdirName string, fileNames []string) error {
 }
 
 // DeleteFiles deletes files from S3 bucket
-func (s *S3Client) DeleteFiles(fileNames []string) error {
+func (s *S3Client) DeleteFiles(fileNames []string, fileFolder string) error {
 	for _, fileName := range fileNames {
 		_, err := s.s3Client.DeleteObject(s.ctx, &s3.DeleteObjectInput{
 			Bucket: aws.String(s.bucketName),
@@ -127,6 +115,15 @@ func (s *S3Client) DeleteFiles(fileNames []string) error {
 			s.s3Logger.Error("failed to delete file", zap.Error(err), zap.String("file_name", fileName))
 			return err
 		}
+	}
+	// delete folder
+	_, err := s.s3Client.DeleteObject(s.ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(fileFolder),
+	})
+	if err != nil {
+		s.s3Logger.Error("failed to delete folder", zap.Error(err), zap.String("folder_name", fileFolder))
+		return err
 	}
 	return nil
 }
