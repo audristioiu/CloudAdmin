@@ -21,6 +21,7 @@
     "react-icons": "^4.10.1",
     "react-input-verification-code": "^1.0.2",
     "react-modal": "^3.16.1",
+    "react-paginate": "^8.2.0",
     "react-password-strength-bar": "^0.4.1",
     "react-qr-code": "^2.0.12",
     "react-qrcode-reader": "^2.3.11",

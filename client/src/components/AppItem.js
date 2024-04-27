@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import Modal from 'react-modal'; // Import the modal library
+import { useEffect, useState } from "react";
+import Modal from 'react-modal';
 import '../assets/MyApps.scss';
 import EditApp from "./EditApp";
 import ScheduleApp from "./ScheduleApp";
@@ -19,6 +18,17 @@ function AppItem(app) {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isGetAppModalOpen, setIsGetAppModalOpen] = useState(false);
+
+  useEffect(() => {
+    setAppName(app.app.name);
+    setAppDescr(app.app.description);
+    setAppRunning(String(app.app.is_running));
+    setAppCreatedTimestamp(new Date(app.app.created_timestamp).toDateString());
+    setAppUpdateTimestamp(new Date(app.app.updated_timestamp).toDateString());
+    setAppScheduleType(app.app.schedule_type);
+    setAppPort(app.app.port);
+    setAppIPAddress(app.app.ip_address);
+  }, [app]);
 
   const getStatusClass = () => (appRunningState ? ' active' : ' inactive');
 

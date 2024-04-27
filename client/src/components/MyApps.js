@@ -5,6 +5,7 @@ import '../assets/MyApps.scss';
 import '../assets/Error.scss';
 import { Agent } from 'https';
 import certs from '../Certs/certs.js';
+import ReactPaginate from 'react-paginate';
 
 function MyApps() {
   const [apps, setApps] = useState([]);
@@ -15,6 +16,10 @@ function MyApps() {
   const [timestampInput, setTimestampInput] = useState('');
   const [timestampOn, setTimeStampOn] = useState(false);
   const [selectedFilterType, setSelectedFilterType] = useState('normal');
+  const [itemOffset, setItemOffset] = useState(0);
+  const [currentItems, setCurrentItems] = useState([]);
+  const [pageCount, setPageCount] = useState(0);
+
   const timeRanges = {
     "1 day": "1 day",
     "3 days": "3 day",
@@ -23,6 +28,20 @@ function MyApps() {
     "30 days": "30 day",
     "60 days": "60 day",
     "90 days": "90 day"
+  };
+
+  // pagination
+  const itemsPerPage = 1;
+
+  useEffect(() => {
+    const endOffset = itemOffset + itemsPerPage;
+    setCurrentItems(apps.slice(itemOffset, endOffset));
+    setPageCount(Math.ceil(apps.length / itemsPerPage));
+  }, [itemOffset, itemsPerPage, apps]);
+
+  const handlePageClick = (event) => {
+    const newOffset = (event.selected * itemsPerPage) % apps.length;
+    setItemOffset(newOffset);
   };
 
   const handleUpload = async (isComplex) => {
@@ -156,8 +175,10 @@ function MyApps() {
   }, []);
 
   const renderApps = () => {
-    if (apps) {
-      return apps.map((app, i) => <AppItem key={i} app={app} />);
+    if (currentItems) {
+      return currentItems.map((app, i) =>
+        <AppItem key={i} app={app} />
+      );
     }
   };
 
@@ -259,7 +280,7 @@ function MyApps() {
       </div>
       {renderFilter()}
 
-      <div className="table-container">
+      <div className="table-container" id='container'>
         <table className="table">
           <thead>
             <tr>
@@ -278,6 +299,20 @@ function MyApps() {
             {renderApps()}
           </tbody>
         </table>
+        <ReactPaginate
+          breakLabel="..."
+          nextLabel="next >"
+          onPageChange={(e) => handlePageClick(e)}
+          pageCount={pageCount}
+          previousLabel="< previous"
+          renderOnZeroPageCount={null}
+          activeClassName="item active-page"
+          breakClassName='item break-me'
+          containerClassName='pagination'
+          disabledClassName='disabled-page'
+          nextClassName='item next'
+          previousClassName='item previous'
+        />
       </div>
       <form>
         <input type="file" id="input" multiple={true} />
