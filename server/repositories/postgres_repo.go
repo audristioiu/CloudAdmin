@@ -270,13 +270,13 @@ func (p *PostgreSqlRepo) DeleteUserData(username string) error {
 func (p *PostgreSqlRepo) InsertAppData(appData *domain.ApplicationData) error {
 	newApplicationData := domain.ApplicationData{}
 	insertStatement := `INSERT INTO apps (name, description, is_running, created_timestamp, updated_timestamp,flag_arguments, 
-						param_arguments,is_main,subgroup_files, owner, namespace, schedule_type, port, ip_address) 
-						VALUES ($1, $2, $3, $4, $5, $6 ,$7, $8, $9, $10, $11, $12, $13, $14) 
+						param_arguments,is_main,subgroup_files, owner, namespace, schedule_type, port, ip_address,alert_ids) 
+						VALUES ($1, $2, $3, $4, $5, $6 ,$7, $8, $9, $10, $11, $12, $13, $14,$15) 
 						RETURNING name`
 	row := p.conn.QueryRow(p.ctx, insertStatement, appData.Name, zeronull.Text(appData.Description), appData.IsRunning, appData.CreatedTimestamp,
 		appData.UpdatedTimestamp, zeronull.Text(appData.FlagArguments), zeronull.Text(appData.ParamArguments), appData.IsMain, appData.SubgroupFiles,
 		appData.Owner, zeronull.Text(appData.Namespace), zeronull.Text(appData.ScheduleType), zeronull.Int8(int64(*appData.Port)),
-		zeronull.Text(*appData.IpAddress))
+		zeronull.Text(*appData.IpAddress), appData.AlertIDs)
 	err := row.Scan(&newApplicationData.Name)
 	if err != nil {
 		p.psqlLogger.Error(" could not insert app", zap.Error(err))
@@ -297,7 +297,8 @@ func (p *PostgreSqlRepo) GetAllApps() ([]*domain.ApplicationData, error) {
 						COALESCE(namespace, '') as namespace,
 						COALESCE(schedule_type, '') as schedule_type,
 						COALESCE(port, 0) as port, 
-						COALESCE(ip_address, '') as ip_address FROM apps`
+						COALESCE(ip_address, '') as ip_address,
+						alert_ids FROM apps`
 
 	rows, err := p.conn.Query(p.ctx, selectStatement)
 	if err != nil {
@@ -309,7 +310,8 @@ func (p *PostgreSqlRepo) GetAllApps() ([]*domain.ApplicationData, error) {
 		applicationData := &domain.ApplicationData{}
 		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning,
 			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp, &applicationData.FlagArguments, &applicationData.ParamArguments,
-			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner, &applicationData.Namespace, &applicationData.ScheduleType)
+			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner, &applicationData.Namespace, &applicationData.ScheduleType,
+			&applicationData.Port, &applicationData.IpAddress, &applicationData.AlertIDs)
 		if err != nil {
 			p.psqlLogger.Error(" could not scan app", zap.Error(err))
 			return nil, err
@@ -360,9 +362,9 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 	var rows pgx.Rows
 	filterArguments := make(pgx.NamedArgs, 0)
 	//Parse fql filter
-	filters := helpers.ParseFQLFilter(filterConditions, p.psqlLogger)
-	if filters == nil {
-		return 0, 0, nil, fmt.Errorf("could not parse fql filter")
+	filters, err := helpers.ParseFQLFilter(filterConditions, p.psqlLogger)
+	if err != nil {
+		return 0, 0, nil, err
 	}
 	if len(filters) > 0 && len(filters[0]) >= 3 {
 		selectStatement := `SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp, 
@@ -372,7 +374,8 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 							COALESCE(namespace, '') as namespace,
 						    COALESCE(schedule_type, '') as schedule_type,
 							COALESCE(port, 0) as port, 
-							COALESCE(ip_address, '') as ip_address FROM apps where (`
+							COALESCE(ip_address, '') as ip_address,
+							alert_ids FROM apps where (`
 		for i, filterParams := range filters {
 			if len(filterParams) == 3 {
 				filterParams[2] = strings.ReplaceAll(filterParams[2], `"`, "")
@@ -495,7 +498,8 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 						COALESCE(namespace, '') as namespace,
 						COALESCE(schedule_type, '') as schedule_type,
 						COALESCE(port, 0) as port, 
-						COALESCE(ip_address, '') as ip_address FROM apps where owner=$1 `
+						COALESCE(ip_address, '') as ip_address,
+						alert_ids from  apps where owner=$1 `
 		if len(sortParams) == 2 {
 			selectStatement += "ORDER BY " + sortParams[0] + " " + sortParams[1]
 		}
@@ -518,7 +522,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 		err := rows.Scan(&applicationData.Name, &applicationData.Description, &applicationData.IsRunning,
 			&applicationData.CreatedTimestamp, &applicationData.UpdatedTimestamp, &applicationData.FlagArguments, &applicationData.ParamArguments,
 			&applicationData.IsMain, &applicationData.SubgroupFiles, &applicationData.Owner, &applicationData.Namespace, &applicationData.ScheduleType,
-			&applicationData.Port, &applicationData.IpAddress)
+			&applicationData.Port, &applicationData.IpAddress, &applicationData.AlertIDs)
 		if err != nil {
 			p.psqlLogger.Error(" could not scan app", zap.Error(err))
 			return 0, 0, nil, err
@@ -542,12 +546,13 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 						namespace=COALESCE(NULLIF($6,E''), namespace),
 						schedule_type=COALESCE(NULLIF($7,E''), schedule_type),
 						port=COALESCE(NULLIF($8,0), port),
-						ip_address=COALESCE(NULLIF($9,E''), ip_address)
-						WHERE name=$10`
+						ip_address=COALESCE(NULLIF($9,E''), ip_address),
+						alert_ids=$10
+						WHERE name=$11`
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.UpdatedTimestamp,
-		appData.FlagArguments, appData.ParamArguments, appData.Namespace, appData.ScheduleType, *appData.Port,
-		*appData.IpAddress, appData.Name)
+		appData.FlagArguments, appData.ParamArguments, appData.Namespace, appData.ScheduleType, zeronull.Int8(int64(*appData.Port)),
+		zeronull.Text(*appData.IpAddress), appData.AlertIDs, appData.Name)
 	if err != nil {
 		p.psqlLogger.Error(" could not update app ", zap.Error(err))
 		return err
@@ -557,6 +562,40 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 		return errors.New("no row found to update")
 	}
 	p.psqlLogger.Info("Successfuly updated app", zap.String("updated_app", appData.Name))
+	return nil
+}
+
+// UpdateAppAlertID updates app by adding alert_id
+func (p *PostgreSqlRepo) UpdateAppAlertID(appName, alertID string) error {
+	updateStatement := "UPDATE apps SET alert_ids=array_append(alert_ids, $1)  WHERE name=$2"
+
+	row, err := p.conn.Exec(p.ctx, updateStatement, alertID, appName)
+	if err != nil {
+		p.psqlLogger.Error(" could not update remove alert", zap.String("app_name", appName), zap.Error(err))
+		return err
+	}
+	if row.RowsAffected() != 1 {
+		p.psqlLogger.Error(" no row found to update")
+		return errors.New("no row found to update")
+	}
+	p.psqlLogger.Info("Successfuly updated alert_id", zap.String("updated_app", appName))
+	return nil
+}
+
+// RemoveAppAlertID updates app by removing alert_id
+func (p *PostgreSqlRepo) RemoveAppAlertID(alertUID, appName string) error {
+	updateStatement := "UPDATE apps SET alert_ids=array_remove(alert_ids,$1) WHERE name=$2"
+
+	row, err := p.conn.Exec(p.ctx, updateStatement, alertUID, appName)
+	if err != nil {
+		p.psqlLogger.Error(" could not update remove alert", zap.String("app_name", appName), zap.Error(err))
+		return err
+	}
+	if row.RowsAffected() != 1 {
+		p.psqlLogger.Error(" no row found to update")
+		return errors.New("no row found to update")
+	}
+	p.psqlLogger.Info("Successfuly removed alert_id", zap.String("updated_app", appName))
 	return nil
 }
 

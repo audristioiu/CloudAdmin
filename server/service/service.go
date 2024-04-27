@@ -8,13 +8,17 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
+	"math"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	vt "github.com/VirusTotal/vt-go"
+	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
@@ -24,6 +28,11 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
+
+/*
+Endpoint : /debug/pprof for profilling data over server
+go tool pprof -pdf .\profile_cpu.prof > profile_cpu.pdf (also use cpu profiler)
+*/
 
 // Service describes the structure used for starting the web service
 type Service struct {
@@ -63,7 +72,7 @@ func (s *Service) StartWebService() {
 		return
 	}
 
-	log.Debug("Local Ristretto Cache initalized")
+	log.Debug("Initalized local Ristretto Cache")
 
 	psqlUser := os.Getenv("POSTGRES_USER")
 	psqlPass := os.Getenv("POSTGRES_PASSWORD")
@@ -77,13 +86,13 @@ func (s *Service) StartWebService() {
 		log.Fatal("[FATAL] Error in starting postgres service")
 		return
 	}
-	log.Debug("Postgres Repo initialized")
+	log.Debug("Initalized Postgres Repo")
 
 	var profilerRepo *repositories.ProfilingService
 	activateCPUProfiler := os.Getenv("ACTIVATE_CPU_PROFILER")
 	if activateCPUProfiler == "true" {
 		profilerRepo = repositories.NewProfileService("profile_cpu.prof", log)
-		log.Debug("Profiling Repo initialized")
+		log.Debug("Initialized Profiling Repo")
 	} else {
 		profilerRepo = repositories.NewProfileService("", log)
 	}
@@ -97,7 +106,7 @@ func (s *Service) StartWebService() {
 		log.Fatal("[FATAL] Error in creating kubernetes client")
 		return
 	}
-	log.Debug("Kubernetes client initialized")
+	log.Debug("Initialized Kubernetes client")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
 	defer cancel()
@@ -114,7 +123,7 @@ func (s *Service) StartWebService() {
 		log.Fatal("[FATAL] Error in creating docker client")
 		return
 	}
-	log.Debug("Docker client initialized")
+	log.Debug("Initialized Docker client")
 
 	// initialize tcp address for graphite
 	// graphiteHost := os.Getenv("GRAPHITE_HOST")
@@ -128,7 +137,7 @@ func (s *Service) StartWebService() {
 	requestCount := make(map[string]int)
 	maxRequestPerMinute := 1000
 
-	// initialize virus total client
+	// initialize Virus Total Client
 	var vtClient *vt.Client
 	vtAPIKey := os.Getenv("VIRUSTOTAL_KEY")
 	if vtAPIKey != "" {
@@ -137,13 +146,39 @@ func (s *Service) StartWebService() {
 			log.Fatal("[FATAL] Failed to create new virus total client")
 			return
 		}
+		log.Debug("Initialized VT Client")
 	} else {
 		vtClient = nil
 	}
 
+	// initialize S3 Client
+	var s3Client *clients.S3Client
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
+	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
+	awsRegion := os.Getenv("AWS_S3_REGION")
+	awsBucket := os.Getenv("AWS_S3_BUCKET")
+	disableS3 := os.Getenv("DISABLE_S3")
+	if disableS3 == "false" {
+		s3Client, err = clients.NewS3Client(ctx, awsAccessKey, awsSecretKey, awsBucket, awsRegion, log)
+		if err != nil {
+			log.Fatal("[FATAL] Error in creating s3 client")
+			return
+		}
+		log.Debug("Initialized S3 Client")
+	} else {
+		s3Client = nil
+	}
+
+	// initialize Grafana Client
+	grafanaUser := os.Getenv("GF_SECURITY_ADMIN_USER")
+	grafanaPass := os.Getenv("GF_SECURITY_ADMIN_PASSWORD")
+	grafanaHost := os.Getenv("GF_HOST")
+	grafanaDataSourceUUID := os.Getenv("GF_DATASOURCE_UUID")
+	grafanaHTTPClient := clients.NewGrafanaClient(ctx, grafanaHost, grafanaUser, grafanaPass, grafanaDataSourceUUID, log)
+	log.Debug("Initialized Grafana Client")
 	// initialize api
-	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient,
-		nil, requestCount, maxRequestPerMinute, vtClient)
+	apiManager := api.NewAPI(ctx, psqlRepo, cache, log, profilerRepo, dockerClient, kubernetesClient, s3Client,
+		graphiteAddr, requestCount, maxRequestPerMinute, vtClient, grafanaHTTPClient)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -201,7 +236,7 @@ func (s *Service) StartWebService() {
 
 	go func() {
 		if err = server.ListenAndServeTLS(certFile, certKeyFile); !errors.Is(err, http.ErrServerClosed) {
-			log.Error("HTTP server error", zap.Error(err))
+			log.Error("HTTPS server error", zap.Error(err))
 		}
 		for _, metric := range helpers.MetricsName {
 			metrics.Unregister(metric)
@@ -211,51 +246,53 @@ func (s *Service) StartWebService() {
 	}()
 	kubernetesMetrics := make([]string, 0)
 
-	//goroutine to gather and send kubernetes metrics regarind pods and nodes to Grafana using Graphite
-	// nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
-	// go func() {
-	// 	for {
+	//goroutine to gather and send kubernetes metrics regarding pods and nodes to Grafana using Graphite
+	activateKubeMetrics := os.Getenv("ACTIVATE_KUBERNETES_METRICS")
+	if activateKubeMetrics == "true" {
+		nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
+		go func() {
+			for {
 
-	// 		if len(nodeMetricsMap) > 0 {
-	// 			for node, nodeMetrics := range nodeMetricsMap {
-	// 				nodeCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.cpu_usage", node), nil)
-	// 				nodeMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.mem_usage", node), nil)
-	// 				cpuQuantity := math.Round(nodeMetrics[0]*100) / 100
-	// 				memQuantity := math.Round(nodeMetrics[1]*100) / 100
-	// 				nodeCPUMetrics.Update(cpuQuantity)
-	// 				nodeMemoryMetrics.Update(memQuantity)
-	// 				graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
-	// 				kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.cpu_usage", node))
-	// 				kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.mem_usage", node))
-	// 			}
-	// 		}
+				if len(nodeMetricsMap) > 0 {
+					for node, nodeMetrics := range nodeMetricsMap {
 
-	// 		podMetricsMap, _ := kubernetesClient.ListPodsMetrics()
-	// 		if len(podMetricsMap) > 0 {
-	// 			for namepace, podContainerMetricsMap := range podMetricsMap {
-	// 				for podName, podMetrics := range podContainerMetricsMap {
-	// 					for _, podMetricElem := range podMetrics {
-	// 						podCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.cpu_usage",
-	// 							namepace, podName, podMetricElem.PodContainerName), nil)
-	// 						podMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.mem_usage",
-	// 							namepace, podName, podMetricElem.PodContainerName), nil)
+						nodeCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.cpu_usage", node), nil)
+						nodeMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.mem_usage", node), nil)
+						cpuQuantity := math.Round(nodeMetrics[0]*100) / 100
+						memQuantity := math.Round(nodeMetrics[1]*100) / 100
+						nodeCPUMetrics.Update(cpuQuantity)
+						nodeMemoryMetrics.Update(memQuantity)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
+						kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.cpu_usage", node))
+						kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.mem_usage", node))
+					}
+				}
+				podMetricsMap, _ := kubernetesClient.ListPodsMetrics()
+				if len(podMetricsMap) > 0 {
+					for namepace, podContainerMetricsMap := range podMetricsMap {
+						for podName, podMetrics := range podContainerMetricsMap {
+							for _, podMetricElem := range podMetrics {
+								podCPUMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.cpu_usage",
+									namepace, podName, podMetricElem.PodContainerName), nil)
+								podMemoryMetrics := metrics.GetOrRegisterGaugeFloat64(fmt.Sprintf("%s.%s.%s.mem_usage",
+									namepace, podName, podMetricElem.PodContainerName), nil)
+								cpuQuantity := math.Round(podMetricElem.CPUMemoryMetrics[2])
+								memQuantity := math.Round(podMetricElem.CPUMemoryMetrics[3])
 
-	// 						cpuQuantity := math.Round(podMetricElem.CPUMemoryMetrics[0]*100) / 100
-	// 						memQuantity := math.Round(podMetricElem.CPUMemoryMetrics[1]*100) / 100
+								podCPUMetrics.Update(cpuQuantity)
+								podMemoryMetrics.Update(memQuantity)
+								go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
+								kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.cpu_usage", namepace, podName, podMetricElem.PodContainerName))
+								kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.mem_usage", namepace, podName, podMetricElem.PodContainerName))
+							}
 
-	// 						podCPUMetrics.Update(cpuQuantity)
-	// 						podMemoryMetrics.Update(memQuantity)
-	// 						graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", graphiteAddr)
-	// 						kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.cpu_usage", namepace, podName, podMetricElem.PodContainerName))
-	// 						kubernetesMetrics = append(kubernetesMetrics, fmt.Sprintf("%s.%s.%s.mem_usage", namepace, podName, podMetricElem.PodContainerName))
-	// 					}
-
-	// 				}
-	// 			}
-	// 		}
-	// 		time.Sleep(time.Second * 10)
-	// 	}
-	// }()
+						}
+					}
+				}
+				time.Sleep(time.Second * 60)
+			}
+		}()
+	}
 
 	sigChan := make(chan os.Signal, 2)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -292,7 +329,7 @@ func enrichSwaggerObject(swo *spec.Swagger) {
 					URL:  "http://mit.org",
 				},
 			},
-			Version: "1.9.2",
+			Version: "1.9.5",
 		},
 	}
 	swo.Tags = []spec.Tag{{TagProps: spec.TagProps{

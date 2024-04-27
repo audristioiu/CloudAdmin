@@ -11,7 +11,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
     },
-    "version": "1.9.2"
+    "version": "1.9.5"
   },
   "tags": [
     {
@@ -484,7 +484,7 @@
                 "properties": {
                   "type": {
                     "type": "array",
-                    "description": "zip archives which contains the code and description files(same name for both,description being txt)",
+                    "description": "zip archives which contain the code and description files(same name for both,description being txt)",
                     "items": {
                       "type": "string",
                       "format": "binary"
@@ -738,9 +738,9 @@
             }
           },
           {
-            "name": "pod_name",
+            "name": "app_name",
             "in": "query",
-            "description": "pod name for which you want to get logs for",
+            "description": "app name for which you want to get logs for",
             "required": true,
             "schema": {
               "type": "string"
@@ -851,9 +851,7 @@
           }
         },
         "x-codegen-request-body-name": "body"
-      }
-    },
-    "/user/{username}": {
+      },
       "get": {
         "tags": [
           "users"
@@ -863,7 +861,7 @@
         "parameters": [
           {
             "name": "username",
-            "in": "path",
+            "in": "query",
             "description": "username of the account",
             "required": true,
             "schema": {
@@ -948,9 +946,9 @@
             }
           },
           {
-            "name": "username",
-            "in": "path",
-            "description": "username of the account",
+            "name": "usernames",
+            "in": "query",
+            "description": "usernames to delete",
             "required": true,
             "schema": {
               "type": "string"
@@ -1019,7 +1017,8 @@
           "is_main",
           "subgroup_files",
           "port",
-          "ip_address"
+          "ip_address",
+          "alert_ids"
         ],
         "type": "object",
         "properties": {
@@ -1043,7 +1042,7 @@
             "type": "string"
           },
           "port": {
-            "type": "int32"
+            "type": "integer"
           },
           "ip_address": {
             "type": "string"
@@ -1064,6 +1063,12 @@
             }
           },
           "subgroup_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "alert_ids": {
             "type": "array",
             "items": {
               "type": "string"
@@ -1115,11 +1120,11 @@
         "properties": {
           "total": {
             "type": "integer",
-            "format": "int32"
+            "format": "integer"
           },
           "resources_count": {
             "type": "integer",
-            "format": "int32"
+            "format": "integer"
           }
         }
       },
@@ -1161,7 +1166,7 @@
           },
           "status_code": {
             "type": "integer",
-            "format": "int32"
+            "format": "integer"
           }
         }
       },

@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"unicode"
 
 	"github.com/VirusTotal/vt-go"
+	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/pquerna/otp/totp"
 	metrics "github.com/rcrowley/go-metrics"
@@ -28,23 +30,33 @@ import (
 )
 
 var (
-	//map of users with their specific cached requests as value
+	// map of users with their specific cached requests as value
 	cachedRequests = make(map[string][]string, 0)
-	// register metrics for graphite client
-	getAppsMetric     = metrics.GetOrRegisterMeter("applications.get", nil)
-	updateAppsMetric  = metrics.GetOrRegisterMeter("applications.update", nil)
-	registerAppMetric = metrics.GetOrRegisterMeter("applications.register", nil)
+	// metrics for graphite client
+	getAppsMetric           = metrics.GetOrRegisterMeter("applications.get", nil)
+	getAppsLatencyMetric    = metrics.GetOrRegisterTimer("get_apps_latency.response", nil)
+	updateAppsMetric        = metrics.GetOrRegisterMeter("applications.update", nil)
+	failedUpdateAppMetric   = metrics.GetOrRegisterMeter("applications.failed_update", nil)
+	registerAppMetric       = metrics.GetOrRegisterMeter("applications.register", nil)
+	failedRegisterAppMetric = metrics.GetOrRegisterMeter("applications.failed_register", nil)
 
 	malwareFileMetric = metrics.GetOrRegisterMeter("applications.malware", nil)
 	safeFileMetric    = metrics.GetOrRegisterMeter("applications.safe", nil)
 
-	scheduleAppsMetric  = metrics.GetOrRegisterMeter("applications.schedule", nil)
-	getPodResultsMetric = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
+	scheduleAppsMetric        = metrics.GetOrRegisterMeter("applications.schedule", nil)
+	scheduleAppsLatencyMetric = metrics.GetOrRegisterTimer("schedule_apps_latency.response", nil)
+	getPodResultsMetric       = metrics.GetOrRegisterMeter("applications.get_pod_results", nil)
 
-	loginMetrics       = metrics.GetOrRegisterMeter("users_login", nil)
-	failedLoginMetrics = metrics.GetOrRegisterMeter("users_failed_login", nil)
-	getUserMetric      = metrics.GetOrRegisterMeter("users.get.profile", nil)
-	updateUserMetric   = metrics.GetOrRegisterMeter("users.update.profile", nil)
+	loginMetrics             = metrics.GetOrRegisterMeter("users_login", nil)
+	failedLoginMetrics       = metrics.GetOrRegisterMeter("users_failed_login", nil)
+	getUserMetric            = metrics.GetOrRegisterMeter("users.get.profile", nil)
+	updateUserMetric         = metrics.GetOrRegisterMeter("users.update.profile", nil)
+	failedUpdateUserMetric   = metrics.GetOrRegisterMeter("users.failed_update_profile", nil)
+	registerUserMetric       = metrics.GetOrRegisterMeter("users.register", nil)
+	failedRegisterUserMetric = metrics.GetOrRegisterMeter("users.failed_register", nil)
+	userLatencyMeric         = metrics.GetOrRegisterTimer("users_get_profile_latency.response", nil)
+
+	totalRequestsMetric = metrics.GetOrRegisterCounter("total_requests.count", nil)
 
 	mutex sync.Mutex
 )
@@ -73,6 +85,7 @@ func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Re
 	errorData := domain.ErrorResponse{}
 	authHeader := request.HeaderParameter("USER-AUTH")
 	userIDHeader := request.HeaderParameter("USER-UUID")
+
 	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
 	if err != nil || !helpers.CheckUser(userData, authHeader) {
 		api.apiLogger.Error(" User id not authorized", zap.String("user_id", userIDHeader))
@@ -110,46 +123,56 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		return
 	}
 
-	// if len(userData.Password) < 16 {
-	// 	api.apiLogger.Error(" password too short")
-	// 	errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
-	// if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
-	// 	api.apiLogger.Error(" password does not contain digits")
-	// 	errorData.Message = "Bad Request/ Password does not contain digits"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
-	// if !unicode.IsUpper(rune(userData.Password[0])) {
-	// 	api.apiLogger.Error(" password does not start with uppercase")
-	// 	errorData.Message = "Bad Request/ Password does not start with uppercase"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
-	// if !helpers.HasSymbol(userData.Password) {
-	// 	api.apiLogger.Error(" password does not have special characters")
-	// 	errorData.Message = "Bad Request/ Password does not have special characters"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
-	// if strings.Contains(userData.Password, userData.UserName) {
-	// 	api.apiLogger.Error(" password contains user")
-	// 	errorData.Message = "Bad Request/ Password contains user"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
+	if len(userData.Password) < 16 {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password too short")
+		errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password does not contain digits")
+		errorData.Message = "Bad Request/ Password does not contain digits"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !unicode.IsUpper(rune(userData.Password[0])) {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password does not start with uppercase")
+		errorData.Message = "Bad Request/ Password does not start with uppercase"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !helpers.HasSymbol(userData.Password) {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password does not have special characters")
+		errorData.Message = "Bad Request/ Password does not have special characters"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if strings.Contains(userData.Password, userData.UserName) {
+		failedRegisterUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password contains user")
+		errorData.Message = "Bad Request/ Password contains user"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	userRetrievedData, _ := api.psqlRepo.GetUserData(userData.UserName)
 	if userRetrievedData != nil {
@@ -195,6 +218,10 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 	registerResponse.Message = "User registered succesfully"
 	registerResponse.ResourcesAffected = append(registerResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(registerResponse)
+	registerUserMetric.Mark(1)
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+
 }
 
 // UserLogin verifies user credentials
@@ -333,7 +360,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 					dbUserData.Password = ""
 					err = api.psqlRepo.UpdateUserData(dbUserData)
 					if err != nil {
-						errorData.Message = "Internal error / updating user data in postgres"
+						errorData.Message = "Internal error / error in updating user data in postgres"
 						errorData.StatusCode = http.StatusInternalServerError
 						response.WriteHeader(http.StatusInternalServerError)
 						response.WriteEntity(errorData)
@@ -357,7 +384,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 						dbUserData.Password = ""
 						err = api.psqlRepo.UpdateUserData(dbUserData)
 						if err != nil {
-							errorData.Message = "Internal error / updating user data in postgres"
+							errorData.Message = "Internal error / error in updating user data in postgres"
 							errorData.StatusCode = http.StatusInternalServerError
 							response.WriteHeader(http.StatusInternalServerError)
 							response.WriteEntity(errorData)
@@ -383,7 +410,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		dbUserData.Password = ""
 		err = api.psqlRepo.UpdateUserData(dbUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.Message = "Internal error / error in updating user data in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -417,7 +444,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		dbUserData.Password = ""
 		err = api.psqlRepo.UpdateUserData(dbUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.Message = "Internal error / error in updating user data in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -439,7 +466,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		newUserData = helpers.GenerateRole(dbUserData)
 		err = api.psqlRepo.UpdateUserRoleData(newUserData.Role, newUserData.UserID, newUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating role in postgres"
+			errorData.Message = "Internal error / error in updating role in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -455,7 +482,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 		err = api.psqlRepo.UpdateUserLastTimeOnlineData(*newUserData.LastTimeOnline, newUserData)
 		if err != nil {
-			errorData.Message = "Internal error / updating last_time in postgres"
+			errorData.Message = "Internal error / error in updating last_time in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -482,14 +509,14 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	newUserData.UserTimeout = nil
 	newUserData.OTPData = domain.OneTimePassData{}
 	loginMetrics.Mark(1)
-	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	response.WriteEntity(newUserData)
-
 }
 
 // GetUserProfile returns user profile based on username
 func (api *API) GetUserProfile(request *restful.Request, response *restful.Response) {
-
+	startTime := time.Now()
 	errorData := domain.ErrorResponse{}
 
 	//calculate key and use cache to get the response
@@ -527,14 +554,14 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		userUUID := request.HeaderParameter("USER-UUID")
 		checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
 		if err != nil {
-			api.apiLogger.Error(" User not found", zap.String("user_name", username))
+			api.apiLogger.Error(" User not found", zap.String("user_uuid", userUUID))
 			errorData.Message = "User not found"
 			errorData.StatusCode = http.StatusNotFound
 			response.WriteHeader(http.StatusNotFound)
 			response.WriteEntity(errorData)
 			return
 		}
-		if userData.UserName != checkUserData.UserName {
+		if checkUserData.UserName != "admin" && userData.UserName != checkUserData.UserName {
 			errorData.Message = "Status forbidden"
 			errorData.StatusCode = http.StatusForbidden
 			response.WriteHeader(http.StatusForbidden)
@@ -568,8 +595,12 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		userData.UserID = ""
 		response.WriteEntity(userData)
 	}
+	defer func() {
+		userLatencyMeric.UpdateSince(startTime)
+	}()
 	getUserMetric.Mark(1)
-	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 }
 
@@ -600,14 +631,14 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	userUUID := request.HeaderParameter("USER-UUID")
 	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
 	if err != nil {
-		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		api.apiLogger.Error(" User not found", zap.String("user_uuid", userUUID))
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
 		response.WriteHeader(http.StatusNotFound)
 		response.WriteEntity(errorData)
 		return
 	}
-	if dbUserData.UserName != checkUserData.UserName {
+	if checkUserData.UserName != "admin" && dbUserData.UserName != checkUserData.UserName {
 		errorData.Message = "Status forbidden"
 		errorData.StatusCode = http.StatusForbidden
 		response.WriteHeader(http.StatusForbidden)
@@ -623,26 +654,64 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	}
 
 	if userData.Role != "" || userData.UserID != "" || len(userData.Applications) > 0 || userData.UserLimitLoginAttempts > 0 ||
-		userData.UserLimitTimeout > 0 {
+		userData.UserLimitTimeout > 0 || userData.UserTimeout != nil ||
+		userData.NrDeployedApps != 0 || userData.WantNotify || userData.UserLocked ||
+		!reflect.DeepEqual(userData.OTPData, domain.OneTimePassData{}) {
+		failedUpdateUserMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" Wrong fields to update")
-		errorData.Message = "Bad Request/ wrong fields , you can only update birth_date ,job_role,email,  want_notify or password"
+		errorData.Message = "Bad Request/ wrong fields to update"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
 	if userData.Password != "" {
-		if len(userData.Password) < 8 {
+		if len(userData.Password) < 16 {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 			api.apiLogger.Error(" password too short")
-			errorData.Message = "Bad Request/ Password too short"
+			errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+			api.apiLogger.Error(" password does not contain digits")
+			errorData.Message = "Bad Request/ Password does not contain digits"
 			errorData.StatusCode = http.StatusBadRequest
 			response.WriteHeader(http.StatusBadRequest)
 			response.WriteEntity(errorData)
 			return
 		}
 		if !unicode.IsUpper(rune(userData.Password[0])) {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 			api.apiLogger.Error(" password does not start with uppercase")
 			errorData.Message = "Bad Request/ Password does not start with uppercase"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		if !helpers.HasSymbol(userData.Password) {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+			api.apiLogger.Error(" password does not have special characters")
+			errorData.Message = "Bad Request/ Password does not have special characters"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		if strings.Contains(userData.Password, userData.UserName) {
+			failedUpdateUserMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+			api.apiLogger.Error(" password contains user")
+			errorData.Message = "Bad Request/ Password contains user"
 			errorData.StatusCode = http.StatusBadRequest
 			response.WriteHeader(http.StatusBadRequest)
 			response.WriteEntity(errorData)
@@ -659,7 +728,7 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 			response.WriteEntity(errorData)
 			return
 		} else {
-			errorData.Message = "Internal error / updating user data in postgres"
+			errorData.Message = "Internal error / error in updating user data in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -684,7 +753,8 @@ func (api *API) UpdateUserProfile(request *restful.Request, response *restful.Re
 	api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 	updateUserMetric.Mark(1)
-	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
 	updateResponse.Message = "User updated succesfully"
@@ -745,6 +815,25 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		}
 
 		for _, userApp := range userApps {
+			if api.s3Client != nil {
+				key := strings.ReplaceAll(strings.Split(userApp, ".")[0], "_", "-")
+				s3FilesName, err := api.s3Client.ListFileFolder(key)
+				if err != nil {
+					errorData.Message = "Internal error / error in retrieving files from s3"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				err = api.s3Client.DeleteFiles(s3FilesName, key)
+				if err != nil {
+					errorData.Message = "Internal error / error in deleting files from s3"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+			}
 			err = api.psqlRepo.DeleteAppData(userApp, username)
 			if err != nil {
 				api.apiLogger.Error(" App could not be deleted/not found ", zap.String("app_name", userApp))
@@ -754,22 +843,12 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 				response.WriteEntity(errorData)
 				return
 			}
-			execName := strings.Split(userApp, ".")[0]
-			extensionName := strings.Split(userApp, ".")[1]
-			err = api.dockerClient.ListImagesAndDelete(execName + "_" + extensionName)
-			if err != nil {
-				errorData.Message = "Internal error/ failed to remove images"
-				errorData.StatusCode = http.StatusInternalServerError
-				response.WriteHeader(http.StatusInternalServerError)
-				response.WriteEntity(errorData)
-				return
-			}
 		}
 
 		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 		if err != nil {
 			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-			errorData.Message = "Internal error / retrieving apps"
+			errorData.Message = "Internal error / error in retrieving apps"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -780,8 +859,8 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 			if app.IsRunning {
 				execName := strings.Split(app.Name, ".")[0]
 				extensionName := strings.Split(app.Name, ".")[1]
-				deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName + "-" + extensionName + "-deployment")
-				err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+				deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName)
+				err = api.kubeClient.DeleteDeployment(deployName, app.Namespace)
 				if err != nil {
 					errorData.Message = "Internal error/ failed to delete deployment"
 					errorData.StatusCode = http.StatusInternalServerError
@@ -789,7 +868,12 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 					response.WriteEntity(errorData)
 					return
 				}
-				err = api.kubeClient.DeleteNamespace(app.Namespace)
+			}
+		}
+		namespaces := api.kubeClient.ListNamespaces()
+		for _, namespace := range namespaces {
+			if strings.Contains(namespace, strings.ReplaceAll(username, "_", "-")) {
+				err = api.kubeClient.DeleteNamespace(namespace)
 				if err != nil {
 					errorData.Message = "Internal error/ failed to delete namespace"
 					errorData.StatusCode = http.StatusInternalServerError
@@ -824,7 +908,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 				response.WriteEntity(errorData)
 				return
 			} else {
-				errorData.Message = "Internal error / delete user data in postgres"
+				errorData.Message = "Internal error / error in delete user data in postgres"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -838,6 +922,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 	deleteResponse.Message = "Users deleted succesfully"
 	deleteResponse.ResourcesAffected = append(deleteResponse.ResourcesAffected, listUsersName...)
 	response.WriteEntity(deleteResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // GenerateOTPToken generates OTP token
@@ -894,6 +979,7 @@ func (api *API) GenerateOTPToken(request *restful.Request, response *restful.Res
 		URL: key.URL(),
 	}
 	response.WriteEntity(otpResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // VerifyOTPToken checks otp token
@@ -951,6 +1037,7 @@ func (api *API) VerifyOTPToken(request *restful.Request, response *restful.Respo
 	updateResponse.Message = "User otp enabled succesfully"
 	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(updateResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // ValidateOTPToken validates otp token
@@ -992,6 +1079,7 @@ func (api *API) ValidateOTPToken(request *restful.Request, response *restful.Res
 	updateResponse.Message = "User otp validated succesfully"
 	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(updateResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // DisableOTP disables otp
@@ -1041,6 +1129,7 @@ func (api *API) DisableOTP(request *restful.Request, response *restful.Response)
 	updateResponse.Message = "User otp disabled succesfully"
 	updateResponse.ResourcesAffected = append(updateResponse.ResourcesAffected, userData.UserName)
 	response.WriteEntity(updateResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 // UploadApp uploads app to s3
@@ -1082,10 +1171,17 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	}
 
 	flag := true
-
-	userData.UserName = username
-
-	if !helpers.CheckUser(userData, userData.Role) {
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_uuid", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !helpers.CheckUser(checkUserData, request.HeaderParameter("USER-AUTH")) || checkUserData.UserName != userData.UserName {
 		flag = false
 	}
 	if !flag {
@@ -1155,6 +1251,16 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				return
 			}
 
+			if !strings.HasSuffix(fileName.Filename, ".zip") {
+				failedRegisterAppMetric.Mark(1)
+				go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+				errorData.Message = "Bad Request/Only zip supported"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
+
 			r, err := zip.OpenReader(fileName.Filename)
 			if err != nil {
 				api.apiLogger.Error(" Couldn't open zipReader", zap.Error(err))
@@ -1162,10 +1268,12 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
+				return
 			}
 
 			// Iterate through the files in the archive,
 			// printing some of their contents.
+			s3Key := strings.ReplaceAll(strings.Split(fileName.Filename, ".")[0], "_", "-")
 			for i, f := range r.File {
 				appData := domain.ApplicationData{}
 
@@ -1178,6 +1286,16 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteHeader(http.StatusInternalServerError)
 					response.WriteEntity(errorData)
 					return
+				}
+				if api.s3Client != nil {
+					err = api.s3Client.UploadFile(s3Key, f.Name, rc)
+					if err != nil {
+						errorData.Message = "Internal error/ upload s3"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
 				}
 				if api.vtClient != nil {
 					// scan file using virus total
@@ -1234,7 +1352,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 					if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
 						malwareFileMetric.Mark(1)
-						// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Warn("malware detected")
 						errorData.Message = "Bad request/ malware detected "
 						errorData.StatusCode = http.StatusBadRequest
@@ -1267,7 +1386,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					api.apiLogger.Debug("got app description", zap.String("app_descr", appsDescription))
 
 				} else {
-					//+ write in s3
 					nowTime := time.Now()
 					appData.CreatedTimestamp = nowTime
 					appData.UpdatedTimestamp = nowTime
@@ -1279,14 +1397,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					appData.Description = appsDescription
 					appData.Name = f.Name
 					appData.Owner = username
-					regexCompiler, err := regexp.Compile("main")
-					if err != nil {
-						api.apiLogger.Error(" Couldn't compile regex ", zap.Error(err))
-						errorData.Message = "Internal Error/  Couldn't compile regex"
-						errorData.StatusCode = http.StatusInternalServerError
-						response.WriteHeader(http.StatusInternalServerError)
-						response.WriteEntity(errorData)
-					}
+					regexCompiler, _ := regexp.Compile("main")
 					if regexCompiler.MatchString(string(descr)) {
 						mainAppData.CreatedTimestamp = appData.CreatedTimestamp
 						mainAppData.UpdatedTimestamp = appData.UpdatedTimestamp
@@ -1310,6 +1421,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			for _, app := range appsData {
 
 				if slices.Contains(allAppsNames, app.Name) {
+					failedRegisterAppMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 					api.apiLogger.Error(" App  already exists", zap.String("app_name", app.Name))
 					errorData.Message = "App already exists"
 					errorData.StatusCode = http.StatusFound
@@ -1343,6 +1456,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 			}
 
 			if slices.Contains(userData.Applications, mainAppData.Name) {
+				failedRegisterAppMetric.Mark(1)
+				go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 				api.apiLogger.Error(" App  already exists", zap.String("app_name", mainAppData.Name))
 				errorData.Message = "App already exists"
 				errorData.StatusCode = http.StatusFound
@@ -1415,6 +1530,16 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				return
 			}
 
+			if !strings.HasSuffix(fileName.Filename, ".zip") {
+				failedRegisterAppMetric.Mark(1)
+				go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+				errorData.Message = "Bad Request/Only zip supported"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
+
 			r, err := zip.OpenReader(fileName.Filename)
 			if err != nil {
 				api.apiLogger.Error(" Couldn't open zipReader", zap.Error(err))
@@ -1422,11 +1547,14 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
+				return
 			}
 
 			// Iterate through the files in the archive,
 			// printing some of their contents.
+			s3Key := strings.ReplaceAll(strings.Split(fileName.Filename, ".")[0], "_", "-")
 			for i, f := range r.File {
+
 				api.apiLogger.Debug("Writting information for file", zap.String("file_name", f.Name))
 				rc, err := f.Open()
 				if err != nil {
@@ -1436,6 +1564,16 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					response.WriteHeader(http.StatusInternalServerError)
 					response.WriteEntity(errorData)
 					return
+				}
+				if api.s3Client != nil {
+					err = api.s3Client.UploadFile(s3Key, f.Name, rc)
+					if err != nil {
+						errorData.Message = "Internal error/ upload s3"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
 				}
 				if api.vtClient != nil {
 					// scan file using virus total
@@ -1492,7 +1630,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 					if respVT.Attributes.Stats.Malicious > 0 || respVT.Attributes.Stats.Suspicious > 0 {
 						malwareFileMetric.Mark(1)
-						// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Warn("malware detected")
 						errorData.Message = "Bad request/ malware detected "
 						errorData.StatusCode = http.StatusBadRequest
@@ -1517,6 +1656,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						errorData.StatusCode = http.StatusInternalServerError
 						response.WriteHeader(http.StatusInternalServerError)
 						response.WriteEntity(errorData)
+						return
 					}
 
 					mainAppData, subApps, appTxt, err := helpers.CreateFilesFromDir(f.Name, api.apiLogger)
@@ -1526,6 +1666,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						errorData.StatusCode = http.StatusInternalServerError
 						response.WriteHeader(http.StatusInternalServerError)
 						response.WriteEntity(errorData)
+						return
 					}
 
 					subGroupMainFiles := make([]string, 0)
@@ -1533,6 +1674,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					for _, app := range subApps {
 
 						if slices.Contains(allAppsNames, app.Name) {
+							failedRegisterAppMetric.Mark(1)
+							go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 							api.apiLogger.Error(" App  already exists", zap.String("app_name", app.Name))
 							errorData.Message = "App already exists"
 							errorData.StatusCode = http.StatusFound
@@ -1563,6 +1706,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					}
 
 					if slices.Contains(allAppsNames, mainAppData.Name) {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" App  already exists", zap.String("app_name", mainAppData.Name))
 						errorData.Message = "App already exists"
 						errorData.StatusCode = http.StatusFound
@@ -1574,6 +1719,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					indexFile := strings.Index(appTxt, ".")
 					indexApp := strings.Index(mainAppData.Name, ".")
 					if indexFile == -1 || indexApp == -1 {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
 						errorData.Message = "Bad Request/ Wrong archive format"
 						errorData.StatusCode = http.StatusBadRequest
@@ -1584,6 +1731,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					trimmedFileName := appTxt[:indexFile]
 					trimmedAppName := mainAppData.Name[:indexFile]
 					if trimmedFileName != trimmedAppName {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
 						errorData.Message = "Bad Request/ Wrong archive format"
 						errorData.StatusCode = http.StatusBadRequest
@@ -1641,6 +1790,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					appData.IpAddress = &ipAddr
 
 					if slices.Contains(allAppsNames, appData.Name) {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" App  already exists", zap.String("app_name", appData.Name))
 						errorData.Message = "App already exists"
 						errorData.StatusCode = http.StatusFound
@@ -1652,6 +1803,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					indexFile := strings.Index(r.File[i].Name, ".")
 					indexApp := strings.Index(appData.Name, ".")
 					if indexFile == -1 || indexApp == -1 {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
 						errorData.Message = "Bad Request/ Wrong archive format"
 						errorData.StatusCode = http.StatusBadRequest
@@ -1662,6 +1815,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					trimmedFileName := r.File[i].Name[:indexFile]
 					trimmedAppName := appData.Name[:indexFile]
 					if trimmedFileName != trimmedAppName {
+						failedRegisterAppMetric.Mark(1)
+						go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 						api.apiLogger.Error(" Wrong archive format", zap.String("mismatch_files", appData.Name+"/"+r.File[i].Name))
 						errorData.Message = "Bad Request/ Wrong archive format"
 						errorData.StatusCode = http.StatusBadRequest
@@ -1689,10 +1844,6 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						response.WriteEntity(errorData)
 						return
 					}
-				} else {
-					//upload in s3
-					api.apiLogger.Info("upload s3")
-					api.apiLogger.Info(string(descr))
 
 				}
 
@@ -1713,7 +1864,8 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	registerAppMetric.Mark(1)
-	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	registerResponse := domain.QueryResponse{}
 	registerResponse.Message = "Apps uploaded succesfully"
@@ -1723,7 +1875,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 
 // GetAppsInfo retrieves apps information
 func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response) {
-
+	startTime := time.Now()
 	errorData := domain.ErrorResponse{}
 
 	userIDHeader := request.HeaderParameter("USER-UUID")
@@ -1826,7 +1978,23 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		}
 
 		limit := request.QueryParameter("limit")
+		if regexp.MustCompile(`\D`).MatchString(limit) {
+			api.apiLogger.Error(" Invalid limit", zap.Any("limit", limit))
+			errorData.Message = "Bad Request /Invalid limit"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
 		offset := request.QueryParameter("offset")
+		if regexp.MustCompile(`\D`).MatchString(offset) {
+			api.apiLogger.Error(" Invalid offset", zap.Any("offset", offset))
+			errorData.Message = "Bad Request /Invalid offset"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
 
 		appnames := request.QueryParameter("appnames")
 		if appnames == "" {
@@ -1847,12 +2015,12 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		if err != nil {
 			if strings.Contains(err.Error(), "fql") {
 				api.apiLogger.Error(" Invalid fql filter for get apps", zap.Error(err))
-				errorData.Message = "Bad Request / Invalid fql filter"
+				errorData.Message = "Bad Request / " + err.Error()
 				errorData.StatusCode = http.StatusBadRequest
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
 			} else {
 				api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-				errorData.Message = "Internal error / retrieving apps"
+				errorData.Message = "Internal error / error retrieving apps"
 				errorData.StatusCode = http.StatusInternalServerError
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
 				response.WriteEntity(appsInfo)
@@ -1887,7 +2055,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			appsInfo = helpers.Unique(appsInfo)
 		}
 		appsName := helpers.GetAppsName(appsInfo.Response)
-		if !helpers.CheckAppsExist(userData.Applications, appsName) {
+		if !helpers.CheckAppsExist(userData.Applications, appsName) && userData.UserName != "admin" {
 			api.apiLogger.Error("User forbidden for apps", zap.Any("apps", appsName))
 			errorData.Message = "Forbidden User"
 			errorData.StatusCode = http.StatusForbidden
@@ -1905,8 +2073,15 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		api.apiLogger.Debug(" Apps  found in cache")
 		response.WriteEntity(appsData)
 	}
+
+	defer func() {
+		getAppsLatencyMetric.UpdateSince(startTime)
+	}()
+
 	getAppsMetric.Mark(1)
-	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	totalRequestsMetric.Inc(1)
+
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 }
 
@@ -1953,54 +2128,21 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	nrReplicas := request.QueryParameter("nr_replicas")
-	maxReplicas := request.QueryParameter("max_nr_replicas")
-	newImage := request.QueryParameter("new_image")
-	if nrReplicas != "" || newImage != "" || maxReplicas != "" {
-		var appInfo domain.ApplicationData
-
-		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
-		if err != nil {
-			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-			errorData.Message = "Internal error / retrieving apps"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-		}
-		for _, app := range appsData {
-			if appData.Name == app.Name {
-				appInfo = *app
-				break
-			}
-		}
-		if !appInfo.IsRunning && (nrReplicas != "" || newImage != "" || maxReplicas != "") {
-			api.apiLogger.Error(" Bad Request / app is not running")
-			errorData.Message = " Bad Request / app is not running"
-			errorData.StatusCode = http.StatusBadRequest
-			response.WriteHeader(http.StatusBadRequest)
-			response.WriteEntity(errorData)
-		} else {
-			splitAppName := strings.Split(appInfo.Name, ".")
-			imageName := splitAppName[0] + "-" + splitAppName[1]
-			nrReplicasInteger, _ := strconv.ParseInt(nrReplicas, 10, 32)
-			maxReplicasInteger, _ := strconv.ParseInt(maxReplicas, 10, 32)
-			if appInfo.ScheduleType == "random_scheduler" {
-				api.kubeClient.UpdateAutoScaler(imageName, appInfo.Namespace, int32(nrReplicasInteger), int32(maxReplicasInteger))
-			} else {
-				api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, int32(nrReplicasInteger))
-			}
-
-		}
-	}
-
 	flag := true
-
-	userData.UserName = username
-
-	if !helpers.CheckUser(userData, userData.Role) || userData.UserName != username {
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_uuid", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !helpers.CheckUser(checkUserData, request.HeaderParameter("USER-AUTH")) || checkUserData.UserName != userData.UserName {
 		flag = false
 	}
-	if !flag {
+	if !flag && checkUserData.UserName != "admin" {
 		api.apiLogger.Error(" User not authorized", zap.String("user_name", username))
 		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
 		errorData.Message = "User " + username + " is Not Authorized"
@@ -2019,9 +2161,105 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	nowTime := time.Now()
-	appData.UpdatedTimestamp = nowTime
+	nrReplicas := request.QueryParameter("nr_replicas")
+	maxReplicas := request.QueryParameter("max_nr_replicas")
+	newImage := request.QueryParameter("new_image")
+	memResources := request.QueryParameter("mem_usage")
+	cpuResources := request.QueryParameter("cpu_usage")
+	limitMemResources := request.QueryParameter("max_mem_usage")
+	limitCpuResources := request.QueryParameter("max_cpu_usage")
 
+	if nrReplicas != "" || newImage != "" || maxReplicas != "" || cpuResources != "" {
+		var appInfo domain.ApplicationData
+
+		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
+		if err != nil {
+			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
+			errorData.Message = "Internal error / error in retrieving apps"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		for _, app := range appsData {
+			if appData.Name == app.Name {
+				appInfo = *app
+				break
+			}
+		}
+		if !appInfo.IsRunning && (nrReplicas != "" || newImage != "" || maxReplicas != "") {
+			failedUpdateAppMetric.Mark(1)
+			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+			api.apiLogger.Error(" Bad Request / app is not running")
+			errorData.Message = " Bad Request / app is not running"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		} else {
+
+			splitAppName := strings.Split(appInfo.Name, ".")
+			imageName := strings.ReplaceAll(splitAppName[0]+"-"+splitAppName[1], "_", "-")
+			nrReplicasInteger, _ := strconv.ParseInt(nrReplicas, 10, 32)
+			maxReplicasInteger, _ := strconv.ParseInt(maxReplicas, 10, 32)
+			newImage = strings.ToLower(strings.ReplaceAll(request.QueryParameter("new_image"), "_", "-"))
+			if appInfo.ScheduleType == "random_scheduler" {
+				err = api.kubeClient.UpdateAutoScaler(imageName, appInfo.Namespace, int32(nrReplicasInteger), int32(maxReplicasInteger))
+				if err != nil {
+					failedUpdateAppMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					api.apiLogger.Error("error in updating autoscaler", zap.Error(err))
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				err = api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, memResources, limitMemResources,
+					cpuResources, limitCpuResources, int32(0))
+				if err != nil {
+					failedUpdateAppMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					api.apiLogger.Error("error in updating deployment", zap.Error(err))
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+			} else {
+				err = api.kubeClient.UpdateDeployment(imageName, appInfo.Namespace, newImage, memResources, limitMemResources,
+					cpuResources, limitCpuResources, int32(nrReplicasInteger))
+				if err != nil {
+					failedUpdateAppMetric.Mark(1)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					api.apiLogger.Error("error in updating deployment", zap.Error(err))
+					errorData.Message = err.Error()
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+			}
+
+		}
+	}
+	if len(appData.SubgroupFiles) > 0 || appData.ScheduleType != "" || appData.Namespace != "" || appData.Owner != "" || appData.IsMain ||
+		appData.IsRunning {
+		failedUpdateAppMetric.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" Wrong fields to update")
+		errorData.Message = "Bad Request/ wrong fields to update"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	nowTime := time.Now()
+	port := 0
+	ipAddr := ""
+	appData.UpdatedTimestamp = nowTime
+	appData.Port = &port
+	appData.IpAddress = &ipAddr
 	err = api.psqlRepo.UpdateAppData(&appData)
 	if err != nil {
 		if strings.Contains(err.Error(), "no row found") {
@@ -2032,13 +2270,12 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 			response.WriteEntity(errorData)
 			return
 		} else {
-			errorData.Message = "Internal error / updating app data in postgres"
+			errorData.Message = "Internal error / error in updating app data in postgres"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
 			return
 		}
-
 	}
 
 	//clear all the cache for that specific user
@@ -2048,7 +2285,8 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	cachedRequests[username] = make([]string, 0)
 
 	updateAppsMetric.Mark(1)
-	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	updateResponse := domain.QueryResponse{}
 	updateResponse.Message = "App updated succesfully"
@@ -2090,6 +2328,30 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_uuid", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if checkUserData.UserName != "admin" && userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	appNamesList := strings.Split(appnames, ",")
 
@@ -2107,7 +2369,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-		errorData.Message = "Internal error / retrieving apps"
+		errorData.Message = "Internal error / error in retrieving apps"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -2120,7 +2382,27 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 
 	for _, appName := range appNamesList {
-		err := api.psqlRepo.DeleteAppData(strings.TrimSpace(appName), username)
+		if api.s3Client != nil {
+			key := strings.ReplaceAll(strings.Split(appName, ".")[0], "_", "-")
+			s3FilesName, err := api.s3Client.ListFileFolder(key)
+			if err != nil {
+				errorData.Message = "Internal error / error in retrieving files from s3"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			err = api.s3Client.DeleteFiles(s3FilesName, key)
+			if err != nil {
+				errorData.Message = "Internal error / error in deleting files from s3"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+		}
+
+		err = api.psqlRepo.DeleteAppData(strings.TrimSpace(appName), username)
 		if err != nil {
 			if strings.Contains(err.Error(), "no row found") {
 				api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
@@ -2130,7 +2412,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				response.WriteEntity(errorData)
 				return
 			} else {
-				errorData.Message = "Internal Error / Delete app"
+				errorData.Message = "Internal Error / error Delete app"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2139,23 +2421,12 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		}
 		err = api.psqlRepo.DeleteUserAppsData(strings.TrimSpace(appName), username)
 		if err != nil {
-			errorData.Message = "Internal Error / Delete app from user"
+			errorData.Message = "Internal Error / error in Delete app from user"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
 			return
 		}
-		execName := strings.Split(appName, ".")[0]
-		extensionName := strings.Split(appName, ".")[1]
-		err = api.dockerClient.ListImagesAndDelete(execName + "_" + extensionName)
-		if err != nil {
-			errorData.Message = "Internal error/ failed to remove images"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
-
 	}
 
 	for _, app := range appsData {
@@ -2171,6 +2442,24 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				response.WriteEntity(errorData)
 				return
 			}
+			if app.IpAddress != nil {
+				err := api.kubeClient.DeleteAutoScaler(deployName, app.Namespace)
+				if err != nil {
+					errorData.Message = "Internal error/ failed to delete autoscaler"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
+				if err != nil {
+					errorData.Message = "Internal error/ failed to delete load balancer"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+			}
 		}
 	}
 
@@ -2184,6 +2473,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	deleteResponse.Message = "Apps deleted succesfully"
 	deleteResponse.ResourcesAffected = append(deleteResponse.ResourcesAffected, appNamesList...)
 	response.WriteEntity(deleteResponse)
+	totalRequestsMetric.Inc(1)
 }
 
 func (api *API) GetAppsAggregates(request *restful.Request, response *restful.Response) {
@@ -2245,11 +2535,13 @@ func (api *API) GetAppsAggregates(request *restful.Request, response *restful.Re
 	appInfo.QueryInfo.MainAppsTotalCount = int64(totalMainAppsCount)
 	appInfo.QueryInfo.RunningAppsTotalCount = int64(totalRunningAppsCount)
 	response.WriteEntity(appInfo)
+	totalRequestsMetric.Inc(1)
 
 }
 
 // ScheduleApps schedule apps
 func (api *API) ScheduleApps(request *restful.Request, response *restful.Response) {
+	startTime := time.Now()
 	errorData := domain.ErrorResponse{}
 	dirNames := make([]string, 0)
 	appnames := request.QueryParameter("appnames")
@@ -2282,16 +2574,17 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		return
 	}
 	userUUID := request.HeaderParameter("USER-UUID")
+	userAuth := request.HeaderParameter("USER-AUTH")
 	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
 	if err != nil {
-		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		api.apiLogger.Error(" User not found", zap.String("user_uuid", userUUID))
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
 		response.WriteHeader(http.StatusNotFound)
 		response.WriteEntity(errorData)
 		return
 	}
-	if userData.UserName != checkUserData.UserName {
+	if userData.UserName != checkUserData.UserName || !helpers.CheckUser(checkUserData, userAuth) {
 		errorData.Message = "Status forbidden"
 		errorData.StatusCode = http.StatusForbidden
 		response.WriteHeader(http.StatusForbidden)
@@ -2343,7 +2636,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-		errorData.Message = "Internal error / retrieving apps"
+		errorData.Message = "Internal error / error in retrieving apps"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -2372,11 +2665,35 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	// push images to docker registry and retrieve task items
 	for _, app := range appsInfo.Response {
-		dirName := strings.Split(app.Name, ".")[0]
-		newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, int32(serverPort), app, api.apiLogger)
+		dirName := strings.ReplaceAll(strings.Split(app.Name, ".")[0], "_", "-")
+		filesFromAppFolder := make([]string, 0)
+		if api.s3Client != nil {
+			dirNameFiles, err := api.s3Client.ListFileFolder(dirName)
+			if err != nil {
+				errorData.Message = "Internal error / error in listing files from s3"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			err = api.s3Client.DownloadFiles(dirName, dirNameFiles)
+			if err != nil {
+				errorData.Message = "Internal error / error in downloading files from s3"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			for _, fileName := range dirNameFiles {
+				name := strings.Split(fileName, dirName+"/")
+				filesFromAppFolder = append(filesFromAppFolder, name[1])
+			}
+		}
+
+		newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, filesFromAppFolder, int32(serverPort), app, api.apiLogger)
 		if err != nil {
 			api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
-			errorData.Message = "Internal error / generating docker file"
+			errorData.Message = "Internal error / error in generating docker file"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2385,11 +2702,11 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		imageName := newDirName
 		var tagName string
 
-		//if app was not updated within the last 10 seconds or update_timestamp = created_timestamp,don't build image
+		//if app was not updated within the last 10 seconds or update_timestamp != created_timestamp,don't build image
 		if math.Trunc(time.Since(app.UpdatedTimestamp).Seconds()) <= float64(10) || app.UpdatedTimestamp.UnixNano() == app.CreatedTimestamp.UnixNano() {
 			err = api.dockerClient.BuildImage(imageName)
 			if err != nil {
-				errorData.Message = "Internal error / building image"
+				errorData.Message = "Internal error / error in building image"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2397,7 +2714,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 			tagName, err = api.dockerClient.PushImage(imageName)
 			if err != nil {
-				errorData.Message = "Internal error / pushing image"
+				errorData.Message = "Internal error / error in pushing image"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2421,7 +2738,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	userNameSpace, err = api.kubeClient.CreateNamespace("namespace-"+strings.ReplaceAll(strings.ReplaceAll(username, "_", "-"), ".", "-"), scheduleType)
 	if err != nil {
-		errorData.Message = "Internal error / creating namespace"
+		errorData.Message = "Internal error / error in creating namespace"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -2431,7 +2748,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 		file, err := os.Create("tasks_duration.json")
 		if err != nil {
-			errorData.Message = "Internal error /  create task duration file"
+			errorData.Message = "Internal error /  error in create task duration file"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2440,7 +2757,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 		err = os.WriteFile(file.Name(), fileData, 0644)
 		if err != nil {
-			errorData.Message = "Internal error /  write to task duration file"
+			errorData.Message = "Internal error /  error in write to task duration file"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2449,7 +2766,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 		tasksPQ, err := schedule_alghoritms.CreatePriorityQueueBasedOnTasksDuration(file.Name(), api.apiLogger)
 		if err != nil {
-			errorData.Message = "Internal error / failed priority queue"
+			errorData.Message = "Internal error / failed to create priority queue"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
@@ -2465,10 +2782,17 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		imageName := strings.ToLower(strings.ReplaceAll(pairImageTag[1], "_", "-"))
 		app := appsInfo.Response[i]
 		if scheduleType == "random_scheduler" {
+			if serverPort <= int64(0) || serverPort > int64(65535) {
+				errorData.Message = "Bad request / invalid port"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
 			publicIp, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
 				[]string{}, int32(serverPort), int32(nrReplicas))
 			if err != nil {
-				errorData.Message = "Internal error / creating deployment"
+				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2476,7 +2800,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 			_, err = api.kubeClient.CreateAutoScaler(imageName, userNameSpace, int32(1), int32(5))
 			if err != nil {
-				errorData.Message = "Internal error / creating auto scaler"
+				errorData.Message = "Internal error / error in creating auto scaler"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2486,7 +2810,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
 				[]string{}, int32(0), int32(nrReplicas))
 			if err != nil {
-				errorData.Message = "Internal error / creating deployment"
+				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2496,7 +2820,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", "",
 				[]string{}, int32(0), int32(nrReplicas))
 			if err != nil {
-				errorData.Message = "Internal error / creating deployment"
+				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2514,8 +2838,12 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		updatedAppData.IsRunning = true
 		updatedAppData.UpdatedTimestamp = time.Now()
 		port := int(serverPort)
-		ipAdress := fmt.Sprintf("http://%s", publicIp)
-		updatedAppData.IpAddress = &ipAdress
+		var ipAddress string
+		if publicIp != "" {
+			ipAddress = fmt.Sprintf("http://%s", publicIp)
+		}
+
+		updatedAppData.IpAddress = &ipAddress
 		updatedAppData.Port = &port
 
 		err = api.psqlRepo.UpdateAppData(&updatedAppData)
@@ -2527,10 +2855,20 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			return
 		}
 
+		userData.NrDeployedApps = userData.NrDeployedApps + 1
+		err = api.psqlRepo.UpdateUserData(userData)
+		if err != nil {
+			errorData.Message = "Internal error / failed to update user"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+
 	}
 
 	for _, dir := range dirNames {
-		err := api.dockerClient.ListContainersAndDelete(dir)
+		err := api.dockerClient.ListImagesAndDelete(dir)
 		if err != nil {
 			errorData.Message = "Internal error / failed to delete containers"
 			errorData.StatusCode = http.StatusInternalServerError
@@ -2540,12 +2878,22 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		}
 	}
 
+	//clear all the cache for that specific user
+	for _, cachedReq := range cachedRequests[username] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[username] = make([]string, 0)
+
 	for _, dir := range deleteDirNames {
 		os.RemoveAll(dir)
 	}
+	defer func() {
+		scheduleAppsLatencyMetric.UpdateSince(startTime)
+	}()
 
 	scheduleAppsMetric.Mark(1)
-	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	scheduleResponse := domain.QueryResponse{}
 	scheduleResponse.Message = "Apps scheduled succesfully"
@@ -2568,19 +2916,18 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		return
 	}
 
-	podName := request.QueryParameter("pod_name")
-	if podName == "" {
-		api.apiLogger.Error(" Couldn't read pod name query parameter")
-		errorData.Message = "Bad Request/ empty pod name"
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
 		return
 	}
 
-	splitPodName := strings.Split(podName, "-deployment")[0]
-	splitApp := strings.Split(splitPodName, "-"+splitPodName[len(splitPodName)-2:])
-	appName := strings.ReplaceAll(splitApp[0]+"."+splitPodName[len(splitPodName)-2:], "-", "_")
+	podName := strings.ReplaceAll(appName, "_", "-")
+	podName = strings.ReplaceAll(podName, ".", "-") + "-deployment"
 
 	userData, err := api.psqlRepo.GetUserData(username)
 	if err != nil {
@@ -2630,7 +2977,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-		errorData.Message = "Internal error / retrieving apps"
+		errorData.Message = "Internal error / error in retrieving apps"
 		errorData.StatusCode = http.StatusInternalServerError
 		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
@@ -2649,16 +2996,769 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
+		return
 	}
 
 	getPodResultsMetric.Mark(1)
-	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}
-	podLogsResponse.PrintMessage = podLogs
+	podLogsResponse.PrintMessage = strings.Join(podLogs, " ")
 	podLogsResponse.AppName = podName
-	response.WriteEntity(podLogsResponse)
+	response.WriteAsJson(podLogsResponse)
 
+}
+
+// GetGrafanaDashboardData retrieves grafana data based on grafana query
+func (api *API) GetGrafanaDashboardData(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	appName := strings.ReplaceAll(strings.ReplaceAll(request.QueryParameter("app_name"), ".", "-"), "_", "-") + "-deployment"
+	grafanaFormat := request.QueryParameter("grafana_format")
+	grafanaFrom := request.QueryParameter("grafana_from")
+	grafanaUsageType := request.QueryParameter("grafana_usage_type")
+	dataSourceData, err := api.grafanaHTTPClient.GetDataSourceData(appName, grafanaFrom, grafanaFormat, grafanaUsageType)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	response.WriteEntity(dataSourceData)
+}
+
+func (api *API) CreateAppAlert(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	// if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+	// 	api.apiLogger.Error("App not found", zap.Any("app", appName))
+	// 	errorData.Message = "App not found"
+	// 	errorData.StatusCode = http.StatusNotFound
+	// 	response.WriteHeader(http.StatusNotFound)
+	// 	response.WriteEntity(errorData)
+	// 	return
+
+	// }
+	// _, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	// if len(appInfo[0].AlertIDs) != 0 {
+	// 	errorData.Message = "Bad Request / App has alerts"
+	// 	errorData.StatusCode = http.StatusBadRequest
+	// 	response.WriteHeader(http.StatusBadRequest)
+	// 	response.WriteEntity(errorData)
+	// 	return
+	// }
+
+	deployAppName := strings.ReplaceAll(strings.ReplaceAll(appName, ".", "-"), "_", "-") + "-deployment"
+
+	// create mem alert for app
+	alertBody := domain.GrafanaAlertInfo{
+		OrgID:     1,
+		FolderUID: "efe8a245-bb05-4919-b8cc-9a2c9620a6e0",
+		RuleGroup: "cloud-admin-team",
+		Title:     "Mem Alert for app " + appName,
+		Condition: "C",
+		Updated:   time.Now().Format(time.RFC3339),
+		For:       "5m",
+		Annotations: domain.Annotations{
+			Description: "Mem Alert for app " + appName,
+			Summary:     "Mem Alert for app " + appName,
+		},
+		IsPaused:     false,
+		ExecErrState: "Error",
+		NoDataState:  "NoData",
+		Data: []domain.Data{
+			{
+				RefID: "A",
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+				DatasourceUUID: "P6575522ED8660310",
+				Model: domain.Model{
+					Hide:          false,
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+					RefID:         "A",
+					Target:        fmt.Sprintf(`cloudadminapi.default.*.%s.mem_usage.value`, deployAppName),
+				},
+			},
+			{
+				RefID: "B",
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+				DatasourceUUID: "__expr__",
+				Model: domain.Model{
+					Conditions: []domain.Condition{
+						{
+							Evaluator: domain.Evaluator{
+								Params: []int{},
+								Type:   "gt",
+							},
+							Operator: domain.Operator{
+								Type: "and",
+							},
+							Query: domain.Query{
+								Params: []string{"B"},
+							},
+							Reducer: domain.Reducer{
+								Params: []string{},
+								Type:   "last",
+							},
+							Type: "query",
+						},
+					},
+					Datasource: domain.Datasource{
+						Type: "__expr__",
+						UID:  "__expr__",
+					},
+					Expression:    "A",
+					Reducer:       "last",
+					Hide:          false,
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+					RefID:         "B",
+					Type:          "reduce",
+				},
+			},
+			{
+				RefID:          "C",
+				DatasourceUUID: "__expr__",
+				Model: domain.Model{
+					RefID: "C",
+					Hide:  false,
+					Type:  "threshold",
+					Datasource: domain.Datasource{
+						Type: "__expr__",
+						UID:  "__expr__",
+					},
+					Conditions: []domain.Condition{
+						{
+							Type: "query",
+							Evaluator: domain.Evaluator{
+								Params: []int{128},
+								Type:   "gt",
+							},
+							Operator: domain.Operator{
+								Type: "and",
+							},
+							Query: domain.Query{
+								Params: []string{"C"},
+							},
+							Reducer: domain.Reducer{
+								Params: []string{},
+								Type:   "last",
+							},
+						},
+					},
+					Expression:    "B",
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+				},
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+			},
+		},
+	}
+
+	respAlert, err := api.grafanaHTTPClient.CreateAlertRule(alertBody)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	alertRules := make([]string, 0)
+	alertRules = append(alertRules, respAlert.UID)
+	err = api.psqlRepo.UpdateAppAlertID(appName, respAlert.UID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no row found") {
+			api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
+			errorData.Message = "App not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		} else {
+			errorData.Message = "Internal error / error in updating app data in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+	}
+
+	// create cpu alert for app
+	alertBody.Title = "CPU Alert for app " + appName
+	alertBody.Annotations.Description = "CPU Alert for app " + appName
+	alertBody.Annotations.Summary = "CPU Alert for app " + appName
+	alertBody.Data[0].Model.Target = fmt.Sprintf(`cloudadminapi.default.*.%s.cpu_usage.value`, deployAppName)
+	alertBody.Data[2].Model.Conditions[0].Evaluator.Params[0] = 500
+
+	respAlert, err = api.grafanaHTTPClient.CreateAlertRule(alertBody)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	alertRules = append(alertRules, respAlert.UID)
+	err = api.psqlRepo.UpdateAppAlertID(appName, respAlert.UID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no row found") {
+			api.apiLogger.Error(" App  not found", zap.String("app_name", appName))
+			errorData.Message = "App not found"
+			errorData.StatusCode = http.StatusNotFound
+			response.WriteHeader(http.StatusNotFound)
+			response.WriteEntity(errorData)
+			return
+		} else {
+			errorData.Message = "Internal error / error in updating app data in postgres"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+	}
+
+	for _, cachedReq := range cachedRequests[username] {
+		api.apiCache.Del(cachedReq)
+	}
+	cachedRequests[username] = make([]string, 0)
+
+	createAlertResponse := domain.QueryResponse{}
+	createAlertResponse.Message = "Alerts created succesfully"
+	createAlertResponse.ResourcesAffected = append(createAlertResponse.ResourcesAffected, alertRules...)
+	response.WriteEntity(createAlertResponse)
+
+}
+
+func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	cpuNewThreshold := request.QueryParameter("alert_new_cpu_value")
+	if cpuNewThreshold == "" {
+		api.apiLogger.Error(" Couldn't read alert_new_cpu_value query parameter")
+		errorData.Message = "Bad Request/ empty alert_new_cpu_value"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	memNewThreshold := request.QueryParameter("alert_new_mem_value")
+	if memNewThreshold == "" {
+		api.apiLogger.Error(" Couldn't read alert_new_mem_value query parameter")
+		errorData.Message = "Bad Request/ empty alert_new_mem_value"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	alertRuleIDs := request.QueryParameter("alert_ids")
+	if alertRuleIDs == "" {
+		api.apiLogger.Error(" Couldn't read alert_ids query parameter")
+		errorData.Message = "Bad Request/ empty alert id"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("App not found", zap.Any("app", appName))
+		errorData.Message = "App not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+
+	}
+
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	if len(appInfo[0].AlertIDs) == 0 {
+		errorData.Message = "Bad Request / App does not have an alert created"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	deployAppName := strings.ReplaceAll(strings.ReplaceAll(appName, ".", "-"), "_", "-") + "-deployment"
+	alertUIDs := strings.Split(alertRuleIDs, ",")
+	newMemTreshholdValue, _ := strconv.ParseInt(memNewThreshold, 10, 64)
+	newCPUTreshholdValue, _ := strconv.ParseInt(cpuNewThreshold, 10, 64)
+	if newCPUTreshholdValue == int64(0) || newMemTreshholdValue == int64(0) {
+		errorData.Message = "Bad Request / Found zero values " + memNewThreshold + "," + cpuNewThreshold
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	// update mem alert
+	alertBody := domain.GrafanaAlertInfo{
+		OrgID:     1,
+		FolderUID: "efe8a245-bb05-4919-b8cc-9a2c9620a6e0",
+		RuleGroup: "cloud-admin-team",
+		Title:     "Mem Alert for app " + appName,
+		Condition: "C",
+		Updated:   time.Now().Format(time.RFC3339),
+		For:       "5m",
+		Annotations: domain.Annotations{
+			Description: "Mem Alert for app " + appName,
+			Summary:     "Mem Alert for app " + appName,
+		},
+		IsPaused:     false,
+		ExecErrState: "Error",
+		NoDataState:  "NoData",
+		Data: []domain.Data{
+			{
+				RefID: "A",
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+				DatasourceUUID: "P6575522ED8660310",
+				Model: domain.Model{
+					Hide:          false,
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+					RefID:         "A",
+					Target:        fmt.Sprintf(`cloudadminapi.default.*.%s.mem_usage.value`, deployAppName),
+				},
+			},
+			{
+				RefID: "B",
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+				DatasourceUUID: "__expr__",
+				Model: domain.Model{
+					Conditions: []domain.Condition{
+						{
+							Evaluator: domain.Evaluator{
+								Params: []int{},
+								Type:   "gt",
+							},
+							Operator: domain.Operator{
+								Type: "and",
+							},
+							Query: domain.Query{
+								Params: []string{"B"},
+							},
+							Reducer: domain.Reducer{
+								Params: []string{},
+								Type:   "last",
+							},
+							Type: "query",
+						},
+					},
+					Datasource: domain.Datasource{
+						Type: "__expr__",
+						UID:  "__expr__",
+					},
+					Expression:    "A",
+					Reducer:       "last",
+					Hide:          false,
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+					RefID:         "B",
+					Type:          "reduce",
+				},
+			},
+			{
+				RefID:          "C",
+				DatasourceUUID: "__expr__",
+				Model: domain.Model{
+					RefID: "C",
+					Hide:  false,
+					Type:  "threshold",
+					Datasource: domain.Datasource{
+						Type: "__expr__",
+						UID:  "__expr__",
+					},
+					Conditions: []domain.Condition{
+						{
+							Type: "query",
+							Evaluator: domain.Evaluator{
+								Params: []int{int(newMemTreshholdValue)},
+								Type:   "gt",
+							},
+							Operator: domain.Operator{
+								Type: "and",
+							},
+							Query: domain.Query{
+								Params: []string{"C"},
+							},
+							Reducer: domain.Reducer{
+								Params: []string{},
+								Type:   "last",
+							},
+						},
+					},
+					Expression:    "B",
+					IntervalMs:    1000,
+					MaxDataPoints: 43200,
+				},
+				RelativeTimeRange: domain.RelativeTimeRange{
+					From: 10800,
+					To:   0,
+				},
+			},
+		},
+	}
+	err = api.grafanaHTTPClient.UpdateAlertRule(alertUIDs[0], alertBody)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	// update cpu alert
+	alertBody.Title = "CPU Alert for app " + appName
+	alertBody.Annotations.Description = "CPU Alert for app " + appName
+	alertBody.Annotations.Summary = "CPU Alert for app " + appName
+	alertBody.Data[0].Model.Target = fmt.Sprintf(`cloudadminapi.default.*.%s.cpu_usage.value`, deployAppName)
+	alertBody.Data[2].Model.Conditions[0].Evaluator.Params[0] = int(newCPUTreshholdValue)
+	alertBody.UID = alertUIDs[1]
+	err = api.grafanaHTTPClient.UpdateAlertRule(alertUIDs[1], alertBody)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	updateAlertResponse := domain.QueryResponse{}
+	updateAlertResponse.Message = "Alerts updated succesfully"
+	updateAlertResponse.ResourcesAffected = append(updateAlertResponse.ResourcesAffected, alertUIDs...)
+	response.WriteEntity(updateAlertResponse)
+}
+
+func (api *API) DeleteAppAlert(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	alertRuleIDs := request.QueryParameter("alert_ids")
+	if alertRuleIDs == "" {
+		api.apiLogger.Error(" Couldn't read alert_ids query parameter")
+		errorData.Message = "Bad Request/ empty alert id"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("App not found", zap.Any("app", appName))
+		errorData.Message = "App not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	if len(appInfo[0].AlertIDs) == 0 {
+		errorData.Message = "Bad Request / App does not have an alert created"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	alertRuleIDsList := strings.Split(alertRuleIDs, ",")
+	for _, alertRuleID := range alertRuleIDsList {
+		err = api.grafanaHTTPClient.DeleteAlertRule(alertRuleID)
+		if err != nil {
+			errorData.Message = "Bad Request/ " + err.Error()
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		err = api.psqlRepo.RemoveAppAlertID(alertRuleID, appName)
+		if err != nil {
+			errorData.Message = "Bad Request/ " + err.Error()
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+	}
+
+	deleteAlertResponse := domain.QueryResponse{}
+	deleteAlertResponse.Message = "Alerts deleted succesfully"
+	deleteAlertResponse.ResourcesAffected = append(deleteAlertResponse.ResourcesAffected, alertRuleIDsList...)
+	response.WriteEntity(deleteAlertResponse)
+}
+
+func (api *API) GetAlertTriggerNotification(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	alertRuleID := request.QueryParameter("alert_id")
+	if alertRuleID == "" {
+		api.apiLogger.Error(" Couldn't read alert_id query parameter")
+		errorData.Message = "Bad Request/ empty alert id"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("App not found", zap.Any("app", appName))
+		return
+	}
+
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	if len(appInfo[0].AlertIDs) == 0 {
+		api.apiLogger.Debug("no alerts found for app", zap.String("app_name", appName))
+		return
+	}
+
+	alertRuleInfo, err := api.grafanaHTTPClient.GetAlertRuleByID(alertRuleID)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	alertTriggerInformation, err := api.grafanaHTTPClient.GetAlertNotification(alertRuleInfo.ID)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	response.WriteEntity(alertTriggerInformation[0])
 }
 
 // StartProfiler starts the cpu profiler

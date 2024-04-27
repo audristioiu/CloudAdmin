@@ -18,6 +18,6 @@ func main() {
 	quit := make(chan struct{})
 	defer close(quit)
 
-	scheduler := schedulers.NewHybridScheduler(podQueue, quit)
+	scheduler := schedulers.NewHybridRoundRobinSJFScheduler(podQueue, quit)
 	scheduler.Run(quit)
 }

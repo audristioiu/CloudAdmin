@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -169,7 +170,7 @@ description=NULL&&is_running="false"||kname="test"&&created_timestamp<"1day"
 */
 
 // ParseFQLFilter returns filters in slice of slices of strings
-func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
+func ParseFQLFilter(fqlString string, logger *zap.Logger) ([][]string, error) {
 	s := fql.NewScanner(strings.NewReader(fqlString))
 
 	listFilters := make([][]string, 20)
@@ -185,12 +186,20 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 
 		if err != nil {
 			logger.Error("error in scanning", zap.Error(err))
-			return nil
+			return nil, err
 		}
-		if t.Type == fql.TokenWS || (t.Type == fql.TokenText && t.Literal == "NULL") ||
-			(t.Type == fql.TokenIdentifier && !slices.Contains(GetAppsFilters, t.Literal) && t.Literal != "NULL") {
+		if t.Type == fql.TokenWS {
 			logger.Error("invalid fql value", zap.String("literal", t.Literal))
-			return nil
+			return nil, fmt.Errorf("invalid fql value , no whitespace allowed")
+		}
+		if t.Type == fql.TokenText && t.Literal == "NULL" {
+			logger.Error("invalid fql value for text token", zap.String("literal", t.Literal))
+			return nil, fmt.Errorf("invalid fql value for text token . NULL is not allowed ")
+		}
+		if t.Type == fql.TokenIdentifier && !slices.Contains(GetAppsFilters, t.Literal) && t.Literal != "NULL" {
+			logger.Error("invalid fql value for identifier token", zap.String("literal", t.Literal))
+			return nil, fmt.Errorf("invalid fql value for identifier token . Text is not allowed")
+
 		}
 		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || t.Type == fql.TokenGroup || t.Type == fql.TokenNumber {
 			if t.Type == fql.TokenGroup {
@@ -221,7 +230,6 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 							separatedLiteral = strings.Split(literal, "<")
 							separator = "<"
 						}
-
 						listFilters[idx] = append(listFilters[idx], separatedLiteral[0])
 						listFilters[idx] = append(listFilters[idx], separator)
 						listFilters[idx] = append(listFilters[idx], separatedLiteral[1])
@@ -245,7 +253,19 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) [][]string {
 	}
 
 	logger.Debug("got list of filters", zap.Any("filter list", listFilters))
-	return listFilters
+	for _, filter := range listFilters {
+		if len(filter) == 3 {
+			if filter[0] == "port" && regexp.MustCompile(`\D`).MatchString(filter[2]) {
+				logger.Error("invalid fql value for port", zap.String("port_value", filter[2]))
+				return nil, fmt.Errorf("invalid fql value for port . Text is not allowed")
+			}
+			if strings.Contains(filter[0], "timestamp") && !regexp.MustCompile(`[0-9]{2}[day]`).MatchString(filter[2]) {
+				logger.Error("invalid fql value for created_timestamp", zap.String("timestamp_value", filter[2]))
+				return nil, fmt.Errorf("invalid fql value for timestamp . Format is not allowed")
+			}
+		}
+	}
+	return listFilters, nil
 }
 
 // WriteDockerFile writes parameters for Dockerfile
@@ -519,7 +539,6 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 	return nil
 }
 
-// todo remove
 func copy(src, dst string) (int64, error) {
 	sourceFileStat, err := os.Stat(src)
 	if err != nil {
@@ -546,10 +565,12 @@ func copy(src, dst string) (int64, error) {
 }
 
 // GenerateDockerFile returns name of the dockerfile created using app info + task item
-func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domain.ApplicationData, logger *zap.Logger) (string, []priority_queue.TaskItem, error) {
-
-	var taskExecutionTime []priority_queue.TaskItem
-
+func GenerateDockerFile(dirName,
+	scheduleType string,
+	files []string,
+	port int32,
+	appData *domain.ApplicationData,
+	logger *zap.Logger) (string, []priority_queue.TaskItem, error) {
 	mkDirName := dirName + "-" + strings.Split(appData.Name, ".")[1]
 	var packageJs []string
 	var inOutFiles []string
@@ -557,77 +578,100 @@ func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domai
 	hasPkg := false
 	hasReqs := false
 	hasGoMod := false
-	//todo luat fisier de pe local(in viitor s3) si scris la locatie
+	path, _ := os.Getwd()
+	path = strings.ReplaceAll(path, "CloudAdmin", "")
+	path = strings.ReplaceAll(path, "server", "")
+	path = filepath.Join(path, filepath.Base(mkDirName))
+	var taskExecutionTime []priority_queue.TaskItem
 	err := os.Mkdir(mkDirName, 0777)
 	if err != nil {
 		logger.Error("failed to create directory", zap.Error(err))
 		return "", nil, err
 	}
-	path, _ := os.Getwd()
-	path = strings.ReplaceAll(path, "CloudAdmin", "")
-	path = strings.ReplaceAll(path, "server", "")
-	path = filepath.Join(path, filepath.Base(mkDirName)) + "/"
-	_, err = copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
-	if err != nil {
-		logger.Error("failed to copy", zap.Error(err))
-		return "", nil, err
-	}
+	if len(files) == 0 {
 
-	for _, subApp := range appData.SubgroupFiles {
-		_, err = copy(path+subApp, filepath.Join(mkDirName, filepath.Base(subApp)))
+		_, err = copy(filepath.Join(path, filepath.Base(appData.Name)), filepath.Join(mkDirName, filepath.Base(appData.Name)))
 		if err != nil {
 			logger.Error("failed to copy", zap.Error(err))
 			return "", nil, err
 		}
-	}
-	//check if extra files does exist in directory
-	_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".in")
-	if err == nil {
-		copy(path+strings.Split(appData.Name, ".")[0]+".in", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".in")))
-		inFile := strings.Split(appData.Name, ".")[0] + ".in"
-		inOutFiles = append(inOutFiles, inFile+" "+inFile)
-	}
-	_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".out")
-	if err == nil {
-		copy(path+strings.Split(appData.Name, ".")[0]+".out", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".out")))
-		outFile := strings.Split(appData.Name, ".")[0] + ".out"
-		inOutFiles = append(inOutFiles, outFile+" "+outFile)
-	}
-	_, err = os.Stat(path + "package.json")
-	if err == nil {
-		hasPkg = true
-	}
-	_, err = os.Stat(path + "requirements.txt")
-	if err == nil {
-		hasReqs = true
-	}
-	_, err = os.Stat(path + "go.mod")
-	if err == nil {
-		hasGoMod = true
+
+		for _, subApp := range appData.SubgroupFiles {
+			_, err = copy(filepath.Join(path, filepath.Base(subApp)), filepath.Join(mkDirName, filepath.Base(subApp)))
+			if err != nil {
+				logger.Error("failed to copy", zap.Error(err))
+				return "", nil, err
+			}
+		}
+		//check if extra files does exist in directory
+		_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".in")
+		if err == nil {
+			copy(path+strings.Split(appData.Name, ".")[0]+".in", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".in")))
+			inFile := strings.Split(appData.Name, ".")[0] + ".in"
+			inOutFiles = append(inOutFiles, inFile+" "+inFile)
+		}
+		_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".out")
+		if err == nil {
+			copy(path+strings.Split(appData.Name, ".")[0]+".out", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".out")))
+			outFile := strings.Split(appData.Name, ".")[0] + ".out"
+			inOutFiles = append(inOutFiles, outFile+" "+outFile)
+		}
+		_, err = os.Stat(path + "package.json")
+		if err == nil {
+			hasPkg = true
+		}
+		_, err = os.Stat(path + "requirements.txt")
+		if err == nil {
+			hasReqs = true
+		}
+		_, err = os.Stat(path + "go.mod")
+		if err == nil {
+			hasGoMod = true
+		}
+	} else {
+		for _, file := range files {
+			if strings.Contains(file, ".in") || strings.Contains(file, ".out") {
+				inOutFiles = append(inOutFiles, file)
+			}
+			if strings.Contains(file, "package.json") {
+				hasPkg = true
+				packageJs = []string{"package.json package.json", "package-lock.json package-lock.json"}
+				runJs = "npm install"
+			}
+			if strings.Contains(file, "requirements.txt") {
+				hasReqs = true
+				runPy = "pip install -r requirements.txt"
+			}
+			if strings.Contains(file, "go.mod") {
+				hasGoMod = true
+				runGo = "go mod download"
+			}
+		}
 	}
 	dockFile, err := os.Create(filepath.Join(mkDirName, filepath.Base("Dockerfile")))
 	if err != nil {
-		logger.Error("could not create temp file", zap.Error(err))
+		logger.Error("could not create Dockerfile in directory", zap.Error(err))
 		return "", nil, err
 	}
 
 	appName := appData.Name
 	extension := strings.Split(appName, ".")[1]
 	if extension == "js" && hasPkg {
-		copy(path+"package.json", filepath.Join(mkDirName, filepath.Base("package.json")))
-		copy(path+"package-lock.json", filepath.Join(mkDirName, filepath.Base("package-lock.json")))
+		copy(filepath.Join(path, filepath.Base("package.json")), filepath.Join(mkDirName, filepath.Base("package.json")))
+		copy(filepath.Join(path, filepath.Base("package-lock.json")), filepath.Join(mkDirName, filepath.Base("package-lock.json")))
 		packageJs = []string{"package.json package.json", "package-lock.json package-lock.json"}
 		runJs = "npm install"
 	}
 	if extension == "py" && hasReqs {
-		copy(path+"requirements.txt", filepath.Join(mkDirName, filepath.Base("requirements.txt")))
+		copy(filepath.Join(path, filepath.Base("requirements.txt")), filepath.Join(mkDirName, filepath.Base("requirements.txt")))
 		runPy = "pip install -r requirements.txt"
 	}
 	if extension == "go" && hasGoMod {
-		copy(path+"go.mod", filepath.Join(mkDirName, filepath.Base("go.mod")))
+		copy(filepath.Join(path, filepath.Base("go.mod")), filepath.Join(mkDirName, filepath.Base("go.mod")))
 		copy(path+"go.sum", filepath.Join(mkDirName, filepath.Base("go.sum")))
 		runGo = "go mod download"
 	}
+	os := runtime.GOOS
 	switch mapCodeExtension[extension] {
 	case "nodejs":
 		{
@@ -814,8 +858,11 @@ func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domai
 			if err != nil {
 				return "", nil, err
 			}
-			//todo remove when switching to linux
-			newCMD[0] = newCMD[0] + ".exe"
+
+			if os == "windows" {
+				newCMD[0] = newCMD[0] + ".exe"
+			}
+
 			if scheduleType == "rr_sjf_scheduler" {
 				taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
 					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
@@ -859,8 +906,9 @@ func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domai
 			if err != nil {
 				return "", nil, err
 			}
-			//todo remove when switching to linux
-			newCMD[0] = newCMD[0] + ".exe"
+			if os == "windows" {
+				newCMD[0] = newCMD[0] + ".exe"
+			}
 			if scheduleType == "rr_sjf_scheduler" {
 				taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
 					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
@@ -882,6 +930,8 @@ func GenerateDockerFile(dirName, scheduleType string, port int32, appData *domai
 // GetExecutionTimeForTasks retrieves list of name-execution time items that will be used in RR SJF algorithm
 func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []string, logger *zap.Logger) ([]priority_queue.TaskItem, error) {
 	tasks := make([]priority_queue.TaskItem, 0)
+
+	os := runtime.GOOS
 
 	for i, namePath := range tasksPath {
 		var execCommand *exec.Cmd
@@ -953,11 +1003,18 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 		if len(runCommands) > 0 {
 			startCmd := time.Now()
 			var newExecCommand *exec.Cmd
-			//update when switching to linux
-			if len(runCommands) == 2 {
-				newExecCommand = exec.Command("cmd", "/K", runCommands[0], runCommands[1])
+			if os == "windows" {
+				if len(runCommands) == 2 {
+					newExecCommand = exec.Command("cmd", "/K", runCommands[0], runCommands[1])
+				} else {
+					newExecCommand = exec.Command("cmd", "/K", runCommands[0])
+				}
 			} else {
-				newExecCommand = exec.Command("cmd", "/K", runCommands[0])
+				if len(runCommands) == 2 {
+					newExecCommand = exec.Command(runCommands[0], runCommands[1])
+				} else {
+					newExecCommand = exec.Command(runCommands[0])
+				}
 			}
 
 			err := newExecCommand.Run()
@@ -966,29 +1023,32 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 				return nil, err
 			}
 			elapsedCMD := time.Since(startCmd)
-			folderNames := strings.Split(namePath, `\`)
+			_, folderName := filepath.Split(namePath)
+			_, folderName = filepath.Split(folderName)
 			if math.Trunc(elapsedCMD.Seconds()) >= float64(1) {
 				tasks = append(tasks, priority_queue.TaskItem{
-					Name:     folderNames[len(folderNames)-1],
+					Name:     folderName,
 					Duration: priority_queue.Duration(elapsedCMD.Seconds() - float64(1)).String(),
 				})
 			} else {
 				tasks = append(tasks, priority_queue.TaskItem{
-					Name:     folderNames[len(folderNames)-1],
+					Name:     folderName,
 					Duration: priority_queue.Duration(elapsedCMD.Seconds()).String(),
 				})
 			}
 		} else {
 			elapsed := time.Since(start)
-			folderNames := strings.Split(namePath, `\`)
+			_, folderName := filepath.Split(namePath)
+			_, folderName = filepath.Split(folderName)
+
 			if math.Trunc(elapsed.Seconds()) >= float64(1) {
 				tasks = append(tasks, priority_queue.TaskItem{
-					Name:     folderNames[len(folderNames)-1],
+					Name:     folderName,
 					Duration: priority_queue.Duration(elapsed.Seconds() - float64(1)).String(),
 				})
 			} else {
 				tasks = append(tasks, priority_queue.TaskItem{
-					Name:     folderNames[len(folderNames)-1],
+					Name:     folderName,
 					Duration: priority_queue.Duration(elapsed.Seconds()).String(),
 				})
 			}
@@ -1082,9 +1142,10 @@ func CreatePQ(items []priority_queue.TaskItem) priority_queue.PriorityQueue {
 	for _, task := range items {
 		taskDuration, _ := time.ParseDuration(task.Duration)
 		tasksPriorityQueue[i] = &priority_queue.Item{
-			Name:         task.Name,
-			TaskDuration: taskDuration,
-			Index:        i,
+			Name:                task.Name,
+			TaskDuration:        taskDuration,
+			InitialTaskDuration: taskDuration,
+			Index:               i,
 		}
 		i++
 	}

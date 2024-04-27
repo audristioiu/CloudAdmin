@@ -9,23 +9,24 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/docker/docker/api/types"
-	containerTypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 	"go.uber.org/zap"
 )
 
-// debug purposes
+// ErrorLine represents line of error from docker
 type ErrorLine struct {
 	Error       string      `json:"error"`
 	ErrorDetail ErrorDetail `json:"errorDetail"`
 }
 
+// ErrorDetail represents error message
 type ErrorDetail struct {
 	Message string `json:"message"`
 }
@@ -59,9 +60,10 @@ func NewDockerClient(ctx context.Context, logger *zap.Logger, dockerID, dockerUs
 
 // BuildImage builds image located in dirName
 func (dock *DockerClient) BuildImage(dirName string) error {
-	//todo remove
+
 	path, _ := os.Getwd()
-	tar, err := archive.TarWithOptions(path+`/`+dirName, &archive.TarOptions{})
+	srcPath := filepath.Join(path, filepath.Base(dirName))
+	tar, err := archive.TarWithOptions(srcPath, &archive.TarOptions{})
 	if err != nil {
 		dock.dockerLogger.Error("failed to create tar with options", zap.Error(err))
 		return err
@@ -115,37 +117,6 @@ func (dock *DockerClient) PushImage(dirName string) (string, error) {
 	return tag, nil
 }
 
-// ListContainersAndDelete lists containers and deletes the one's with dirName
-func (dock *DockerClient) ListContainersAndDelete(dirName string) error {
-	imageName := dock.dockerRegistryUserID + "/" + strings.ToLower(dirName) + ":latest"
-	containers, err := dock.dockerClient.ContainerList(dock.ctx, types.ContainerListOptions{})
-	if err != nil {
-		dock.dockerLogger.Error("failed to list containers", zap.Error(err))
-		return err
-	}
-	for _, container := range containers {
-		if container.Image == imageName {
-			noWaitTimeout := 0 // to not wait for the container to exit gracefully
-			err = dock.dockerClient.ContainerStop(dock.ctx, container.ID, containerTypes.StopOptions{Timeout: &noWaitTimeout})
-			if err != nil {
-				dock.dockerLogger.Error("failed to stop container", zap.String("container_id", container.ID[:10]), zap.Error(err))
-				return err
-			}
-			removeOptions := types.ContainerRemoveOptions{
-				RemoveVolumes: true,
-				Force:         true,
-			}
-			err = dock.dockerClient.ContainerRemove(dock.ctx, container.ID, removeOptions)
-			if err != nil {
-				dock.dockerLogger.Error("failed to remove container", zap.String("container_id", container.ID[:10]), zap.Error(err))
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
 // ListImagesAndDelete lists images and delete the one's with dirName
 func (dock *DockerClient) ListImagesAndDelete(dirName string) error {
 	imageName := dock.dockerRegistryUserID + "/" + strings.ToLower(dirName) + ":latest"
@@ -169,7 +140,6 @@ func (dock *DockerClient) ListImagesAndDelete(dirName string) error {
 	return nil
 }
 
-// for debug
 func print(rd io.Reader) error {
 	var lastLine string
 

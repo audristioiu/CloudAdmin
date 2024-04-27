@@ -17,16 +17,16 @@ import (
 
 const hybridSchedulerName = "rr-sjf-scheduler-go-deployment"
 
-// HybridScheduler represents info about HybridScheduler
-type HybridScheduler struct {
+// HybridRoundRobinSJFScheduler represents info about HybridRoundRobinSJFScheduler
+type HybridRoundRobinSJFScheduler struct {
 	clientset  *kubernetes.Clientset
 	podQueue   chan *v1.Pod
 	nodeLister listersv1.NodeLister
 	counter    int
 }
 
-// NewHybridScheduler returns a HybridScheduler
-func NewHybridScheduler(podQueue chan *v1.Pod, quit chan struct{}) HybridScheduler {
+// NewHybridRoundRobinSJFScheduler returns a HybridRoundRobinSJFScheduler
+func NewHybridRoundRobinSJFScheduler(podQueue chan *v1.Pod, quit chan struct{}) HybridRoundRobinSJFScheduler {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -37,7 +37,7 @@ func NewHybridScheduler(podQueue chan *v1.Pod, quit chan struct{}) HybridSchedul
 		log.Fatal(err)
 	}
 
-	return HybridScheduler{
+	return HybridRoundRobinSJFScheduler{
 		clientset:  clientset,
 		podQueue:   podQueue,
 		counter:    0,
@@ -47,16 +47,17 @@ func NewHybridScheduler(podQueue chan *v1.Pod, quit chan struct{}) HybridSchedul
 }
 
 // Run starts schedulling
-func (s *HybridScheduler) Run(quit chan struct{}) {
+func (s *HybridRoundRobinSJFScheduler) Run(quit chan struct{}) {
 	wait.Until(s.ScheduleOne, 0, quit)
 }
 
 // ScheduleOne tries to binds found pod from algorithm to node .
-func (s *HybridScheduler) ScheduleOne() {
+func (s *HybridRoundRobinSJFScheduler) ScheduleOne() {
 	p := <-s.podQueue
 	fmt.Println("found a pod to schedule:", p.Namespace, "/", p.Name)
 	nodes, err := s.nodeLister.List(labels.Everything())
 	if err != nil {
+		log.Println("failed to list nodes", err.Error())
 		return
 	}
 	priorities := s.prioritize(nodes)
@@ -82,7 +83,7 @@ func (s *HybridScheduler) ScheduleOne() {
 
 }
 
-func (s *HybridScheduler) bindPod(p *v1.Pod, node string) error {
+func (s *HybridRoundRobinSJFScheduler) bindPod(p *v1.Pod, node string) error {
 	return s.clientset.CoreV1().Pods(p.Namespace).Bind(context.Background(), &v1.Binding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      p.Name,
@@ -96,12 +97,12 @@ func (s *HybridScheduler) bindPod(p *v1.Pod, node string) error {
 	}, metav1.CreateOptions{})
 }
 
-func (s *HybridScheduler) emitEvent(p *v1.Pod, message string) error {
+func (s *HybridRoundRobinSJFScheduler) emitEvent(p *v1.Pod, message string) error {
 	timestamp := time.Now().UTC()
 	_, err := s.clientset.CoreV1().Events(p.Namespace).Create(context.Background(), &v1.Event{
 		Count:          1,
 		Message:        message,
-		Reason:         "HybridScheduled",
+		Reason:         "HybridRRSJFScheduled",
 		LastTimestamp:  metav1.NewTime(timestamp),
 		FirstTimestamp: metav1.NewTime(timestamp),
 		Type:           "Normal",
@@ -119,12 +120,13 @@ func (s *HybridScheduler) emitEvent(p *v1.Pod, message string) error {
 		},
 	}, metav1.CreateOptions{})
 	if err != nil {
+		log.Println("failed to create event", err.Error())
 		return err
 	}
 	return nil
 }
 
-func (s *HybridScheduler) prioritize(nodes []*v1.Node) map[string]int {
+func (s *HybridRoundRobinSJFScheduler) prioritize(nodes []*v1.Node) map[string]int {
 	priorities := make(map[string]int)
 	count := 0
 	for _, node := range nodes {
@@ -135,7 +137,7 @@ func (s *HybridScheduler) prioritize(nodes []*v1.Node) map[string]int {
 	return priorities
 }
 
-func (s *HybridScheduler) findBestNode(priorities map[string]int, value int) string {
+func (s *HybridRoundRobinSJFScheduler) findBestNode(priorities map[string]int, value int) string {
 	var bestNode string
 	for node, p := range priorities {
 		if p == value {

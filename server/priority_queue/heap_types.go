@@ -10,7 +10,8 @@ type TaskItem struct {
 
 // Item is something we manage in a priority queue.
 type Item struct {
-	Name         string
-	TaskDuration time.Duration
-	Index        int
+	Name                string
+	InitialTaskDuration time.Duration
+	TaskDuration        time.Duration
+	Index               int
 }
