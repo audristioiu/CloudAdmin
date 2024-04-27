@@ -595,8 +595,9 @@ func (api *API) GetUserProfile(request *restful.Request, response *restful.Respo
 		userData.UserID = ""
 		response.WriteEntity(userData)
 	}
-	endTime := time.Since(startTime)
-	userLatencyMeric.Update(time.Duration(endTime.Microseconds()))
+	defer func() {
+		userLatencyMeric.UpdateSince(startTime)
+	}()
 	getUserMetric.Mark(1)
 	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
@@ -2073,10 +2074,13 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		response.WriteEntity(appsData)
 	}
 
-	endTime := time.Since(startTime)
-	getAppsLatencyMetric.Update(time.Duration(endTime.Microseconds()))
+	defer func() {
+		getAppsLatencyMetric.UpdateSince(startTime)
+	}()
+
 	getAppsMetric.Mark(1)
 	totalRequestsMetric.Inc(1)
+
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 }
@@ -2883,8 +2887,10 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	for _, dir := range deleteDirNames {
 		os.RemoveAll(dir)
 	}
-	endTime := time.Since(startTime)
-	scheduleAppsLatencyMetric.Update(time.Duration(endTime.Microseconds()))
+	defer func() {
+		scheduleAppsLatencyMetric.UpdateSince(startTime)
+	}()
+
 	scheduleAppsMetric.Mark(1)
 	totalRequestsMetric.Inc(1)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
