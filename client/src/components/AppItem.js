@@ -4,6 +4,7 @@ import '../assets/MyApps.scss';
 import EditApp from "./EditApp";
 import ScheduleApp from "./ScheduleApp";
 import GetApp from "./GetApp";
+import { useNavigate } from 'react-router-dom';
 
 function AppItem(app) {
   const [appName, setAppName] = useState(app.app.name);
@@ -18,6 +19,8 @@ function AppItem(app) {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isGetAppModalOpen, setIsGetAppModalOpen] = useState(false);
+
+  const history = useNavigate();
 
   useEffect(() => {
     setAppName(app.app.name);
