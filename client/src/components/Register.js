@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import './Login.scss';
+import '../assets/Login.scss';
+import '../assets/Error.scss';
 import PasswordStrengthBar from 'react-password-strength-bar';
 import {Agent} from 'https';
 import certs from '../Certs/certs';
@@ -66,7 +67,7 @@ function Register() {
         history('/login');
       } catch (error) {
 
-        setErrorMessage(error.response.data.message);
+        setErrorMessage('Register failed.');
         return
       };
 
@@ -131,7 +132,7 @@ function Register() {
           Register
         </a>
       </form>
-      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
   );
 }

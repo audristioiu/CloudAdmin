@@ -4,12 +4,10 @@ import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 import '../assets/Error.scss';
 
-function EditApp(props) {
-  const {app} = props.app;
+function GetApp(props) {
+  const { app } = props.app;
   const [appName, setAppName] = useState(app.name);
-  const [appDescription, setAppDescr] = useState("");
-  const [appFlagArguments, setAppFlags] = useState("");
-  const [appParamArguments, setAppParams] = useState("");
+  const [podName, setPodName] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
   let handleSubmit = async (event) => {
@@ -33,56 +31,34 @@ function EditApp(props) {
         }
       };
 
-      await axios.put(`https://localhost:9443/app`, {
-        "name": appName,
-        "description": appDescription,
-        "flag_arguments": appFlagArguments,
-        "param_arguments": appParamArguments
+      await axios.get(`https://localhost:9443/getresults`, {
+        "pod_name": podName,
       }, config,
         { httpsAgent: agent },);
 
     } catch (error) {
-      setErrorMessage('Failed to update APP. Please try again. /' + error.message);
+      setErrorMessage('Failed to schedule APP. Please try again. /' + error.message);
     }
   };
 
   return (
     <form onSubmit={handleSubmit}>
       <div className="modal-title">
-        Edit {appName}
+        Get {appName} info
       </div>
-      <div className="user-box">
-        <label>Description
-          <input
-            className='input-style app-description'
-            type='textarea'
-            value={appDescription}
-            onChange={(e) => setAppDescr(e.target.value)}
-          />
-        </label>
 
-      </div>
       <div className="user-box">
-        <label>Flag Arguments
+        <label>
+          Pod Name
           <input
             className='input-style app-description'
-            type='textarea'
-            value={appFlagArguments}
-            onChange={(e) => setAppFlags(e.target.value)}
+            type='text'
+            value={podName}
+            onChange={(e) => setPodName(e.target.value)}
           />
 
         </label>
 
-      </div>
-      <div className="user-box">
-        <label>Param Arguments
-          <input
-            className='input-style app-description'
-            type='textarea'
-            value={appParamArguments}
-            onChange={(e) => setAppParams(e.target.value)}
-          />
-        </label>
       </div>
 
 
@@ -99,4 +75,4 @@ function EditApp(props) {
 }
 
 
-export default EditApp;
+export default GetApp;

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import './Login.scss';
+import '../assets/Login.scss';
 
 function Main() {
   return (

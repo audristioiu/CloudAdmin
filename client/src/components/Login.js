@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import './Login.scss';
+import '../assets/Login.scss';
+import '../assets/Error.scss';
 import { Agent } from 'https';
 import certs from '../Certs/certs.js';
 
@@ -44,7 +45,7 @@ function Login({ setAuth }) {
       }
      
     } catch (error) {
-      setErrorMessage("Wrong username or password. /" + error.response.data.message);
+      setErrorMessage(error.response.data.message);
       return
     };
   };
@@ -81,7 +82,7 @@ function Login({ setAuth }) {
           Log in
         </a>
       </form>
-      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import AppItem from './AppItem';
-import './MyApps.scss';
+import '../assets/MyApps.scss';
+import '../assets/Error.scss';
 import { Agent } from 'https';
 import certs from '../Certs/certs.js';
+import ReactPaginate from 'react-paginate';
 
 function MyApps() {
   const [apps, setApps] = useState([]);
@@ -13,6 +15,11 @@ function MyApps() {
   const [sortQueryInput, setSortQueryInput] = useState('')
   const [timestampInput, setTimestampInput] = useState('');
   const [timestampOn, setTimeStampOn] = useState(false);
+  const [selectedFilterType, setSelectedFilterType] = useState('normal');
+  const [itemOffset, setItemOffset] = useState(0);
+  const [currentItems, setCurrentItems] = useState([]);
+  const [pageCount, setPageCount] = useState(0);
+
   const timeRanges = {
     "1 day": "1 day",
     "3 days": "3 day",
@@ -21,6 +28,20 @@ function MyApps() {
     "30 days": "30 day",
     "60 days": "60 day",
     "90 days": "90 day"
+  };
+
+  // pagination
+  const itemsPerPage = 1;
+
+  useEffect(() => {
+    const endOffset = itemOffset + itemsPerPage;
+    setCurrentItems(apps.slice(itemOffset, endOffset));
+    setPageCount(Math.ceil(apps.length / itemsPerPage));
+  }, [itemOffset, itemsPerPage, apps]);
+
+  const handlePageClick = (event) => {
+    const newOffset = (event.selected * itemsPerPage) % apps.length;
+    setItemOffset(newOffset);
   };
 
   const handleUpload = async (isComplex) => {
@@ -55,7 +76,7 @@ function MyApps() {
       try {
         await axios.post('https://localhost:9443/register/app', formData, config_app, { httpsAgent: agent });
       } catch (error) {
-        setErrorMessage(`Failed to upload app. ${error.response?.data?.message}`);
+        setErrorMessage(`Failed to upload app.`);
       }
     }
   };
@@ -103,10 +124,17 @@ function MyApps() {
 
   const buildSearchConfig = (config_app, typeInput, searchInput) => {
     if (searchInput.length !== 0) {
-      config_app.params = {
-        ...config_app.params,
-        [typeInput === 'custom_filter' ? 'filter' : 'appnames']: typeInput === 'name' ? searchInput : typeInput === 'custom_filter' ? searchInput : `${typeInput}=${searchInput}`,
-      };
+      if (selectedFilterType == 'normal') {
+        config_app.params = {
+          ...config_app.params,
+          'appnames': typeInput == 'name' ? searchInput : `${typeInput}=${searchInput}`,
+        };
+      } else {
+        config_app.params = {
+          ...config_app.params,
+          'filter': searchInput,
+        };
+      }
     }
 
     return config_app;
@@ -136,7 +164,8 @@ function MyApps() {
         setApps(responseApps.data.Response);
       }
     } catch (error) {
-      setErrorMessage(`Could not retrieve your apps. /${error.response?.data?.message}`);
+      console.log(error);
+      setErrorMessage(`Could not retrieve your apps.`);
       setApps([]);
     }
   };
@@ -146,13 +175,15 @@ function MyApps() {
   }, []);
 
   const renderApps = () => {
-    if (apps) {
-      return apps.map((app, i) => <AppItem key={i} app={app} />);
+    if (currentItems) {
+      return currentItems.map((app, i) =>
+        <AppItem key={i} app={app} />
+      );
     }
   };
 
-  return (
-    <div className='myapps_container'>
+  const renderNormalFilter = () => {
+    return (
       <form onSubmit={handleSearchApp}>
         <div className='search_bar'>
           <input
@@ -206,7 +237,50 @@ function MyApps() {
           </button>
         </div>
       </form>
-      <div className="table-container">
+    );
+  }
+
+  const renderComplexFilter = () => {
+    return (
+      <form>
+        <div className='search_bar'>
+          <input
+            type="search"
+            placeholder="Build your filter query"
+            onChange={(e) => setSearchInput(e.target.value)}
+            value={searchInput}
+          />
+          <button type="submit" className='button-3'>
+            Submit
+          </button>
+        </div>
+      </form>
+    );
+  }
+
+  const renderFilter = () => {
+    if (selectedFilterType == 'normal') {
+      return renderNormalFilter();
+    } else {
+      return renderComplexFilter();
+    }
+  }
+
+  return (
+    <div className='myapps_container'>
+      <div className="search_bar filter_type_select">
+        <label>
+          Filter Type:
+          <select name="filter_type" className="input-style filter-type" onChange={(e) => setSelectedFilterType(e.target.value)}>
+            <option value="normal">Normal</option>
+            <option value="complex">Complex</option>
+          </select>
+        </label>
+
+      </div>
+      {renderFilter()}
+
+      <div className="table-container" id='container'>
         <table className="table">
           <thead>
             <tr>
@@ -225,6 +299,20 @@ function MyApps() {
             {renderApps()}
           </tbody>
         </table>
+        <ReactPaginate
+          breakLabel="..."
+          nextLabel="next >"
+          onPageChange={(e) => handlePageClick(e)}
+          pageCount={pageCount}
+          previousLabel="< previous"
+          renderOnZeroPageCount={null}
+          activeClassName="item active-page"
+          breakClassName='item break-me'
+          containerClassName='pagination'
+          disabledClassName='disabled-page'
+          nextClassName='item next'
+          previousClassName='item previous'
+        />
       </div>
       <form>
         <input type="file" id="input" multiple={true} />
@@ -236,7 +324,7 @@ function MyApps() {
         </button>
       </form>
 
-      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
+      {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </div>
 
   );

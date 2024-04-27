@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import user_photo from '../user.png';
-import './Profile.scss';
+import '../assets/Profile.scss';
+import '../assets/Error.scss';
 import { Agent } from 'https';
 import certs from '../Certs/certs';
 import { useNavigate } from 'react-router-dom';
@@ -56,7 +57,7 @@ const ProfilePage = () => {
         "https://localhost:9443/otp/disable",
       {},config, { httpsAgent : agent },);
     } catch (error) {
-      setErrorMessage("Could not disable otp /" + error.response.data.message);
+      setErrorMessage("Could not disable otp");
     }
   }
   const generateQRCode = async () => {
@@ -80,7 +81,7 @@ const ProfilePage = () => {
         localStorage.setItem("userOTP", JSON.stringify(response.data))
       }
     } catch (error) {
-      setErrorMessage("Could not generate qr /" + error.response.data.message);
+      setErrorMessage("Could not generate qr");
     }
   }
 
@@ -151,7 +152,7 @@ const ProfilePage = () => {
           }
         }
       } catch (error) {
-        setErrorMessage("Could not retrieve user details. /" + error.response.data.message);
+        setErrorMessage("Could not retrieve user details");
       }
     };
 
@@ -191,7 +192,7 @@ const ProfilePage = () => {
       <a href="/editprofile">
         Edit Profile
       </a>
-      {errorMessage && <div style={{ backgroundColor: "red" }} className="error"> {errorMessage} </div>}<p>{errorMessage}</p>
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
   );
 };
