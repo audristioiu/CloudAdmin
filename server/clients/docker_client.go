@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -61,7 +62,8 @@ func NewDockerClient(ctx context.Context, logger *zap.Logger, dockerID, dockerUs
 func (dock *DockerClient) BuildImage(dirName string) error {
 
 	path, _ := os.Getwd()
-	tar, err := archive.TarWithOptions(path+`\`+dirName, &archive.TarOptions{})
+	srcPath := filepath.Join(path, filepath.Base(dirName))
+	tar, err := archive.TarWithOptions(srcPath, &archive.TarOptions{})
 	if err != nil {
 		dock.dockerLogger.Error("failed to create tar with options", zap.Error(err))
 		return err

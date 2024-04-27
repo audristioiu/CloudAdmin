@@ -33,7 +33,6 @@ func CreatePriorityQueueBasedOnTasksDuration(fileName string, logger *zap.Logger
 // RoundRobinShortestJobFirstAlgorithm uses a constant min(minimum burst time) and decreases every execution with this value.
 // Tasks with duration equal to 0 or below are added to a slice of string which will be the order of applications
 func RoundRobinShortestJobFirstAlgorithm(pq priority_queue.PriorityQueue, pairNames [][]string, logger *zap.Logger) [][]string {
-
 	newPairNames := make([][]string, 0)
 	firstElem := heap.Pop(&pq).(*priority_queue.Item)
 	for firstElem != nil {
@@ -51,7 +50,8 @@ func RoundRobinShortestJobFirstAlgorithm(pq priority_queue.PriorityQueue, pairNa
 			durationDiff := float64(item.TaskDuration.Seconds()) - float64(firstElem.TaskDuration.Seconds())
 			if durationDiff <= float64(0) {
 				for _, pair := range pairNames {
-					if pair[1] == strings.ReplaceAll(item.Name, ".", "-") {
+					searchName := strings.ReplaceAll(strings.ReplaceAll(item.Name, ".", "-"), "_", "-")
+					if pair[1] == searchName {
 						auxPair := pair
 						floatDuration := strconv.FormatFloat(item.InitialTaskDuration.Seconds(), 'f', 3, 64)
 						auxPair = append(auxPair, floatDuration)

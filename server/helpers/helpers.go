@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -580,23 +581,23 @@ func GenerateDockerFile(dirName,
 	path, _ := os.Getwd()
 	path = strings.ReplaceAll(path, "CloudAdmin", "")
 	path = strings.ReplaceAll(path, "server", "")
-	path = filepath.Join(path, filepath.Base(mkDirName)) + "\\"
+	path = filepath.Join(path, filepath.Base(mkDirName))
 	var taskExecutionTime []priority_queue.TaskItem
-	err := os.Mkdir(mkDirName, 0666)
+	err := os.Mkdir(mkDirName, 0777)
 	if err != nil {
 		logger.Error("failed to create directory", zap.Error(err))
 		return "", nil, err
 	}
 	if len(files) == 0 {
 
-		_, err = copy(path+appData.Name, filepath.Join(mkDirName, filepath.Base(appData.Name)))
+		_, err = copy(filepath.Join(path, filepath.Base(appData.Name)), filepath.Join(mkDirName, filepath.Base(appData.Name)))
 		if err != nil {
 			logger.Error("failed to copy", zap.Error(err))
 			return "", nil, err
 		}
 
 		for _, subApp := range appData.SubgroupFiles {
-			_, err = copy(path+subApp, filepath.Join(mkDirName, filepath.Base(subApp)))
+			_, err = copy(filepath.Join(path, filepath.Base(subApp)), filepath.Join(mkDirName, filepath.Base(subApp)))
 			if err != nil {
 				logger.Error("failed to copy", zap.Error(err))
 				return "", nil, err
@@ -649,27 +650,28 @@ func GenerateDockerFile(dirName,
 	}
 	dockFile, err := os.Create(filepath.Join(mkDirName, filepath.Base("Dockerfile")))
 	if err != nil {
-		logger.Error("could not create temp file", zap.Error(err))
+		logger.Error("could not create Dockerfile in directory", zap.Error(err))
 		return "", nil, err
 	}
 
 	appName := appData.Name
 	extension := strings.Split(appName, ".")[1]
 	if extension == "js" && hasPkg {
-		copy(path+"package.json", filepath.Join(mkDirName, filepath.Base("package.json")))
-		copy(path+"package-lock.json", filepath.Join(mkDirName, filepath.Base("package-lock.json")))
+		copy(filepath.Join(path, filepath.Base("package.json")), filepath.Join(mkDirName, filepath.Base("package.json")))
+		copy(filepath.Join(path, filepath.Base("package-lock.json")), filepath.Join(mkDirName, filepath.Base("package-lock.json")))
 		packageJs = []string{"package.json package.json", "package-lock.json package-lock.json"}
 		runJs = "npm install"
 	}
 	if extension == "py" && hasReqs {
-		copy(path+"requirements.txt", filepath.Join(mkDirName, filepath.Base("requirements.txt")))
+		copy(filepath.Join(path, filepath.Base("requirements.txt")), filepath.Join(mkDirName, filepath.Base("requirements.txt")))
 		runPy = "pip install -r requirements.txt"
 	}
 	if extension == "go" && hasGoMod {
-		copy(path+"go.mod", filepath.Join(mkDirName, filepath.Base("go.mod")))
+		copy(filepath.Join(path, filepath.Base("go.mod")), filepath.Join(mkDirName, filepath.Base("go.mod")))
 		copy(path+"go.sum", filepath.Join(mkDirName, filepath.Base("go.sum")))
 		runGo = "go mod download"
 	}
+	os := runtime.GOOS
 	switch mapCodeExtension[extension] {
 	case "nodejs":
 		{
@@ -856,8 +858,11 @@ func GenerateDockerFile(dirName,
 			if err != nil {
 				return "", nil, err
 			}
-			//todo remove when switching to linux
-			newCMD[0] = newCMD[0] + ".exe"
+
+			if os == "windows" {
+				newCMD[0] = newCMD[0] + ".exe"
+			}
+
 			if scheduleType == "rr_sjf_scheduler" {
 				taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
 					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
@@ -901,8 +906,9 @@ func GenerateDockerFile(dirName,
 			if err != nil {
 				return "", nil, err
 			}
-			//todo remove when switching to linux
-			newCMD[0] = newCMD[0] + ".exe"
+			if os == "windows" {
+				newCMD[0] = newCMD[0] + ".exe"
+			}
 			if scheduleType == "rr_sjf_scheduler" {
 				taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
 					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
@@ -924,6 +930,8 @@ func GenerateDockerFile(dirName,
 // GetExecutionTimeForTasks retrieves list of name-execution time items that will be used in RR SJF algorithm
 func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []string, logger *zap.Logger) ([]priority_queue.TaskItem, error) {
 	tasks := make([]priority_queue.TaskItem, 0)
+
+	os := runtime.GOOS
 
 	for i, namePath := range tasksPath {
 		var execCommand *exec.Cmd
@@ -995,11 +1003,18 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 		if len(runCommands) > 0 {
 			startCmd := time.Now()
 			var newExecCommand *exec.Cmd
-			//update when switching to linux
-			if len(runCommands) == 2 {
-				newExecCommand = exec.Command("cmd", "/K", runCommands[0], runCommands[1])
+			if os == "windows" {
+				if len(runCommands) == 2 {
+					newExecCommand = exec.Command("cmd", "/K", runCommands[0], runCommands[1])
+				} else {
+					newExecCommand = exec.Command("cmd", "/K", runCommands[0])
+				}
 			} else {
-				newExecCommand = exec.Command("cmd", "/K", runCommands[0])
+				if len(runCommands) == 2 {
+					newExecCommand = exec.Command(runCommands[0], runCommands[1])
+				} else {
+					newExecCommand = exec.Command(runCommands[0])
+				}
 			}
 
 			err := newExecCommand.Run()
@@ -1008,29 +1023,32 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 				return nil, err
 			}
 			elapsedCMD := time.Since(startCmd)
-			folderNames := strings.Split(namePath, `\`)
+			_, folderName := filepath.Split(namePath)
+			_, folderName = filepath.Split(folderName)
 			if math.Trunc(elapsedCMD.Seconds()) >= float64(1) {
 				tasks = append(tasks, priority_queue.TaskItem{
-					Name:     folderNames[len(folderNames)-1],
+					Name:     folderName,
 					Duration: priority_queue.Duration(elapsedCMD.Seconds() - float64(1)).String(),
 				})
 			} else {
 				tasks = append(tasks, priority_queue.TaskItem{
-					Name:     folderNames[len(folderNames)-1],
+					Name:     folderName,
 					Duration: priority_queue.Duration(elapsedCMD.Seconds()).String(),
 				})
 			}
 		} else {
 			elapsed := time.Since(start)
-			folderNames := strings.Split(namePath, `\`)
+			_, folderName := filepath.Split(namePath)
+			_, folderName = filepath.Split(folderName)
+
 			if math.Trunc(elapsed.Seconds()) >= float64(1) {
 				tasks = append(tasks, priority_queue.TaskItem{
-					Name:     folderNames[len(folderNames)-1],
+					Name:     folderName,
 					Duration: priority_queue.Duration(elapsed.Seconds() - float64(1)).String(),
 				})
 			} else {
 				tasks = append(tasks, priority_queue.TaskItem{
-					Name:     folderNames[len(folderNames)-1],
+					Name:     folderName,
 					Duration: priority_queue.Duration(elapsed.Seconds()).String(),
 				})
 			}

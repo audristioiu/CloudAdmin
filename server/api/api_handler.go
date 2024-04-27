@@ -2762,7 +2762,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 		tasksPQ, err := schedule_alghoritms.CreatePriorityQueueBasedOnTasksDuration(file.Name(), api.apiLogger)
 		if err != nil {
-			errorData.Message = "Internal error / failed to crete priority queue"
+			errorData.Message = "Internal error / failed to create priority queue"
 			errorData.StatusCode = http.StatusInternalServerError
 			response.WriteHeader(http.StatusInternalServerError)
 			response.WriteEntity(errorData)
