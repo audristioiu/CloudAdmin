@@ -259,7 +259,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 	if userData.Password == "" {
 		failedLoginMetrics.Mark(1)
-		// // go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" Couldn't read password query parameter")
 		errorData.Message = "Bad Request/ empty password"
 		errorData.StatusCode = http.StatusBadRequest
@@ -268,56 +268,56 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		return
 	}
 
-	// if len(userData.Password) < 16 {
-	// 	failedLoginMetrics.Mark(1)
-	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-	// 	api.apiLogger.Error(" password too short")
-	// 	errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
-	// if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
-	// 	failedLoginMetrics.Mark(1)
-	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-	// 	api.apiLogger.Error(" password does not contain digits")
-	// 	errorData.Message = "Bad Request/ Password does not contain digits"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
-	// if !unicode.IsUpper(rune(userData.Password[0])) {
-	// 	failedLoginMetrics.Mark(1)
-	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-	// 	api.apiLogger.Error(" password does not start with uppercase")
-	// 	errorData.Message = "Bad Request/ Password does not start with uppercase"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
-	// if !helpers.HasSymbol(userData.Password) {
-	// 	failedLoginMetrics.Mark(1)
-	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-	// 	api.apiLogger.Error(" password does not have special characters")
-	// 	errorData.Message = "Bad Request/ Password does not have special characters"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
-	// if strings.Contains(userData.Password, userData.UserName) {
-	// 	failedLoginMetrics.Mark(1)
-	// 	// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-	// 	api.apiLogger.Error(" password contains user")
-	// 	errorData.Message = "Bad Request/ Password contains user"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
+	if len(userData.Password) < 16 {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password too short")
+		errorData.Message = "Bad Request/ Password too short(must have at least 16 characters)"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !regexp.MustCompile(`\d`).MatchString(userData.Password) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password does not contain digits")
+		errorData.Message = "Bad Request/ Password does not contain digits"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !unicode.IsUpper(rune(userData.Password[0])) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password does not start with uppercase")
+		errorData.Message = "Bad Request/ Password does not start with uppercase"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if !helpers.HasSymbol(userData.Password) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password does not have special characters")
+		errorData.Message = "Bad Request/ Password does not have special characters"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if strings.Contains(userData.Password, userData.UserName) {
+		failedLoginMetrics.Mark(1)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		api.apiLogger.Error(" password contains user")
+		errorData.Message = "Bad Request/ Password contains user"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	reqUrl, _ := request.Request.URL.Parse(request.Request.URL.Host + userPath + "/" + userData.UserName)
 	marshalledRequest, err := json.Marshal(reqUrl)
@@ -333,7 +333,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 	dbUserData, err := api.psqlRepo.GetUserData(userData.UserName)
 	if err != nil {
 		failedLoginMetrics.Mark(1)
-		// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
 		errorData.Message = "User not found"
 		errorData.StatusCode = http.StatusNotFound
@@ -344,7 +344,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 
 	if !helpers.CheckPasswordHash(userData.Password, dbUserData.Password) {
 		failedLoginMetrics.Mark(1)
-		// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		//rate limit mechanism + update in cache
 		if !dbUserData.UserLocked {
 			// update postgres for timeout
@@ -422,7 +422,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		api.apiCache.SetWithTTL(string(marshalledRequest), newUserData, 1, time.Hour*24)
 
 		failedLoginMetrics.Mark(1)
-		// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" Wrong password given. Please try again.")
 		errorData.Message = "Wrong Password"
 		errorData.StatusCode = http.StatusBadRequest
@@ -1362,7 +1362,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						return
 					}
 					safeFileMetric.Mark(1)
-					// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 				}
 
 				descr, err1 := io.ReadAll(rc)
@@ -1640,7 +1640,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						return
 					}
 					safeFileMetric.Mark(1)
-					// go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+					go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 				}
 
 				appData := domain.ApplicationData{}
@@ -3085,23 +3085,23 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 		return
 	}
 
-	// if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
-	// 	api.apiLogger.Error("App not found", zap.Any("app", appName))
-	// 	errorData.Message = "App not found"
-	// 	errorData.StatusCode = http.StatusNotFound
-	// 	response.WriteHeader(http.StatusNotFound)
-	// 	response.WriteEntity(errorData)
-	// 	return
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("App not found", zap.Any("app", appName))
+		errorData.Message = "App not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
 
-	// }
-	// _, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
-	// if len(appInfo[0].AlertIDs) != 0 {
-	// 	errorData.Message = "Bad Request / App has alerts"
-	// 	errorData.StatusCode = http.StatusBadRequest
-	// 	response.WriteHeader(http.StatusBadRequest)
-	// 	response.WriteEntity(errorData)
-	// 	return
-	// }
+	}
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	if len(appInfo[0].AlertIDs) != 0 {
+		errorData.Message = "Bad Request / App has alerts"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	deployAppName := strings.ReplaceAll(strings.ReplaceAll(appName, ".", "-"), "_", "-") + "-deployment"
 

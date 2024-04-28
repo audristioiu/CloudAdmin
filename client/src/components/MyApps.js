@@ -17,30 +17,24 @@ function MyApps() {
   const [timestampOn, setTimeStampOn] = useState(false);
   const [selectedFilterType, setSelectedFilterType] = useState('normal');
   const [itemOffset, setItemOffset] = useState(0);
-  const [currentItems, setCurrentItems] = useState([]);
   const [pageCount, setPageCount] = useState(0);
 
   const timeRanges = {
-    "1 day": "1 day",
-    "3 days": "3 day",
-    "7 days": "7 day",
-    "14 days": "14 day",
-    "30 days": "30 day",
-    "60 days": "60 day",
-    "90 days": "90 day"
+    "1 day": "1day",
+    "3 days": "3day",
+    "7 days": "7day",
+    "14 days": "14day",
+    "30 days": "30day",
+    "60 days": "60day",
+    "90 days": "90day"
   };
 
   // pagination
-  const itemsPerPage = 1;
-
-  useEffect(() => {
-    const endOffset = itemOffset + itemsPerPage;
-    setCurrentItems(apps.slice(itemOffset, endOffset));
-    setPageCount(Math.ceil(apps.length / itemsPerPage));
-  }, [itemOffset, itemsPerPage, apps]);
-
+  const itemsPerPage = 5;
+  
   const handlePageClick = (event) => {
-    const newOffset = (event.selected * itemsPerPage) % apps.length;
+    const selectedPage = event.selected;
+    const newOffset = selectedPage * itemsPerPage;
     setItemOffset(newOffset);
   };
 
@@ -86,31 +80,8 @@ function MyApps() {
     fetchApps();
   };
 
-  //TODO filtre update ciudat (actualizare sau ceva) si sort nu se updateaza automat
-  const buildConfig = (userInfo, typeInput, timestampInput, sortQueryInput) => {
-    const config = {
-      headers: {
-        'Content-type': 'application/json',
-        'USER-AUTH': userInfo?.role,
-        'USER-UUID': userInfo?.user_id,
-      },
-      params: {},
-    };
-
-    setTimeStampOn(typeInput === 'created_timestamp' || typeInput === 'updated_timestamp');
-
-    if (typeInput === 'created_timestamp' || typeInput === 'updated_timestamp') {
-      config.params.filter = `${typeInput}>=${timeRanges[timestampInput]}`;
-    }
-
-    if (sortQueryInput.length !== 0) {
-      config.params.sort = sortQueryInput;
-    }
-
-    return config;
-  };
-
-  const buildAppConfig = (userInfo, query_my_apps, username) => ({
+  
+const buildAppConfig = (userInfo, query_my_apps, username) => ({
     headers: {
       'Content-type': 'application/json',
       'USER-AUTH': userInfo?.role,
@@ -122,23 +93,37 @@ function MyApps() {
     },
   });
 
-  const buildSearchConfig = (config_app, typeInput, searchInput) => {
-    if (searchInput.length !== 0) {
-      if (selectedFilterType == 'normal') {
-        config_app.params = {
-          ...config_app.params,
-          'appnames': typeInput == 'name' ? searchInput : `${typeInput}=${searchInput}`,
-        };
+  const buildSearchConfig = (config_app, typeInput, searchInput, sortQueryInput) => {
+    setTimeStampOn(typeInput === 'created_timestamp' || typeInput === 'updated_timestamp');
+
+    if (selectedFilterType == 'normal') {
+      if (typeInput === 'created_timestamp' || typeInput === 'updated_timestamp') {
+        config_app.params.filter = `${typeInput}>='${timeRanges[timestampInput]}'`;
       } else {
-        config_app.params = {
-          ...config_app.params,
-          'filter': searchInput,
-        };
-      }
+        if (searchInput.length !== 0) {
+        config_app.params.filter = `${typeInput}='${searchInput}'`
+        }
+    }
+    } else {
+
+      config_app.params = {
+        ...config_app.params,
+        'filter': searchInput,
+      };
+    }
+  
+    if (sortQueryInput.length !== 0) {
+      config_app.params.sort = sortQueryInput;
     }
 
     return config_app;
   };
+
+  const buildPaginationConfig = (config_app,limitInput, offsetInput) => {
+    config_app.params.limit = limitInput
+    config_app.params.offset = offsetInput
+    return config_app
+  }
 
   const fetchApps = async () => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -150,21 +135,27 @@ function MyApps() {
         cert: certs.certFile,
         key: certs.keyFile,
       });
-
-      const responseUser = await axios.get(`https://localhost:9443/user/${username}`, buildConfig(userInfo, typeInput, timestampInput, sortQueryInput), { httpsAgent: agent });
+      const userConfig = {
+        headers: {
+          'Content-type': 'application/json',
+          'USER-AUTH': userInfo?.role,
+          'USER-UUID': userInfo?.user_id,
+        }
+      };
+      const responseUser = await axios.get(`https://localhost:9443/user/${username}`,userConfig, { httpsAgent: agent });
 
       const my_apps = responseUser.data?.applications;
 
       if (my_apps !== undefined) {
         const query_my_apps = my_apps.join();
         let config_app = buildAppConfig(userInfo, query_my_apps, username);
-        config_app = buildSearchConfig(config_app, typeInput, searchInput);
-
+        config_app = buildSearchConfig(config_app, typeInput, searchInput, sortQueryInput);
+        config_app = buildPaginationConfig(config_app, itemsPerPage, itemOffset)
         const responseApps = await axios.get('https://localhost:9443/app', config_app, { httpsAgent: agent });
         setApps(responseApps.data.Response);
+        setPageCount(Math.ceil(responseApps.data.QueryInfo.total / itemsPerPage));
       }
     } catch (error) {
-      console.log(error);
       setErrorMessage(`Could not retrieve your apps.`);
       setApps([]);
     }
@@ -172,11 +163,11 @@ function MyApps() {
 
   useEffect(() => {
     fetchApps();
-  }, []);
+  }, [itemOffset, pageCount]);
 
   const renderApps = () => {
-    if (currentItems) {
-      return currentItems.map((app, i) =>
+    if (apps) {
+      return apps.map((app, i) =>
         <AppItem key={i} app={app} />
       );
     }
@@ -242,7 +233,7 @@ function MyApps() {
 
   const renderComplexFilter = () => {
     return (
-      <form>
+      <form onSubmit={handleSearchApp}>
         <div className='search_bar'>
           <input
             type="search"
@@ -250,6 +241,17 @@ function MyApps() {
             onChange={(e) => setSearchInput(e.target.value)}
             value={searchInput}
           />
+          <label>
+            Sorting Types:
+            <select value={sortQueryInput} onChange={(e) => setSortQueryInput(e.target.value)}>
+              <option value="name|asc">Sort names ascending</option>
+              <option value="name|desc">Sort names descending</option>
+              <option value="created_timestamp|asc">Sort by Created Timestamp ascending</option>
+              <option value="created_timestamp|desc">Sort by Created Timestamp descending</option>
+              <option value="updated_timestamp|asc">Sort by Last Updated ascending</option>
+              <option value="updated_timestamp|desc">Sort by Last Updated descending</option>
+            </select>
+          </label>
           <button type="submit" className='button-3'>
             Submit
           </button>

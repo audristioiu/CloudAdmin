@@ -88,7 +88,6 @@ const OneTimePassword = () => {
             }
             
           } catch (error) {
-            console.log(error)
             setErrorMessage("Could not verify otp");
           }
          

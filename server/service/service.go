@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -126,13 +127,13 @@ func (s *Service) StartWebService() {
 	log.Debug("Initialized Docker client")
 
 	// initialize tcp address for graphite
-	// graphiteHost := os.Getenv("GRAPHITE_HOST")
-	// graphiteAddr, err := net.ResolveTCPAddr("tcp", graphiteHost)
-	// if err != nil {
-	// 	log.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
-	// 	return
-	// }
-	// log.Debug("Initialized graphite for metrics")
+	graphiteHost := os.Getenv("GRAPHITE_HOST")
+	graphiteAddr, err := net.ResolveTCPAddr("tcp", graphiteHost)
+	if err != nil {
+		log.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
+		return
+	}
+	log.Debug("Initialized graphite for metrics")
 
 	requestCount := make(map[string]int)
 	maxRequestPerMinute := 1000
@@ -195,7 +196,7 @@ func (s *Service) StartWebService() {
 	// Optionally, you may need to enable CORS for the UI to work.
 	cors := restful.CrossOriginResourceSharing{
 		AllowedHeaders: []string{"Content-Type", "Accept", "USER-AUTH", "USER-UUID"},
-		AllowedDomains: []string{"http://localhost:3000"},
+		AllowedDomains: []string{"https://localhost:3000"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		CookiesAllowed: false,
 		Container:      restful.DefaultContainer}
