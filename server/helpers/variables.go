@@ -28,4 +28,14 @@ var (
 		"java": "java",
 		"go":   "golang",
 	}
+	// FormFieldsReplacement maps ids from form response to actual fields in postgres
+	FormFieldsReplacement = map[int]string{
+		117091242:  "bad_features",
+		268846956:  "project_like_rate",
+		716498160:  "friends_recommend_rate",
+		1241175840: "project_issues",
+		1244799013: "project_has_issues",
+		1668004662: "project_suggestions",
+		1921554159: "good_features",
+	}
 )

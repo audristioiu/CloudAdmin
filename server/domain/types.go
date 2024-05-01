@@ -96,16 +96,38 @@ type GetApplicationsData struct {
 	QueryInfo AppsMetaInfo
 }
 
+// FormData represents form info
+type FormData struct {
+	ID                   int    `json:"id"`
+	BadFeatures          string `json:"bad_features"`
+	GoodFeatures         string `json:"good_features"`
+	ProjectLikeRate      string `json:"project_like_rate"`
+	FriendsRecommendRate string `json:"friends_recommend_rate"`
+	ProjectIssues        string `json:"project_issues"`
+	ProjectHasIssues     string `json:"project_has_issues"`
+	ProjectSuggestions   string `json:"project_suggestions"`
+}
+
+// FormStatistics represents an aggregation info over form table
+type FormStatistics struct {
+	AverageProjectLikeRate      float64  `json:"average_project_like_rate"`
+	AverageFriendsRecommendRate float64  `json:"average_friends_recommend_rate"`
+	TotalBadFeatures            []string `json:"total_bad_features"`
+	TotalGoodFeatures           []string `json:"total_good_features"`
+	TotalProjectIssues          []string `json:"total_project_issues"`
+	TotalProjectSuggestions     []string `json:"total_project_suggestions"`
+}
+
 // QueryResponse represents info for register/update/delete/schedule resources
 type QueryResponse struct {
 	Message           string   `json:"message"`
-	ResourcesAffected []string `json:"resources_affected"`
+	ResourcesAffected []string `json:"resources_affected,omitempty"`
 }
 
 // GetLogsFromPod represents info about pod
 type GetLogsFromPod struct {
-	PrintMessage string `json:"print_message"`
-	AppName      string `json:"app_name"`
+	PrintMessage []string `json:"print_message"`
+	AppName      string   `json:"app_name"`
 }
 
 // PodContainerMetrics represents info regarding metrics of a pod container

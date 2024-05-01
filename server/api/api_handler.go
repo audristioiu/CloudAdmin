@@ -61,31 +61,11 @@ var (
 	mutex sync.Mutex
 )
 
-// AdminAuthenticate verifies role and user_id for admin
-func (api *API) AdminAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
-	errorData := domain.ErrorResponse{}
-	authHeader := request.HeaderParameter("USER-AUTH")
-	userIDHeader := request.HeaderParameter("USER-UUID")
-
-	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
-	if err != nil || !helpers.CheckUser(userData, authHeader) || userData.UserName != "admin" {
-		api.apiLogger.Error(" User id not authorized", zap.String("user_id", userIDHeader))
-		response.AddHeader("WWW-Authenticate", "Basic realm=Protected Area")
-		errorData.Message = "User " + userIDHeader + " is Not Authorized"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteHeader(http.StatusForbidden)
-		response.WriteEntity(errorData)
-		return
-	}
-	chain.ProcessFilter(request, response)
-}
-
 // BasicAuthenticate verifies role and user_id for auth
 func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Response, chain *restful.FilterChain) {
 	errorData := domain.ErrorResponse{}
 	authHeader := request.HeaderParameter("USER-AUTH")
 	userIDHeader := request.HeaderParameter("USER-UUID")
-
 	userData, err := api.psqlRepo.GetUserDataWithUUID(userIDHeader)
 	if err != nil || !helpers.CheckUser(userData, authHeader) {
 		api.apiLogger.Error(" User id not authorized", zap.String("user_id", userIDHeader))
@@ -774,11 +754,36 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		response.WriteEntity(errorData)
 		return
 	}
-
 	listUsersName := strings.Split(usersName, ",")
-
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_uuid", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if checkUserData.UserName != "admin" && (len(listUsersName) > 1 || listUsersName[0] != checkUserData.UserName) {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if checkUserData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
 	for _, username := range listUsersName {
-		//Get user data and update applications column + delete apps
+		if checkUserData.UserName != "admin" && checkUserData.UserName != username {
+			continue
+		}
+		//Get user data and delete apps
 		//calculate key and use cache to get the response
 		reqUrl, _ := request.Request.URL.Parse(request.Request.URL.String() + "/" + username)
 
@@ -3004,10 +3009,108 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 
 	podLogsResponse := domain.GetLogsFromPod{}
-	podLogsResponse.PrintMessage = strings.Join(podLogs, " ")
+	podLogsResponse.PrintMessage = podLogs
 	podLogsResponse.AppName = podName
-	response.WriteAsJson(podLogsResponse)
+	response.WriteEntity(podLogsResponse)
 
+}
+
+// SubmitForm submits form
+func (api *API) SubmitForm(request *restful.Request, response *restful.Response) {
+	formData := make(map[int]string, 0)
+	errorData := domain.ErrorResponse{}
+	err := request.ReadEntity(&formData)
+	if err != nil {
+		api.apiLogger.Error(" Couldn't read body with error : ", zap.Error(err))
+		errorData.Message = "Bad Request/ could not read body"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username path parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_uuid", userUUID))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	formActualFields := make(map[string]string, 0)
+	for formKey, formValue := range formData {
+		formActualFields[helpers.FormFieldsReplacement[formKey]] = formValue
+	}
+
+	postgresFormData := domain.FormData{
+		BadFeatures:          formActualFields["bad_features"],
+		GoodFeatures:         formActualFields["good_features"],
+		ProjectLikeRate:      formActualFields["project_like_rate"],
+		FriendsRecommendRate: formActualFields["friends_recommend_rate"],
+		ProjectHasIssues:     formActualFields["project_has_issues"],
+		ProjectIssues:        formActualFields["project_issues"],
+		ProjectSuggestions:   formActualFields["project_suggestions"],
+	}
+	err = api.psqlRepo.InsertFormData(&postgresFormData)
+	if err != nil {
+		errorData.Message = "Internal error/ insert form data in postgres"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	createFormResponse := domain.QueryResponse{}
+	createFormResponse.Message = "Form created succesfully"
+	response.WriteEntity(createFormResponse)
+
+}
+
+func (api *API) GetFormStats(request *restful.Request, response *restful.Response) {
+	errorData := domain.ErrorResponse{}
+	formStatsData, err := api.psqlRepo.GetFormStatistics()
+	if err != nil {
+		errorData.Message = "Internal error/ get form stats"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	response.WriteEntity(formStatsData)
 }
 
 // GetGrafanaDashboardData retrieves grafana data based on grafana query

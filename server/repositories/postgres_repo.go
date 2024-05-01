@@ -627,3 +627,38 @@ func (p *PostgreSqlRepo) DeleteAppData(appName, userName string) error {
 	p.psqlLogger.Info("Successfuly deleted user app", zap.String("deleted_app", appName))
 	return nil
 }
+
+func (p *PostgreSqlRepo) InsertFormData(formData *domain.FormData) error {
+	newFormData := domain.FormData{}
+	insertStatement := `INSERT INTO forms (bad_features,project_like_rate,friends_recommend_rate, project_issues,
+						project_has_issues,project_suggestions, good_features) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
+
+	row := p.conn.QueryRow(p.ctx, insertStatement, formData.BadFeatures, formData.ProjectLikeRate, formData.FriendsRecommendRate, formData.ProjectIssues,
+		formData.ProjectHasIssues, formData.ProjectSuggestions, formData.GoodFeatures)
+	err := row.Scan(&newFormData.ID)
+	if err != nil {
+		p.psqlLogger.Error(" could not insert data", zap.Error(err))
+		return err
+	}
+	p.psqlLogger.Info("Successfuly inserted form", zap.Any("form_id", newFormData.ID))
+	return nil
+}
+
+func (p *PostgreSqlRepo) GetFormStatistics() (*domain.FormStatistics, error) {
+	formStats := domain.FormStatistics{}
+	statisticsStatement := `SELECT ROUND(AVG(project_like_rate::DECIMAL),3) AS avg_project_like_rate, 
+							ROUND(AVG(friends_recommend_rate::DECIMAL),3) AS avg_friends_recommend_rate,
+							string_to_array(string_agg(bad_features,chr(10)), chr(10)) AS total_bad_features,
+							string_to_array(string_agg(good_features,chr(10)), chr(10)) AS total_good_features,
+							string_to_array(string_agg(project_suggestions,chr(10)), chr(10)) AS total_project_suggestions,
+							string_to_array(string_agg(project_issues,chr(10)), chr(10)) AS total_project_issues
+							FROM forms;`
+	row := p.conn.QueryRow(p.ctx, statisticsStatement)
+	err := row.Scan(&formStats.AverageProjectLikeRate, &formStats.AverageFriendsRecommendRate, &formStats.TotalBadFeatures,
+		&formStats.TotalGoodFeatures, &formStats.TotalProjectSuggestions, &formStats.TotalProjectIssues)
+	if err != nil {
+		p.psqlLogger.Error(" could not retrieve form stats data", zap.Error(err))
+		return nil, err
+	}
+	return &formStats, nil
+}

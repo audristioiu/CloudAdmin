@@ -52,7 +52,7 @@ function Home() {
           });
         }
       } catch (error) {
-        setErrorMessage(`Could not retrieve user details.`);
+        setErrorMessage(`Could not retrieve apps count details.`);
       }
     };
 

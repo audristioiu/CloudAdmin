@@ -8,14 +8,7 @@ import certs from '../Certs/certs';
 import { useNavigate } from 'react-router-dom';
 
 const styles = {
-  heading3: `text-xl font-semibold text-gray-900 p-4 border-b`,
-  heading4: `text-base text-ct-blue-600 font-medium border-b mb-2`,
-  modalOverlay: `overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 w-full md:inset-0 h-modal md:h-full`,
-  orderedList: `space-y-1 text-sm list-decimal`,
-  buttonGroup: `flex items-center py-6 space-x-2 rounded-b border-t border-gray-200 dark:border-gray-600`,
   buttonBlue: `text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800`,
-  buttonGrey: `text-gray-500 bg-white hover:bg-gray-100 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg border border-gray-200 text-sm font-medium px-5 py-2.5 hover:text-gray-900 focus:z-10 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500 dark:hover:text-white dark:hover:bg-gray-600 dark:focus:ring-gray-600`,
-  inputField: `bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-2/5 p-2.5`,
 };
 
 
@@ -37,7 +30,7 @@ const ProfilePage = () => {
     generateQRCode()
     history("/otp/setup")
   }
-  
+
 
   const disable2FA = async () => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -53,9 +46,9 @@ const ProfilePage = () => {
         cert: certs.certFile,
         key: certs.keyFile,
       })
-     await axios.post(
+      await axios.post(
         "https://localhost:9443/otp/disable",
-      {},config, { httpsAgent : agent },);
+        {}, config, { httpsAgent: agent },);
     } catch (error) {
       setErrorMessage("Could not disable otp");
     }
@@ -76,7 +69,7 @@ const ProfilePage = () => {
       })
       const response = await axios.post(
         "https://localhost:9443/otp/generate",
-      {},config, { httpsAgent : agent },);
+        {}, config, { httpsAgent: agent },);
       if (response.status === 200) {
         localStorage.setItem("userOTP", JSON.stringify(response.data))
       }
@@ -84,7 +77,36 @@ const ProfilePage = () => {
       setErrorMessage("Could not generate qr");
     }
   }
+  const deleteAccount = async () => {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+    try {
+      const config = {
+        headers: {
+          "Content-type": "application/json",
+          "USER-AUTH": userInfo?.role,
+          "USER-UUID": userInfo?.user_id,
+        },
+        params: {
+          "usernames": username
+        }
+      };
+      const agent = new Agent({
+        cert: certs.certFile,
+        key: certs.keyFile,
+      })
+      await axios.delete(
+        "https://localhost:9443/user",
+        config, { httpsAgent: agent },);
+    } catch (error) {
+      setErrorMessage("Could not delete account");
+    }
 
+    localStorage.removeItem('userPass');
+    localStorage.removeItem('userInfo');
+    localStorage.setItem("auth", false)
+
+    history('/main');
+  }
 
 
   useEffect(() => {
@@ -145,7 +167,7 @@ const ProfilePage = () => {
           setWantNotify(String(want_notify))
           setUserEmail(email);
           const otp_data = response.data?.otp_data
-          if (otp_data.otp_enabled === true){
+          if (otp_data.otp_enabled === true) {
             setTwoFAEnabled(true)
           } else {
             setTwoFAEnabled(false)
@@ -178,21 +200,27 @@ const ProfilePage = () => {
       </div>
       {!twoFAEnabled ? (
         <div>
-      <button onClick={setup2FA} className={styles.buttonBlue}>
-        Setup MFA 
-      </button>
-      </div>
+          <button onClick={setup2FA} className={styles.buttonBlue}>
+            Setup MFA
+          </button>
+        </div>
       ) : (
         <div>
-        <button onClick={disable2FA} className={styles.buttonBlue}>
-        Disable MFA
-        </button>
+          <button onClick={disable2FA} className={styles.buttonBlue}>
+            Disable MFA
+          </button>
         </div>
       )}
       <a href="/editprofile">
         Edit Profile
       </a>
-      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+      <a href="/form">
+        Submit Review
+      </a>
+      <button onClick={deleteAccount} className={"button-delete-user"}>
+        Delete Account
+      </button>
+      {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </div>
   );
 };

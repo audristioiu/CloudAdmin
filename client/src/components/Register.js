@@ -24,23 +24,6 @@ function Register() {
       return
 
     }
-    if (password.length > 0) {
-      if (password.length < 8) {
-        errMsg = 'Password is too short.';
-        setErrorMessage(errMsg);
-        return
-
-      }
-      if (password.charAt(0) !== password.charAt(0).toUpperCase()) {
-        errMsg = 'Password must start with an uppercase letter.';
-        setErrorMessage(errMsg);
-        return;
-      }
-    } else {
-      errMsg = "Password is empty.";
-      setErrorMessage(errMsg);
-      return;
-    }
 
 
     event.preventDefault();

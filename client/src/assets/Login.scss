@@ -271,6 +271,16 @@ ul {
   top: -200px;
 }
 
+.button-delete-user {
+  display: flex;
+  align-items: right;
+  justify-content: space-between;
+  float : right;
+  position: relative;
+  top: -110px;
+  background-color: #A00;
+}
+
 .textfield--header-actions {
   padding: 10px;
   border-radius: 5px;

@@ -28,6 +28,8 @@ const (
 	grafanaAlertPath        = "/grafana/alert"
 	grafanaUpdateAlertPath  = "/grafana/update_alert"
 	grafanaAlertTriggerPath = "/grafana/alert_trigger"
+	formSubmitPath          = "/form_submit"
+	formStatisticsPath      = "/form_stats"
 )
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service + clients
@@ -141,12 +143,11 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
-			Filter(api.AdminAuthenticate).
+			Filter(api.BasicAuthenticate).
 			To(api.DeleteUser).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
-			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
-			Returns(http.StatusForbidden, "User not allowed as admin", domain.ErrorResponse{}))
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 	ws.Route(
 		ws.
 			POST(otpPath+"/generate").
@@ -298,8 +299,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			To(api.DeleteApp).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
-			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
-			Returns(http.StatusForbidden, "User not allowed as admin", domain.ErrorResponse{}))
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 
 	tags = []string{"schedule"}
 	ws.Route(
@@ -338,6 +338,27 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Returns(http.StatusOK, "OK", domain.GetLogsFromPod{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			POST(formSubmitPath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Doc("Form submit").
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			To(api.SubmitForm).
+			Returns(http.StatusOK, "OK", []domain.QueryResponse{}).
+			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			GET(formStatisticsPath).
+			Doc("Form stats").
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			To(api.GetFormStats).
+			Returns(http.StatusOK, "OK", []domain.FormStatistics{}))
 	ws.Route(
 		ws.
 			GET(grafanaDataSourcePath).

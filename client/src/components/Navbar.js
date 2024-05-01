@@ -10,6 +10,7 @@ const Navbar = () => {
 
     localStorage.removeItem('userPass');
     localStorage.removeItem('userInfo');
+    localStorage.setItem("auth", false)
 
     history('/main');
   };

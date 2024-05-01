@@ -18,6 +18,7 @@ import OneTimePassword from "./components/OneTimePass/OneTimePassword";
 import OneTimePasswordValidate from "./components/OneTimePass/OneTimePasswordValidate";
 import GrafanaPanelCPU from './components/D3Grafana/GrafanaPanelCPU';
 import GrafanaPanelMem from './components/D3Grafana/GrafanaPanelMem';
+import Form from './components/Form/Form';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -32,7 +33,6 @@ function App() {
     localStorage.setItem("auth", JSON.stringify(isAuthenticated));
   }, [isAuthenticated]);
 
-  //fix pentru navbar
   return (
     <BrowserRouter>
       <Routes>
@@ -53,6 +53,7 @@ function App() {
           <ProfilePage />
         </>} />
         <Route path='/editprofile' element={<EditProfilePage />} />
+        <Route path="/form" element={<Form />} />
         <Route path='/main' element={<Main />} />
         <Route path='/myapps' element={<>
           <Navbar />
