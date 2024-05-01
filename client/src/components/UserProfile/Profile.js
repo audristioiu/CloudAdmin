@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import user_photo from '../user.png';
-import '../assets/Profile.scss';
-import '../assets/Error.scss';
+import user_photo from '../../user.png';
+import '../../assets/Profile.scss';
+import '../../assets/Error.scss';
 import { Agent } from 'https';
-import certs from '../Certs/certs';
+import certs from '../../Certs/certs';
 import { useNavigate } from 'react-router-dom';
 
 const styles = {

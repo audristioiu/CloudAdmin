@@ -1,13 +1,15 @@
 import { useState } from "react";
 import axios from 'axios';
 import { Agent } from 'https';
-import certs from '../Certs/certs.js';
-import '../assets/Error.scss';
+import certs from '../../Certs/certs.js';
+import '../../assets/Error.scss';
 
-function GetApp(props) {
+function ScheduleApp(props) {
   const { app } = props.app;
   const [appName, setAppName] = useState(app.name);
-  const [podName, setPodName] = useState('');
+  const [appScheduleType, setAppScheduleType] = useState(app.schedule_type);
+  const [appNrReplicas, setAppNrReplicas] = useState(0);
+  const [appServerPort, setAppServerPort] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
 
   let handleSubmit = async (event) => {
@@ -31,8 +33,11 @@ function GetApp(props) {
         }
       };
 
-      await axios.get(`https://localhost:9443/getresults`, {
-        "pod_name": podName,
+      await axios.get(`https://localhost:9443/schedule`, {
+        "appnames": appName,
+        "schedule_type": appScheduleType,
+        "nr_replicas": appNrReplicas,
+        "server_port": appServerPort
       }, config,
         { httpsAgent: agent },);
 
@@ -44,19 +49,41 @@ function GetApp(props) {
   return (
     <form onSubmit={handleSubmit}>
       <div className="modal-title">
-        Get {appName} info
+        Schedule {appName}
       </div>
-
       <div className="user-box">
         <label>
-          Pod Name
+          Schedule Type:
+          <select name="schedule_type" defaultValue={appScheduleType} className="input-style app-description">
+            <option value="normal">Normal</option>
+            <option value="random_scheduler">Random Scheduler</option>
+            <option value="rr_sjf_scheduler">RR SJF Scheduler</option>
+          </select>
+        </label>
+
+      </div>
+      <div className="user-box">
+        <label>
+          Number of replicas
           <input
             className='input-style app-description'
-            type='text'
-            value={podName}
-            onChange={(e) => setPodName(e.target.value)}
+            type='number'
+            value={appNrReplicas}
+            onChange={(e) => setAppNrReplicas(e.target.value)}
           />
 
+        </label>
+
+      </div>
+      <div className="user-box">
+        <label>
+          Server Port
+          <input
+            className='input-style app-description'
+            type='number'
+            value={appServerPort}
+            onChange={(e) => setAppServerPort(e.target.value)}
+          />
         </label>
 
       </div>
@@ -75,4 +102,4 @@ function GetApp(props) {
 }
 
 
-export default GetApp;
+export default ScheduleApp;

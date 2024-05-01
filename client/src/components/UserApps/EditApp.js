@@ -1,8 +1,8 @@
 import { useState } from "react";
 import axios from 'axios';
 import { Agent } from 'https';
-import certs from '../Certs/certs.js';
-import '../assets/Error.scss';
+import certs from '../../Certs/certs.js';
+import '../../assets/Error.scss';
 
 function EditApp(props) {
   const {app} = props.app;

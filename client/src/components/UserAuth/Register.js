@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import '../assets/Login.scss';
-import '../assets/Error.scss';
+import '../../assets/Login.scss';
+import '../../assets/Error.scss';
 import PasswordStrengthBar from 'react-password-strength-bar';
 import {Agent} from 'https';
-import certs from '../Certs/certs';
+import certs from '../../Certs/certs';
 
 function Register() {
   const [username, setUsername] = useState('');

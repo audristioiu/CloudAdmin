@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import AppItem from './AppItem';
-import '../assets/MyApps.scss';
-import '../assets/Error.scss';
+import AppItem from './AppItem.js';
+import '../../assets/MyApps.scss';
+import '../../assets/Error.scss';
 import { Agent } from 'https';
-import certs from '../Certs/certs.js';
+import certs from '../../Certs/certs.js';
 import ReactPaginate from 'react-paginate';
 
 function MyApps() {
   const [apps, setApps] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [typeInput, setTypeInput] = useState('');
@@ -31,11 +32,39 @@ function MyApps() {
 
   // pagination
   const itemsPerPage = 5;
-  
+
   const handlePageClick = (event) => {
     const selectedPage = event.selected;
     const newOffset = selectedPage * itemsPerPage;
     setItemOffset(newOffset);
+  };
+
+  const toggleAppSelection = (appId, isSelected) => {
+    if (appId === 'all') {
+      setSelectAll(isSelected);
+      setApps(prevApps =>
+        prevApps.map(app => ({
+          ...app,
+          isSelected: isSelected
+        }))
+      );
+    } else {
+      setApps(prevApps =>
+        prevApps.map(app =>
+          app.name === appId ? { ...app, isSelected : isSelected} : app
+        )
+      );
+    }
+  };
+
+  const toggleSelectAll = () => {
+    setSelectAll(!selectAll);
+    setApps(prevApps =>
+      prevApps.map(app => ({
+        ...app,
+        isSelected: !selectAll
+      }))
+    );
   };
 
   const handleUpload = async (isComplex) => {
@@ -80,8 +109,8 @@ function MyApps() {
     fetchApps();
   };
 
-  
-const buildAppConfig = (userInfo, query_my_apps, username) => ({
+
+  const buildAppConfig = (userInfo, query_my_apps, username) => ({
     headers: {
       'Content-type': 'application/json',
       'USER-AUTH': userInfo?.role,
@@ -101,9 +130,9 @@ const buildAppConfig = (userInfo, query_my_apps, username) => ({
         config_app.params.filter = `${typeInput}>='${timeRanges[timestampInput]}'`;
       } else {
         if (searchInput.length !== 0) {
-        config_app.params.filter = `${typeInput}='${searchInput}'`
+          config_app.params.filter = `${typeInput}='${searchInput}'`
         }
-    }
+      }
     } else {
 
       config_app.params = {
@@ -111,7 +140,7 @@ const buildAppConfig = (userInfo, query_my_apps, username) => ({
         'filter': searchInput,
       };
     }
-  
+
     if (sortQueryInput.length !== 0) {
       config_app.params.sort = sortQueryInput;
     }
@@ -119,7 +148,7 @@ const buildAppConfig = (userInfo, query_my_apps, username) => ({
     return config_app;
   };
 
-  const buildPaginationConfig = (config_app,limitInput, offsetInput) => {
+  const buildPaginationConfig = (config_app, limitInput, offsetInput) => {
     config_app.params.limit = limitInput
     config_app.params.offset = offsetInput
     return config_app
@@ -142,7 +171,7 @@ const buildAppConfig = (userInfo, query_my_apps, username) => ({
           'USER-UUID': userInfo?.user_id,
         }
       };
-      const responseUser = await axios.get(`https://localhost:9443/user/${username}`,userConfig, { httpsAgent: agent });
+      const responseUser = await axios.get(`https://localhost:9443/user/${username}`, userConfig, { httpsAgent: agent });
 
       const my_apps = responseUser.data?.applications;
 
@@ -167,9 +196,14 @@ const buildAppConfig = (userInfo, query_my_apps, username) => ({
 
   const renderApps = () => {
     if (apps) {
-      return apps.map((app, i) =>
-        <AppItem key={i} app={app} />
-      );
+      return apps.map((app, i) => (
+        <AppItem
+        key={i}
+        app={app}
+        onSelect={toggleAppSelection}
+        isSelected={app.isSelected || selectAll}
+      />
+      ));
     }
   };
 
@@ -268,8 +302,42 @@ const buildAppConfig = (userInfo, query_my_apps, username) => ({
     }
   }
 
+  const deleteSelectedApps = async () => {
+    const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+    const username = userInfo?.username;
+    const appnames = apps.filter(app => app.isSelected).map(app => app.name );
+
+    try {
+      const agent = new Agent({
+        rejectUnauthorized: false,
+        cert: certs.certFile,
+        key: certs.keyFile,
+      });
+      const appConfig = {
+        headers: {
+          'Content-type': 'application/json',
+          'USER-AUTH': userInfo?.role,
+          'USER-UUID': userInfo?.user_id,
+        },
+        params: {
+          username,
+          "appnames": appnames.join(',')
+        }
+      };
+      await axios.delete(`https://localhost:9443/app`, appConfig, { httpsAgent: agent });
+    } catch (error) {
+      setErrorMessage(`Could not delete your apps.`);
+    }
+  }
+
   return (
     <div className='myapps_container'>
+      <input
+        type="checkbox"
+        checked={selectAll}
+        onChange={toggleSelectAll}
+      />
+      Select All
       <div className="search_bar filter_type_select">
         <label>
           Filter Type:
@@ -286,6 +354,7 @@ const buildAppConfig = (userInfo, query_my_apps, username) => ({
         <table className="table">
           <thead>
             <tr>
+            <th>&nbsp;</th>
               <th>App Name</th>
               <th>Description</th>
               <th>Status</th>
@@ -325,7 +394,9 @@ const buildAppConfig = (userInfo, query_my_apps, username) => ({
           SubmitComplexArchive
         </button>
       </form>
-
+      <button type="button" className='button-3' onClick={deleteSelectedApps} disabled={apps.length === 0}>
+        Delete Apps
+      </button>
       {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </div>
 

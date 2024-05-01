@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import user_photo from '../user.png';
+import user_photo from '../../user.png';
 import { Agent } from 'https';
-import certs from '../Certs/certs.js';
-import '../assets/Error.scss';
+import certs from '../../Certs/certs.js';
+import '../../assets/Error.scss';
 
 const EditProfilePage = () => {
   const [jobRole, setJobRole] = useState('');

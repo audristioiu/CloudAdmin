@@ -5,15 +5,15 @@ import {
   Route,
   Navigate
 } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import Login from './components/Login';
-import Register from './components/Register';
+import Navbar from './components/Navbar/Navbar';
+import Login from './components/UserAuth/Login';
+import Register from './components/UserAuth/Register';
 import Home from './components/Home';
 import Main from './components/Main';
-import ProfilePage from './components/Profile';
-import EditProfilePage from './components/EditProfilePage';
-import MyApps from './components/MyApps';
-import EditApp from './components/EditApp';
+import ProfilePage from './components/UserProfile/Profile';
+import EditProfilePage from './components/UserProfile/EditProfilePage';
+import MyApps from './components/UserApps/MyApps';
+import EditApp from './components/UserApps/EditApp';
 import OneTimePassword from "./components/OneTimePass/OneTimePassword";
 import OneTimePasswordValidate from "./components/OneTimePass/OneTimePasswordValidate";
 import GrafanaPanelCPU from './components/D3Grafana/GrafanaPanelCPU';

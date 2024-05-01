@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
 import Modal from 'react-modal';
-import '../assets/MyApps.scss';
+import '../../assets/MyApps.scss';
 import EditApp from "./EditApp";
 import ScheduleApp from "./ScheduleApp";
 import GetApp from "./GetApp";
 import { useNavigate } from 'react-router-dom';
 
-function AppItem(app) {
-  const [appName, setAppName] = useState(app.app.name);
-  const [appDescription, setAppDescr] = useState(app.app.description);
-  const [appRunningState, setAppRunning] = useState(String(app.app.is_running));
-  const [appCreatedTimestamp, setAppCreatedTimestamp] = useState(new Date(app.app.created_timestamp).toDateString());
-  const [appUpdatedTimestamp, setAppUpdateTimestamp] = useState(new Date(app.app.updated_timestamp).toDateString());
-  const [appScheduleType, setAppScheduleType] = useState(app.app.schedule_type);
-  const [appPort, setAppPort] = useState(app.app.port);
-  const [appIPAddress, setAppIPAddress] = useState(app.app.ip_address);
+function AppItem({ app, onSelect, isSelected }) {
+  const [appName, setAppName] = useState(app.name);
+  const [appDescription, setAppDescr] = useState(app.description);
+  const [appRunningState, setAppRunning] = useState(String(app.is_running));
+  const [appCreatedTimestamp, setAppCreatedTimestamp] = useState(new Date(app.created_timestamp).toDateString());
+  const [appUpdatedTimestamp, setAppUpdateTimestamp] = useState(new Date(app.updated_timestamp).toDateString());
+  const [appScheduleType, setAppScheduleType] = useState(app.schedule_type);
+  const [appPort, setAppPort] = useState(app.port);
+  const [appIPAddress, setAppIPAddress] = useState(app.ip_address);
 
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -22,15 +22,19 @@ function AppItem(app) {
 
   const history = useNavigate();
 
+  const toggleSelection = () => {
+    onSelect(app.name, !app.isSelected);
+  };
+
   useEffect(() => {
-    setAppName(app.app.name);
-    setAppDescr(app.app.description);
-    setAppRunning(String(app.app.is_running));
-    setAppCreatedTimestamp(new Date(app.app.created_timestamp).toDateString());
-    setAppUpdateTimestamp(new Date(app.app.updated_timestamp).toDateString());
-    setAppScheduleType(app.app.schedule_type);
-    setAppPort(app.app.port);
-    setAppIPAddress(app.app.ip_address);
+    setAppName(app.name);
+    setAppDescr(app.description);
+    setAppRunning(String(app.is_running));
+    setAppCreatedTimestamp(new Date(app.created_timestamp).toDateString());
+    setAppUpdateTimestamp(new Date(app.updated_timestamp).toDateString());
+    setAppScheduleType(app.schedule_type);
+    setAppPort(app.port);
+    setAppIPAddress(app.ip_address);
   }, [app]);
 
   const getDashboardCPU = () => {
@@ -69,6 +73,13 @@ function AppItem(app) {
 
   return (
     <tr>
+     <td>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={toggleSelection}
+        />
+      </td>
       <td>{appName}</td>
       <td>{appDescription}</td>
       <td className={"status"}>
@@ -123,10 +134,6 @@ function AppItem(app) {
         >
           <GetApp app={app} />
         </Modal>
-
-        <button className='button-3'>
-          Delete App
-        </button>
         { (appRunningState == "true") &&
         (<div><button className='button-3' onClick={getDashboardCPU}>
           Get Dashboard CPU Usage
