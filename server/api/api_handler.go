@@ -143,7 +143,7 @@ func (api *API) UserRegister(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
-	if strings.Contains(userData.Password, userData.UserName) {
+	if strings.Contains(strings.ToLower(userData.Password), strings.ToLower(userData.UserName)) {
 		failedRegisterUserMetric.Mark(1)
 		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" password contains user")
@@ -288,7 +288,7 @@ func (api *API) UserLogin(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
-	if strings.Contains(userData.Password, userData.UserName) {
+	if strings.Contains(strings.ToLower(userData.Password), strings.ToLower(userData.UserName)) {
 		failedLoginMetrics.Mark(1)
 		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" password contains user")
@@ -3086,7 +3086,7 @@ func (api *API) SubmitForm(request *restful.Request, response *restful.Response)
 		ProjectIssues:        formActualFields["project_issues"],
 		ProjectSuggestions:   formActualFields["project_suggestions"],
 	}
-	err = api.psqlRepo.InsertFormData(&postgresFormData)
+	formID, err := api.psqlRepo.InsertFormData(&postgresFormData)
 	if err != nil {
 		errorData.Message = "Internal error/ insert form data in postgres"
 		errorData.StatusCode = http.StatusInternalServerError
@@ -3095,13 +3095,23 @@ func (api *API) SubmitForm(request *restful.Request, response *restful.Response)
 		return
 	}
 	createFormResponse := domain.QueryResponse{}
-	createFormResponse.Message = "Form created succesfully"
+	createFormResponse.Message = fmt.Sprintf("Form created succesfully with ID : %d", formID)
 	response.WriteEntity(createFormResponse)
 
 }
 
 func (api *API) GetFormStats(request *restful.Request, response *restful.Response) {
 	errorData := domain.ErrorResponse{}
+	completeFormStats := make([]*domain.FormStatistics, 0)
+	completeTimestampsList := make([]string, 0)
+	timestampsList, timestampsFound := api.apiCache.Get("form_timestamps")
+	if timestampsFound {
+		completeTimestampsList = append(completeTimestampsList, timestampsList.([]string)...)
+	}
+	for _, timestamp := range completeTimestampsList {
+		oldFormStats, _ := api.apiCache.Get(timestamp)
+		completeFormStats = append(completeFormStats, oldFormStats.(*domain.FormStatistics))
+	}
 	formStatsData, err := api.psqlRepo.GetFormStatistics()
 	if err != nil {
 		errorData.Message = "Internal error/ get form stats"
@@ -3110,7 +3120,12 @@ func (api *API) GetFormStats(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
-	response.WriteEntity(formStatsData)
+	formStatsData.Timestamp = time.Now().Format(time.RFC3339)
+	api.apiCache.SetWithTTL(formStatsData.Timestamp, formStatsData, 1, time.Hour*24)
+	completeTimestampsList = append(completeTimestampsList, formStatsData.Timestamp)
+	api.apiCache.SetWithTTL("form_timestamps", completeTimestampsList, 1, time.Hour*24)
+	completeFormStats = append(completeFormStats, formStatsData)
+	response.WriteEntity(completeFormStats)
 }
 
 // GetGrafanaDashboardData retrieves grafana data based on grafana query

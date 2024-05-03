@@ -116,6 +116,7 @@ type FormStatistics struct {
 	TotalGoodFeatures           []string `json:"total_good_features"`
 	TotalProjectIssues          []string `json:"total_project_issues"`
 	TotalProjectSuggestions     []string `json:"total_project_suggestions"`
+	Timestamp                   string   `json:"form_timestamp"`
 }
 
 // QueryResponse represents info for register/update/delete/schedule resources

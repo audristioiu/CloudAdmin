@@ -1,8 +1,11 @@
 import threading
 import requests
+import os
 from queue import Queue
 
 NUM_THREADS = 4
+sslCrt = os.getenv("SSL_CRT_FILE")
+sslKey = os.getenv("SSL_KEY_FILE")
 URL = "https://localhost:9443/app/aggregates"
 
 def make_request(url):

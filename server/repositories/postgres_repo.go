@@ -628,7 +628,7 @@ func (p *PostgreSqlRepo) DeleteAppData(appName, userName string) error {
 	return nil
 }
 
-func (p *PostgreSqlRepo) InsertFormData(formData *domain.FormData) error {
+func (p *PostgreSqlRepo) InsertFormData(formData *domain.FormData) (int, error) {
 	newFormData := domain.FormData{}
 	insertStatement := `INSERT INTO forms (bad_features,project_like_rate,friends_recommend_rate, project_issues,
 						project_has_issues,project_suggestions, good_features) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
@@ -638,10 +638,10 @@ func (p *PostgreSqlRepo) InsertFormData(formData *domain.FormData) error {
 	err := row.Scan(&newFormData.ID)
 	if err != nil {
 		p.psqlLogger.Error(" could not insert data", zap.Error(err))
-		return err
+		return 0, err
 	}
 	p.psqlLogger.Info("Successfuly inserted form", zap.Any("form_id", newFormData.ID))
-	return nil
+	return newFormData.ID, nil
 }
 
 func (p *PostgreSqlRepo) GetFormStatistics() (*domain.FormStatistics, error) {

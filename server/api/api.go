@@ -358,7 +358,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			To(api.GetFormStats).
-			Returns(http.StatusOK, "OK", []domain.FormStatistics{}))
+			Returns(http.StatusOK, "OK", []*domain.FormStatistics{}))
 	ws.Route(
 		ws.
 			GET(grafanaDataSourcePath).
