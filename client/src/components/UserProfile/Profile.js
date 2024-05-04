@@ -50,7 +50,7 @@ const ProfilePage = () => {
         "https://localhost:9443/otp/disable",
         {}, config, { httpsAgent: agent },);
     } catch (error) {
-      setErrorMessage("Could not disable otp");
+      setErrorMessage("Could not disable otp : " + error.response.data.message);
     }
   }
   const generateQRCode = async () => {
@@ -74,7 +74,7 @@ const ProfilePage = () => {
         localStorage.setItem("userOTP", JSON.stringify(response.data))
       }
     } catch (error) {
-      setErrorMessage("Could not generate qr");
+      setErrorMessage("Could not generate qr : " + error.response.data.message);
     }
   }
   const deleteAccount = async () => {
@@ -98,7 +98,7 @@ const ProfilePage = () => {
         "https://localhost:9443/user",
         config, { httpsAgent: agent },);
     } catch (error) {
-      setErrorMessage("Could not delete account");
+      setErrorMessage("Could not delete account : " + error.response.data.message);
     }
 
     localStorage.removeItem('userPass');
@@ -174,7 +174,7 @@ const ProfilePage = () => {
           }
         }
       } catch (error) {
-        setErrorMessage("Could not retrieve user details");
+        setErrorMessage("Could not retrieve user details : " + error.response.data.message );
       }
     };
 

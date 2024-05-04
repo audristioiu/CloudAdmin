@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// A PriorityQueue implements heap.Interface and holds Items.
+// PriorityQueue implements heap.Interface and holds Items.
 type PriorityQueue []*Item
 
 // Len returns length of priorityQueue

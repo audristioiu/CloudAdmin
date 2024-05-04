@@ -1,6 +1,5 @@
 import requests
 import matplotlib.pyplot as plt
-import numpy as np
 
 url = "https://localhost:9443/form_stats"
 

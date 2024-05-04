@@ -76,7 +76,7 @@ const OneTimePasswordValidate = () => {
                 history('/')
              }
           } catch (error) {
-            setErrorMessage("Could not verify otp");
+            setErrorMessage("Could not validate otp : " +error.response.data.message);
           }
          
       }

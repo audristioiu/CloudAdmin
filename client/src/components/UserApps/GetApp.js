@@ -37,11 +37,12 @@ function GetApp(props) {
         { httpsAgent: agent },);
 
     } catch (error) {
-      setErrorMessage('Failed to schedule APP. Please try again. /' + error.message);
+      setErrorMessage('Failed to schedule APP. Please try again. /' +error.response.data.message);
     }
   };
 
   return (
+    <div>
     <form onSubmit={handleSubmit}>
       <div className="modal-title">
         Get {appName} info
@@ -70,7 +71,8 @@ function GetApp(props) {
         Update
       </a>
     </form>
-    // {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+    {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+    </div>
   )
 }
 

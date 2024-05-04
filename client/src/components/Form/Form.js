@@ -2,6 +2,7 @@ import React from 'react'
 import styled from 'styled-components'
 import axios from 'axios';
 import { Agent } from 'https';
+import '../../assets/Error.scss';
 import certs from '../../Certs/certs';
 import { useNavigate } from 'react-router-dom';
 import { GoogleFormProvider, useGoogleForm } from 'react-google-forms-hooks'
@@ -73,11 +74,11 @@ const Questions = () => {
   }
 
   const Form = () => {
+    const [errorMessage, setErrorMessage] = useState('');
     const history = useNavigate()
     const methods = useGoogleForm({ form })
     const onSubmit = async (data) => {
-      // todo
-      //  await methods.submitToGoogleForms(data)
+      await methods.submitToGoogleForms(data)
       try {
         const agent = new Agent({
           cert: certs.certFile,
@@ -102,11 +103,13 @@ const Questions = () => {
             { httpsAgent: agent },
           );
       } catch (error) {
+        setErrorMessage('Error submitting form:' +error.response.data.message);
       }
       history("/profile")
     }
   
     return (
+      <div>
       <GoogleFormProvider {...methods}>
         <FormContainer onSubmit={methods.handleSubmit(onSubmit)}>
           {form.title && (
@@ -121,6 +124,8 @@ const Questions = () => {
           <button type='submit'>Submit form</button>
         </FormContainer>
       </GoogleFormProvider>
+       {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+       </div>
     )
   }
   

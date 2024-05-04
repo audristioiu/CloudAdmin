@@ -12,7 +12,7 @@ function ScheduleApp(props) {
   const [appServerPort, setAppServerPort] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
 
-  let handleSubmit = async (event) => {
+  let handleSubmit = async () => {
 
     try {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -42,11 +42,12 @@ function ScheduleApp(props) {
         { httpsAgent: agent },);
 
     } catch (error) {
-      setErrorMessage('Failed to schedule APP. Please try again. /' + error.message);
+      setErrorMessage('Failed to schedule APP. Please try again. /' +error.response.data.message);
     }
   };
 
   return (
+    <div>
     <form onSubmit={handleSubmit}>
       <div className="modal-title">
         Schedule {appName}
@@ -97,7 +98,8 @@ function ScheduleApp(props) {
         Update
       </a>
     </form>
-    // {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+    {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+    </div>
   )
 }
 

@@ -628,6 +628,7 @@ func (p *PostgreSqlRepo) DeleteAppData(appName, userName string) error {
 	return nil
 }
 
+// InsertFormData inserts form in db
 func (p *PostgreSqlRepo) InsertFormData(formData *domain.FormData) (int, error) {
 	newFormData := domain.FormData{}
 	insertStatement := `INSERT INTO forms (bad_features,project_like_rate,friends_recommend_rate, project_issues,
@@ -644,6 +645,7 @@ func (p *PostgreSqlRepo) InsertFormData(formData *domain.FormData) (int, error) 
 	return newFormData.ID, nil
 }
 
+// GetFormStatistics retrieves aggregates for all entries in form table
 func (p *PostgreSqlRepo) GetFormStatistics() (*domain.FormStatistics, error) {
 	formStats := domain.FormStatistics{}
 	statisticsStatement := `SELECT ROUND(AVG(project_like_rate::DECIMAL),3) AS avg_project_like_rate, 

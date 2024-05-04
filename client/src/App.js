@@ -1,10 +1,5 @@
 import { useEffect, useState, React } from 'react';
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate
-} from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar/Navbar';
 import Login from './components/UserAuth/Login';
 import Register from './components/UserAuth/Register';

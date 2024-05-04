@@ -99,7 +99,7 @@ function MyApps() {
       try {
         await axios.post('https://localhost:9443/register/app', formData, config_app, { httpsAgent: agent });
       } catch (error) {
-        setErrorMessage(`Failed to upload app.`);
+        setErrorMessage(`Failed to upload app. Error : ` +error.response.data.message);
       }
     }
   };
@@ -185,7 +185,7 @@ function MyApps() {
         setPageCount(Math.ceil(responseApps.data.QueryInfo.total / itemsPerPage));
       }
     } catch (error) {
-      setErrorMessage(`Could not retrieve your apps.`);
+      setErrorMessage(`Could not retrieve your apps. Error : ` +error.response.data.message);
       setApps([]);
     }
   };

@@ -1,5 +1,4 @@
-# Configurare de cluster cu trei noduri (dintre care doi workeri)
-kind: Cluster # precizăm ce dorim să creăm: cluster, pod, etc.
+kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
 - role: control-plane

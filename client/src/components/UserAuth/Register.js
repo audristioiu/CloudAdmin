@@ -50,7 +50,7 @@ function Register() {
         history('/login');
       } catch (error) {
 
-        setErrorMessage('Register failed.');
+        setErrorMessage('Register failed. Error : ' + error.response.data.message);
         return
       };
 

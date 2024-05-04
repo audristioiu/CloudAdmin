@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Agent } from 'https';
 import certs from '../Certs/certs';
 import '../assets/Login.scss';
+import '../assets/Error.scss';
 
 function Home() {
   const [userDetails, setUserDetails] = useState({
@@ -52,7 +53,7 @@ function Home() {
           });
         }
       } catch (error) {
-        setErrorMessage(`Could not retrieve apps count details.`);
+        setErrorMessage(`Could not retrieve apps count details. Error : ` + error.response.data.message);
       }
     };
 

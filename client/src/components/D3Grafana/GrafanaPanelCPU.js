@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import D3GrafanaChartCPU from './D3GrafanaChartCPU';
+import '../../assets/Error.scss';
 
 const GrafanaPanelCPU = () => {
   const [panelData, setPanelData] = useState([]);
   const app = JSON.parse(localStorage.getItem("appInfo"));
   const [appName, setAppName] = useState(app.app_name);
+  const [errorMessage, setErrorMessage] = useState('');
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -14,7 +16,7 @@ const GrafanaPanelCPU = () => {
           headers: {
             'Content-Type': 'application/json'
           },
-          // schimbat appname cu numele aplicatiei la care ai vrut datele
+          
           params: {
             'appname' : appName,
             'grafana_from' : '-12h',
@@ -26,7 +28,7 @@ const GrafanaPanelCPU = () => {
         const data = response.data
         setPanelData(data)
       } catch (error) {
-        console.error('Error fetching data:', error);
+        setErrorMessage('Error fetching grafana cpu data:' +error.response.data.message);
       }
     };
 
@@ -43,6 +45,7 @@ const GrafanaPanelCPU = () => {
   return (
     <div>
       <D3GrafanaChartCPU graphiteData={panelData} />
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
   );
 };

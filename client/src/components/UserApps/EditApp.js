@@ -12,7 +12,7 @@ function EditApp(props) {
   const [appParamArguments, setAppParams] = useState("");
   const [errorMessage, setErrorMessage] = useState('');
 
-  let handleSubmit = async (event) => {
+  let handleSubmit = async () => {
 
     try {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -42,11 +42,12 @@ function EditApp(props) {
         { httpsAgent: agent },);
 
     } catch (error) {
-      setErrorMessage('Failed to update APP. Please try again. /' + error.message);
+      setErrorMessage('Failed to update APP. Please try again. /' +error.response.data.message);
     }
   };
 
   return (
+    <div>
     <form onSubmit={handleSubmit}>
       <div className="modal-title">
         Edit {appName}
@@ -94,7 +95,8 @@ function EditApp(props) {
         Update
       </a>
     </form>
-    // {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+    {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+    </div>
   )
 }
 

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import D3GraphChartMem from './D3GrafanaChartMem';
+import '../../assets/Error.scss';
 
 const GrafanaPanelMem = () => {
   const [panelData, setPanelData] = useState([]);
   const app = JSON.parse(localStorage.getItem("appInfo"));
   const [appName, setAppName] = useState(app.app_name);
+  const [errorMessage, setErrorMessage] = useState('');
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -25,7 +27,7 @@ const GrafanaPanelMem = () => {
         const data = response.data
         setPanelData(data)
       } catch (error) {
-        console.error('Error fetching data:', error);
+        setErrorMessage('Error fetching grafana mem data:' +error.response.data.message);
       }
     };
 
@@ -42,6 +44,7 @@ const GrafanaPanelMem = () => {
   return (
     <div>
       <D3GraphChartMem graphiteData={panelData} />
+      {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
     </div>
   );
 };

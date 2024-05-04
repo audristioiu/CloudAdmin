@@ -54,27 +54,6 @@ const EditProfilePage = () => {
         };
 
         if (showPasswordFields) {
-          if (password.length > 0) {
-            if (password.length < 8) {
-              setErrorMessage('Password should be at least 8 characters long.');
-              return;
-            }
-
-            if (password.charAt(0) !== password.charAt(0).toUpperCase()) {
-              errMsg = 'Password must start with an uppercase letter.';
-              setErrorMessage(errMsg);
-              return;
-            }
-            if (password !== confirmPassword) {
-              setErrorMessage('Passwords do not match.');
-              return;
-            }
-          } else {
-            errMsg = "Password is empty.";
-            setErrorMessage(errMsg);
-            return;
-          }
-
           if (username) {
             try {
               const config = {
@@ -93,7 +72,7 @@ const EditProfilePage = () => {
                 { httpsAgent: agent },
               );
             } catch (error) {
-              setErrorMessage("Wrong old password / " + error.message);
+              setErrorMessage("Wrong old password / " +error.response.data.message);
               return
             };
 
@@ -115,7 +94,7 @@ const EditProfilePage = () => {
         }
       }
     } catch (error) {
-      setErrorMessage('Error updating profile. Please try again. /' + error.message);
+      setErrorMessage('Error updating profile. Please try again. /' +error.response.data.message);
     }
   };
 
