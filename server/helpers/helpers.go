@@ -201,7 +201,8 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) ([][]string, error) {
 			return nil, fmt.Errorf("invalid fql value for identifier token . Text is not allowed")
 
 		}
-		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText || t.Type == fql.TokenGroup || t.Type == fql.TokenNumber {
+		if t.Type == fql.TokenSign || t.Type == fql.TokenJoin || t.Type == fql.TokenIdentifier || t.Type == fql.TokenText ||
+			t.Type == fql.TokenGroup || t.Type == fql.TokenNumber {
 			if t.Type == fql.TokenGroup {
 				for _, literal := range strings.Split(t.Literal, " ") {
 					if literal == "&&" || literal == "||" {
@@ -259,7 +260,7 @@ func ParseFQLFilter(fqlString string, logger *zap.Logger) ([][]string, error) {
 				logger.Error("invalid fql value for port", zap.String("port_value", filter[2]))
 				return nil, fmt.Errorf("invalid fql value for port . Text is not allowed")
 			}
-			if strings.Contains(filter[0], "timestamp") && !regexp.MustCompile(`[0-9]{2}[day]`).MatchString(filter[2]) {
+			if strings.Contains(filter[0], "timestamp") && !regexp.MustCompile(`[0-9]{1,2}[day]`).MatchString(filter[2]) {
 				logger.Error("invalid fql value for created_timestamp", zap.String("timestamp_value", filter[2]))
 				return nil, fmt.Errorf("invalid fql value for timestamp . Format is not allowed")
 			}
@@ -570,7 +571,7 @@ func GenerateDockerFile(dirName,
 	files []string,
 	port int32,
 	appData *domain.ApplicationData,
-	logger *zap.Logger) (string, []priority_queue.TaskItem, error) {
+	logger *zap.Logger) (string, []domain.TaskItem, error) {
 	mkDirName := dirName + "-" + strings.Split(appData.Name, ".")[1]
 	var packageJs []string
 	var inOutFiles []string
@@ -582,12 +583,13 @@ func GenerateDockerFile(dirName,
 	path = strings.ReplaceAll(path, "CloudAdmin", "")
 	path = strings.ReplaceAll(path, "server", "")
 	path = filepath.Join(path, filepath.Base(mkDirName))
-	var taskExecutionTime []priority_queue.TaskItem
+	var taskExecutionTime []domain.TaskItem
 	err := os.Mkdir(mkDirName, 0777)
 	if err != nil {
 		logger.Error("failed to create directory", zap.Error(err))
 		return "", nil, err
 	}
+	//todo delete in the end
 	if len(files) == 0 {
 
 		_, err = copy(filepath.Join(path, filepath.Base(appData.Name)), filepath.Join(mkDirName, filepath.Base(appData.Name)))
@@ -668,7 +670,7 @@ func GenerateDockerFile(dirName,
 	}
 	if extension == "go" && hasGoMod {
 		copy(filepath.Join(path, filepath.Base("go.mod")), filepath.Join(mkDirName, filepath.Base("go.mod")))
-		copy(path+"go.sum", filepath.Join(mkDirName, filepath.Base("go.sum")))
+		copy(filepath.Join(path, filepath.Base("go.sum")), filepath.Join(mkDirName, filepath.Base("go.sum")))
 		runGo = "go mod download"
 	}
 	os := runtime.GOOS
@@ -928,8 +930,8 @@ func GenerateDockerFile(dirName,
 }
 
 // GetExecutionTimeForTasks retrieves list of name-execution time items that will be used in RR SJF algorithm
-func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []string, logger *zap.Logger) ([]priority_queue.TaskItem, error) {
-	tasks := make([]priority_queue.TaskItem, 0)
+func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []string, logger *zap.Logger) ([]domain.TaskItem, error) {
+	tasks := make([]domain.TaskItem, 0)
 
 	os := runtime.GOOS
 
@@ -1026,12 +1028,12 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 			_, folderName := filepath.Split(namePath)
 			_, folderName = filepath.Split(folderName)
 			if math.Trunc(elapsedCMD.Seconds()) >= float64(1) {
-				tasks = append(tasks, priority_queue.TaskItem{
+				tasks = append(tasks, domain.TaskItem{
 					Name:     folderName,
 					Duration: priority_queue.Duration(elapsedCMD.Seconds() - float64(1)).String(),
 				})
 			} else {
-				tasks = append(tasks, priority_queue.TaskItem{
+				tasks = append(tasks, domain.TaskItem{
 					Name:     folderName,
 					Duration: priority_queue.Duration(elapsedCMD.Seconds()).String(),
 				})
@@ -1042,12 +1044,12 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 			_, folderName = filepath.Split(folderName)
 
 			if math.Trunc(elapsed.Seconds()) >= float64(1) {
-				tasks = append(tasks, priority_queue.TaskItem{
+				tasks = append(tasks, domain.TaskItem{
 					Name:     folderName,
 					Duration: priority_queue.Duration(elapsed.Seconds() - float64(1)).String(),
 				})
 			} else {
-				tasks = append(tasks, priority_queue.TaskItem{
+				tasks = append(tasks, domain.TaskItem{
 					Name:     folderName,
 					Duration: priority_queue.Duration(elapsed.Seconds()).String(),
 				})
@@ -1134,14 +1136,14 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 }
 
 // CreatePQ returns a priority queue based on map of task names and task durations
-func CreatePQ(items []priority_queue.TaskItem) priority_queue.PriorityQueue {
+func CreatePQ(items []domain.TaskItem) priority_queue.PriorityQueue {
 	// Create a priority queue, put the items in it, and
 	// establish the priority queue (heap) invariants.
 	tasksPriorityQueue := make(priority_queue.PriorityQueue, len(items))
 	i := 0
 	for _, task := range items {
 		taskDuration, _ := time.ParseDuration(task.Duration)
-		tasksPriorityQueue[i] = &priority_queue.Item{
+		tasksPriorityQueue[i] = &domain.Item{
 			Name:                task.Name,
 			TaskDuration:        taskDuration,
 			InitialTaskDuration: taskDuration,

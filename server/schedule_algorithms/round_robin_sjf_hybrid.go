@@ -1,6 +1,7 @@
 package schedule_alghoritms
 
 import (
+	"cloudadmin/domain"
 	"cloudadmin/helpers"
 	"cloudadmin/priority_queue"
 	"container/heap"
@@ -14,7 +15,7 @@ import (
 
 // CreatePriorityQueueBasedOnTasksDuration reads tasks duration file and creates a priority queue used for Round Robin Shortest Job First Algorithm
 func CreatePriorityQueueBasedOnTasksDuration(fileName string, logger *zap.Logger) (priority_queue.PriorityQueue, error) {
-	var taskItems []priority_queue.TaskItem
+	var taskItems []domain.TaskItem
 	tasksDurationBytes, err := os.ReadFile(fileName)
 	if err != nil {
 		logger.Error("cannot open file ", zap.Error(err))
@@ -34,9 +35,9 @@ func CreatePriorityQueueBasedOnTasksDuration(fileName string, logger *zap.Logger
 // Tasks with duration equal to 0 or below are added to a slice of string which will be the order of applications
 func RoundRobinShortestJobFirstAlgorithm(pq priority_queue.PriorityQueue, pairNames [][]string, logger *zap.Logger) [][]string {
 	newPairNames := make([][]string, 0)
-	firstElem := heap.Pop(&pq).(*priority_queue.Item)
+	firstElem := heap.Pop(&pq).(*domain.Item)
 	for firstElem != nil {
-		newItem := &priority_queue.Item{
+		newItem := &domain.Item{
 			Name:                firstElem.Name,
 			InitialTaskDuration: firstElem.InitialTaskDuration,
 			TaskDuration:        firstElem.TaskDuration,
@@ -46,7 +47,7 @@ func RoundRobinShortestJobFirstAlgorithm(pq priority_queue.PriorityQueue, pairNa
 		count := 0
 		lenPQ := pq.Len()
 		for count != lenPQ && lenPQ != -1 {
-			item := heap.Pop(&pq).(*priority_queue.Item)
+			item := heap.Pop(&pq).(*domain.Item)
 			durationDiff := float64(item.TaskDuration.Seconds()) - float64(firstElem.TaskDuration.Seconds())
 			if durationDiff <= float64(0) {
 				for _, pair := range pairNames {
@@ -59,7 +60,7 @@ func RoundRobinShortestJobFirstAlgorithm(pq priority_queue.PriorityQueue, pairNa
 					}
 				}
 			} else {
-				newItem := &priority_queue.Item{
+				newItem := &domain.Item{
 					Name:                item.Name,
 					InitialTaskDuration: item.InitialTaskDuration,
 					TaskDuration:        priority_queue.Duration(float64(durationDiff)),
@@ -70,7 +71,7 @@ func RoundRobinShortestJobFirstAlgorithm(pq priority_queue.PriorityQueue, pairNa
 			count++
 		}
 		if pq.Len() > 0 {
-			firstElem = heap.Pop(&pq).(*priority_queue.Item)
+			firstElem = heap.Pop(&pq).(*domain.Item)
 		} else {
 			firstElem = nil
 		}

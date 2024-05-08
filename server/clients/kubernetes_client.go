@@ -500,7 +500,7 @@ func (k *KubernetesClient) UpdateDeployment(deployName, namespace, newImage, mem
 		}
 		_, updateErr := deploymentsClient.Update(k.ctx, result, metav1.UpdateOptions{})
 		if updateErr != nil {
-			k.kubeLogger.Error("failed to update hpa", zap.Error(updateErr))
+			k.kubeLogger.Error("failed to update deployment", zap.Error(updateErr))
 		}
 		return updateErr
 	})

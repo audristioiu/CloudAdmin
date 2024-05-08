@@ -277,11 +277,14 @@ type VTResponseLinks struct {
 	Self string `json:"self"`
 }
 
-// GrafanaDataSourceResponse represents graphite results for every metric
-type GrafanaDataSourceResponse struct {
+// GrafanaDataSourceInfo represents graphite results for every metric
+type GrafanaDataSourceInfo struct {
 	Target     string       `json:"target"`
 	Datapoints [][]*float64 `json:"datapoints"`
 }
+
+// GrafanaDataSourceResponse represents type for grafana data source response
+type GrafanaDataSourceResponse []GrafanaDataSourceInfo
 
 // RelativeTimeRange represents info about time range alert
 type RelativeTimeRange struct {
@@ -375,7 +378,35 @@ type GrafanaAlertInfo struct {
 	IsPaused     bool        `json:"isPaused"`
 }
 
-// AlertNotification represents struct for alert notification response
+// AlertNotification represents struct for alert notification info
 type AlertNotification struct {
 	NewState string `json:"newState"`
+}
+
+// AlertNotificationResponse represents type for alert notification response
+type AlertNotificationResponse []AlertNotification
+
+// ErrorLine represents line of error from docker
+type ErrorLine struct {
+	Error       string      `json:"error"`
+	ErrorDetail ErrorDetail `json:"errorDetail"`
+}
+
+// ErrorDetail represents error message
+type ErrorDetail struct {
+	Message string `json:"message"`
+}
+
+// TaskItem represents info for hybrid algorithm between Round Robin and Shortest Job First
+type TaskItem struct {
+	Name     string `json:"name"`
+	Duration string `json:"duration"`
+}
+
+// Item is something we manage in a priority queue.
+type Item struct {
+	Name                string
+	InitialTaskDuration time.Duration
+	TaskDuration        time.Duration
+	Index               int
 }

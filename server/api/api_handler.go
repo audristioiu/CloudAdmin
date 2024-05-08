@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
-	"cloudadmin/priority_queue"
 	schedule_alghoritms "cloudadmin/schedule_algorithms"
 	"encoding/json"
 	"fmt"
@@ -2664,7 +2663,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 	serverPort, _ := strconv.ParseInt(request.QueryParameter("server_port"), 0, 32)
 
-	taskItems := make([]priority_queue.TaskItem, 0)
+	taskItems := make([]domain.TaskItem, 0)
 	pairNames := make([][]string, 0)
 	deleteDirNames := make([]string, 0)
 

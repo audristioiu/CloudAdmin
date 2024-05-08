@@ -1,12 +1,13 @@
 package priority_queue
 
 import (
+	"cloudadmin/domain"
 	"container/heap"
 	"time"
 )
 
 // PriorityQueue implements heap.Interface and holds Items.
-type PriorityQueue []*Item
+type PriorityQueue []*domain.Item
 
 // Len returns length of priorityQueue
 func (pq PriorityQueue) Len() int { return len(pq) }
@@ -27,7 +28,7 @@ func (pq PriorityQueue) Swap(i, j int) {
 // Push adds item in queue
 func (pq *PriorityQueue) Push(x any) {
 	n := len(*pq)
-	item := x.(*Item)
+	item := x.(*domain.Item)
 	item.Index = n
 	*pq = append(*pq, item)
 }
@@ -49,7 +50,7 @@ func Duration(f float64) time.Duration {
 }
 
 // Update modifies the priority and value of an Item in the queue.
-func (pq *PriorityQueue) Update(item *Item, Name string, duration, initialDuration time.Duration) {
+func (pq *PriorityQueue) Update(item *domain.Item, Name string, duration, initialDuration time.Duration) {
 	item.Name = Name
 	item.TaskDuration = duration
 	item.InitialTaskDuration = initialDuration

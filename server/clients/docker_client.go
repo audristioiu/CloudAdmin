@@ -2,6 +2,7 @@ package clients
 
 import (
 	"bufio"
+	"cloudadmin/domain"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -19,17 +20,6 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"go.uber.org/zap"
 )
-
-// ErrorLine represents line of error from docker
-type ErrorLine struct {
-	Error       string      `json:"error"`
-	ErrorDetail ErrorDetail `json:"errorDetail"`
-}
-
-// ErrorDetail represents error message
-type ErrorDetail struct {
-	Message string `json:"message"`
-}
 
 // DockerClient represents info about Docker Client
 type DockerClient struct {
@@ -149,8 +139,11 @@ func print(rd io.Reader) error {
 		fmt.Println(scanner.Text())
 	}
 
-	errLine := &ErrorLine{}
-	json.Unmarshal([]byte(lastLine), errLine)
+	errLine := &domain.ErrorLine{}
+	err := json.Unmarshal([]byte(lastLine), errLine)
+	if err != nil {
+		return err
+	}
 	if errLine.Error != "" {
 		return errors.New(errLine.Error)
 	}
