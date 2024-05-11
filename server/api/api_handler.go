@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
+
 	schedule_alghoritms "cloudadmin/schedule_algorithms"
 	"encoding/json"
 	"fmt"
@@ -849,7 +850,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 			}
 		}
 
-		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
+		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "is_running=true", "", "", userApps, []string{})
 		if err != nil {
 			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 			errorData.Message = "Internal error / error in retrieving apps"
@@ -860,34 +861,53 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 		}
 
 		for _, app := range userAppsData {
-			if app.IsRunning {
-				execName := strings.Split(app.Name, ".")[0]
-				extensionName := strings.Split(app.Name, ".")[1]
-				deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName)
-				err = api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+			execName := strings.Split(app.Name, ".")[0]
+			extensionName := strings.Split(app.Name, ".")[1]
+			deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName)
+			err = api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+			if err != nil {
+				errorData.Message = "Internal error/ failed to delete deployment"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			if app.IpAddress != nil && *app.IpAddress != "" {
+				err := api.kubeClient.DeleteAutoScaler(deployName, app.Namespace)
 				if err != nil {
-					errorData.Message = "Internal error/ failed to delete deployment"
+					errorData.Message = "Internal error/ failed to delete autoscaler"
 					errorData.StatusCode = http.StatusInternalServerError
 					response.WriteHeader(http.StatusInternalServerError)
 					response.WriteEntity(errorData)
 					return
 				}
-				if app.IpAddress != nil && *app.IpAddress != "" {
-					err := api.kubeClient.DeleteAutoScaler(deployName, app.Namespace)
-					if err != nil {
-						errorData.Message = "Internal error/ failed to delete autoscaler"
-						errorData.StatusCode = http.StatusInternalServerError
-						response.WriteHeader(http.StatusInternalServerError)
-						response.WriteEntity(errorData)
-						return
-					}
-					err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
-					if err != nil {
-						errorData.Message = "Internal error/ failed to delete load balancer"
-						errorData.StatusCode = http.StatusInternalServerError
-						response.WriteHeader(http.StatusInternalServerError)
-						response.WriteEntity(errorData)
-						return
+				err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
+				if err != nil {
+					errorData.Message = "Internal error/ failed to delete load balancer"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				if len(app.SubgroupFiles) > 0 {
+					for _, subGroupApp := range app.SubgroupFiles {
+						err = api.psqlRepo.DeleteAppData(strings.TrimSpace(subGroupApp), username)
+						if err != nil {
+							if strings.Contains(err.Error(), "no row found") {
+								api.apiLogger.Error(" Subgroup App  not found", zap.String("sub_group_app_name", subGroupApp))
+								errorData.Message = "Subgropup App not found"
+								errorData.StatusCode = http.StatusNotFound
+								response.WriteHeader(http.StatusNotFound)
+								response.WriteEntity(errorData)
+								return
+							} else {
+								errorData.Message = "Internal Error / error Delete app"
+								errorData.StatusCode = http.StatusInternalServerError
+								response.WriteHeader(http.StatusInternalServerError)
+								response.WriteEntity(errorData)
+								return
+							}
+						}
 					}
 				}
 			}
@@ -1428,6 +1448,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 						mainAppData.ParamArguments = ""
 						mainAppData.IsMain = true
 						mainAppData.SubgroupFiles = []string{}
+						mainAppData.AlertIDs = []string{}
 						mainAppData.Description = appsDescription
 						mainAppData.Name = f.Name
 						mainAppData.Owner = username
@@ -1806,6 +1827,7 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 					appData.FlagArguments = ""
 					appData.ParamArguments = ""
 					appData.IsMain = true
+					appData.AlertIDs = []string{}
 					appData.SubgroupFiles = []string{}
 					appData.Owner = username
 					appData.Port = &port
@@ -2033,7 +2055,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			api.apiLogger.Debug("sorting by ", zap.Any("sort_query", sortParams))
 		}
 
-		total, resultsCount, appsData, err := api.psqlRepo.GetAppsData(username, filter, limit, offset, sortParams)
+		total, resultsCount, appsData, err := api.psqlRepo.GetAppsData(username, filter, limit, offset, appNamesList, sortParams)
 		if err != nil {
 			if strings.Contains(err.Error(), "fql") {
 				api.apiLogger.Error(" Invalid fql filter for get apps", zap.Error(err))
@@ -2053,20 +2075,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			errorData.StatusCode = http.StatusNotFound
 			appsInfo.Errors = append(appsInfo.Errors, errorData)
 		}
-		if len(appNamesList) > 0 {
-			for _, appData := range appsData {
-				if slices.Contains(appNamesList, appData.Name) && appData.IsMain {
-					appsInfo.Response = append(appsInfo.Response, appData)
-				}
-			}
-			resultsCount = len(appsInfo.Response)
-		} else {
-			for _, appData := range appsData {
-				if appData.IsMain {
-					appsInfo.Response = append(appsInfo.Response, appData)
-				}
-			}
-		}
+		appsInfo.Response = append(appsInfo.Response, appsData...)
 
 		appsName := helpers.GetAppsName(appsInfo.Response)
 		if !helpers.CheckAppsExist(userData.Applications, appsName) && userData.UserName != "admin" {
@@ -2078,7 +2087,7 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 		appsInfo.QueryInfo.Total = total
 		appsInfo.QueryInfo.ResourcesCount = resultsCount
 		response.WriteEntity(appsInfo)
-		if len(appsInfo.Response) > 0 {
+		if len(appsInfo.Response) > 0 && len(appsInfo.Errors) == 0 {
 			api.apiCache.SetWithTTL(string(marshalledRequest), appsInfo, 1, time.Hour*24)
 			cachedRequests[username] = append(cachedRequests[username], string(marshalledRequest))
 		}
@@ -2186,7 +2195,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 	if nrReplicas != "" || newImage != "" || maxReplicas != "" || cpuResources != "" {
 		var appInfo domain.ApplicationData
 
-		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
+		_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{appData.Name}, []string{})
 		if err != nil {
 			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 			errorData.Message = "Internal error / error in retrieving apps"
@@ -2195,12 +2204,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 			response.WriteEntity(errorData)
 			return
 		}
-		for _, app := range appsData {
-			if appData.Name == app.Name {
-				appInfo = *app
-				break
-			}
-		}
+		appInfo = *appsData[0]
 		if !appInfo.IsRunning && (nrReplicas != "" || newImage != "" || maxReplicas != "") {
 			failedUpdateAppMetric.Mark(1)
 			go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
@@ -2257,7 +2261,7 @@ func (api *API) UpdateApp(request *restful.Request, response *restful.Response) 
 		}
 	}
 	if len(appData.SubgroupFiles) > 0 || appData.ScheduleType != "" || appData.Namespace != "" || appData.Owner != "" || appData.IsMain ||
-		appData.IsRunning {
+		appData.IsRunning || appData.IpAddress != nil && appData.Port != nil && len(appData.AlertIDs) != 0 {
 		failedUpdateAppMetric.Mark(1)
 		go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 		api.apiLogger.Error(" Wrong fields to update")
@@ -2380,7 +2384,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 
 	appsData := make([]*domain.ApplicationData, 0)
-	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
+	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "is_running=true", "", "", appNamesList, []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / error in retrieving apps"
@@ -2389,11 +2393,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 		response.WriteEntity(errorData)
 		return
 	}
-	for _, app := range userAppsData {
-		if slices.Contains(appNamesList, app.Name) {
-			appsData = append(appsData, app)
-		}
-	}
+	appsData = append(appsData, userAppsData...)
 
 	for _, appName := range appNamesList {
 		if api.s3Client != nil {
@@ -2436,34 +2436,53 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 
 	for _, app := range appsData {
-		if app.IsRunning {
-			execName := strings.Split(app.Name, ".")[0]
-			extensionName := strings.Split(app.Name, ".")[1]
-			deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName)
-			err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+		execName := strings.Split(app.Name, ".")[0]
+		extensionName := strings.Split(app.Name, ".")[1]
+		deployName := strings.ToLower(strings.ReplaceAll(execName, "_", "-") + "-" + extensionName)
+		err := api.kubeClient.DeleteDeployment(deployName, app.Namespace)
+		if err != nil {
+			errorData.Message = "Internal error/ failed to delete deployment"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		if app.IpAddress != nil && *app.IpAddress != "" {
+			err := api.kubeClient.DeleteAutoScaler(deployName, app.Namespace)
 			if err != nil {
-				errorData.Message = "Internal error/ failed to delete deployment"
+				errorData.Message = "Internal error/ failed to delete autoscaler"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
 				return
 			}
-			if app.IpAddress != nil && *app.IpAddress != "" {
-				err := api.kubeClient.DeleteAutoScaler(deployName, app.Namespace)
-				if err != nil {
-					errorData.Message = "Internal error/ failed to delete autoscaler"
-					errorData.StatusCode = http.StatusInternalServerError
-					response.WriteHeader(http.StatusInternalServerError)
-					response.WriteEntity(errorData)
-					return
-				}
-				err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
-				if err != nil {
-					errorData.Message = "Internal error/ failed to delete load balancer"
-					errorData.StatusCode = http.StatusInternalServerError
-					response.WriteHeader(http.StatusInternalServerError)
-					response.WriteEntity(errorData)
-					return
+			err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
+			if err != nil {
+				errorData.Message = "Internal error/ failed to delete load balancer"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			if len(app.SubgroupFiles) > 0 {
+				for _, subGroupApp := range app.SubgroupFiles {
+					err = api.psqlRepo.DeleteAppData(strings.TrimSpace(subGroupApp), username)
+					if err != nil {
+						if strings.Contains(err.Error(), "no row found") {
+							api.apiLogger.Error(" Subgroup App  not found", zap.String("sub_groupapp_name", subGroupApp))
+							errorData.Message = "Subgropup App not found"
+							errorData.StatusCode = http.StatusNotFound
+							response.WriteHeader(http.StatusNotFound)
+							response.WriteEntity(errorData)
+							return
+						} else {
+							errorData.Message = "Internal Error / error Delete app"
+							errorData.StatusCode = http.StatusInternalServerError
+							response.WriteHeader(http.StatusInternalServerError)
+							response.WriteEntity(errorData)
+							return
+						}
+					}
 				}
 			}
 		}
@@ -2639,7 +2658,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	appsInfo.Response = make([]*domain.ApplicationData, 0)
 	appsInfo.Errors = make([]domain.ErrorResponse, 0)
 
-	_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
+	_, _, appsData, err := api.psqlRepo.GetAppsData(username, "", "", "", appNamesList, []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / error in retrieving apps"
@@ -2648,15 +2667,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
-	if len(appNamesList) > 0 {
-		for _, appData := range appsData {
-			if slices.Contains(appNamesList, appData.Name) {
-				appsInfo.Response = append(appsInfo.Response, appData)
-			}
-		}
-	} else {
-		appsInfo.Response = append(appsInfo.Response, appsData...)
-	}
+	appsInfo.Response = append(appsInfo.Response, appsData...)
 
 	nrReplicas, _ := strconv.ParseInt(request.QueryParameter("nr_replicas"), 0, 32)
 	if nrReplicas == int64(0) {
@@ -2669,74 +2680,90 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	pairNames := make([][]string, 0)
 	deleteDirNames := make([]string, 0)
 
+	errChan := make(chan error)
+
+	var wg sync.WaitGroup
+	var deleteDirNamesMutex sync.Mutex
+	var taskItemsMutex sync.Mutex
+	var pairNamesMutex sync.Mutex
+	wg.Add(len(appsInfo.Response))
 	// push images to docker registry and retrieve task items
 	for _, app := range appsInfo.Response {
-		dirName := strings.ReplaceAll(strings.Split(app.Name, ".")[0], "_", "-")
-		filesFromAppFolder := make([]string, 0)
-		if api.s3Client != nil {
-			dirNameFiles, err := api.s3Client.ListFileFolder(dirName)
-			if err != nil {
-				errorData.Message = "Internal error / error in listing files from s3"
-				errorData.StatusCode = http.StatusInternalServerError
-				response.WriteHeader(http.StatusInternalServerError)
-				response.WriteEntity(errorData)
-				return
-			}
-			err = api.s3Client.DownloadFiles(dirName, dirNameFiles)
-			if err != nil {
-				errorData.Message = "Internal error / error in downloading files from s3"
-				errorData.StatusCode = http.StatusInternalServerError
-				response.WriteHeader(http.StatusInternalServerError)
-				response.WriteEntity(errorData)
-				return
-			}
-			for _, fileName := range dirNameFiles {
-				name := strings.Split(fileName, dirName+"/")
-				filesFromAppFolder = append(filesFromAppFolder, name[1])
-			}
-		}
+		go func(app *domain.ApplicationData) {
+			defer wg.Done()
 
-		newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, filesFromAppFolder, int32(serverPort), app, api.apiLogger)
-		if err != nil {
-			api.apiLogger.Error("Got error when generating docker file", zap.Error(err))
-			errorData.Message = "Internal error / error in generating docker file"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
-		imageName := newDirName
-		var tagName string
+			dirName := strings.ReplaceAll(strings.Split(app.Name, ".")[0], "_", "-")
+			filesFromAppFolder := make([]string, 0)
 
-		//if app was not updated within the last 10 seconds or update_timestamp != created_timestamp,don't build image
-		if math.Trunc(time.Since(app.UpdatedTimestamp).Seconds()) <= float64(10) || app.UpdatedTimestamp.UnixNano() == app.CreatedTimestamp.UnixNano() {
-			err = api.dockerClient.BuildImage(imageName)
-			if err != nil {
-				errorData.Message = "Internal error / error in building image"
-				errorData.StatusCode = http.StatusInternalServerError
-				response.WriteHeader(http.StatusInternalServerError)
-				response.WriteEntity(errorData)
-				return
+			// Handle s3 operations concurrently
+			if api.s3Client != nil {
+				dirNameFiles, err := api.s3Client.ListFileFolder(dirName)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				err = api.s3Client.DownloadFiles(dirName, dirNameFiles)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				for _, fileName := range dirNameFiles {
+					name := strings.Split(fileName, dirName+"/")
+					filesFromAppFolder = append(filesFromAppFolder, name[1])
+				}
 			}
-			tagName, err = api.dockerClient.PushImage(imageName)
+
+			newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, filesFromAppFolder, int32(serverPort), app, api.apiLogger)
 			if err != nil {
-				errorData.Message = "Internal error / error in pushing image"
-				errorData.StatusCode = http.StatusInternalServerError
-				response.WriteHeader(http.StatusInternalServerError)
-				response.WriteEntity(errorData)
+				errChan <- err
 				return
 			}
 
-		} else {
-			dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
-			tagName = dockerRegID + "/" + strings.ToLower(imageName)
-		}
+			imageName := newDirName
+			var tagName string
 
-		deleteDirNames = append(deleteDirNames, newDirName)
-		taskItems = append(taskItems, item...)
-		pairNames = append(pairNames, []string{tagName, imageName})
+			// Build and push images concurrently
+			if math.Trunc(time.Since(app.UpdatedTimestamp).Seconds()) <= float64(10) || app.UpdatedTimestamp.UnixNano() == app.CreatedTimestamp.UnixNano() {
+				err = api.dockerClient.BuildImage(imageName)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				tagName, err = api.dockerClient.PushImage(imageName)
+				if err != nil {
+					errChan <- err
+					return
+				}
+			} else {
+				dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+				tagName = dockerRegID + "/" + strings.ToLower(imageName)
+			}
+
+			deleteDirNamesMutex.Lock()
+			deleteDirNames = append(deleteDirNames, newDirName)
+			deleteDirNamesMutex.Unlock()
+
+			taskItemsMutex.Lock()
+			taskItems = append(taskItems, item...)
+			taskItemsMutex.Unlock()
+
+			pairNamesMutex.Lock()
+			pairNames = append(pairNames, []string{tagName, imageName})
+			pairNamesMutex.Unlock()
+		}(app)
 	}
-
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+	for err := range errChan {
+		api.apiLogger.Error("Got error when generating docker image", zap.Error(err))
+		errorData.Message = "Internal error / error in generating docker image"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
 	fileData, _ := json.MarshalIndent(taskItems, "", " ")
 
 	// create namespace using username,schedule type to deploy the scheduler + file and data if needed
@@ -2980,7 +3007,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	}
 
 	appData := domain.ApplicationData{}
-	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{})
+	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{appName}, []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / error in retrieving apps"
@@ -2989,12 +3016,7 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 		response.WriteEntity(errorData)
 		return
 	}
-	for _, app := range userAppsData {
-		if app.Name == appName {
-			appData = *app
-			break
-		}
-	}
+	appData = *userAppsData[0]
 
 	podLogs, err := api.kubeClient.GetLogsForPodName(podName, appData.Namespace)
 	if err != nil {
@@ -3213,7 +3235,7 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 		return
 
 	}
-	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, "", "", "", []string{appName}, []string{})
 	if len(appInfo[0].AlertIDs) != 0 {
 		errorData.Message = "Bad Request / App has alerts"
 		errorData.StatusCode = http.StatusBadRequest
@@ -3508,7 +3530,7 @@ func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Respo
 
 	}
 
-	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, "", "", "", []string{appName}, []string{})
 	if len(appInfo[0].AlertIDs) == 0 {
 		errorData.Message = "Bad Request / App does not have an alert created"
 		errorData.StatusCode = http.StatusBadRequest
@@ -3747,7 +3769,7 @@ func (api *API) DeleteAppAlert(request *restful.Request, response *restful.Respo
 		return
 	}
 
-	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, "", "", "", []string{appName}, []string{})
 	if len(appInfo[0].AlertIDs) == 0 {
 		errorData.Message = "Bad Request / App does not have an alert created"
 		errorData.StatusCode = http.StatusBadRequest
@@ -3853,7 +3875,7 @@ func (api *API) GetAlertTriggerNotification(request *restful.Request, response *
 		return
 	}
 
-	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, `name="`+appName+`"`, "", "", []string{})
+	_, _, appInfo, _ := api.psqlRepo.GetAppsData(username, "", "", "", []string{appName}, []string{})
 	if len(appInfo[0].AlertIDs) == 0 {
 		api.apiLogger.Debug("no alerts found for app", zap.String("app_name", appName))
 		return

@@ -124,9 +124,7 @@ func CheckAppsExist(applications []string, appsData []string) bool {
 	if len(applications) == 0 || len(appsData) == 0 {
 		return false
 	}
-
 	for _, app := range appsData {
-
 		if !slices.Contains(applications, app) {
 			return false
 		}

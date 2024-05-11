@@ -335,7 +335,7 @@ func (p *PostgreSqlRepo) GetAppsCount(owner string, countApp bool) (int, error) 
 }
 
 // GetAppsData retrieves apps from PostgreSql table using fql filter
-func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset string, sortParams []string) (int, int, []*domain.ApplicationData, error) {
+func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset string, appsList, sortParams []string) (int, int, []*domain.ApplicationData, error) {
 	totals, _ := p.GetAppsCount(owner, false)
 	resultsCount := 0
 
@@ -451,7 +451,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 
 			}
 			if i != len(filters)-1 && len(filterParams) == 0 {
-				selectStatement += ") AND owner=@app_owner"
+				selectStatement += ") AND owner=@app_owner AND is_main=true AND name = ANY(@app_names)"
 				if len(sortParams) == 2 {
 					selectStatement += " ORDER BY " + sortParams[0] + " " + sortParams[1]
 				}
@@ -462,6 +462,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 					selectStatement += " LIMIT " + limit + " "
 				}
 				filterArguments["app_owner"] = owner
+				filterArguments["app_names"] = appsList
 				break
 			}
 
@@ -482,7 +483,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 						COALESCE(schedule_type, '') as schedule_type,
 						COALESCE(port, 0) as port, 
 						COALESCE(ip_address, '') as ip_address,
-						alert_ids from  apps where owner=$1 `
+						alert_ids from  apps where owner=$1 AND is_main=true AND name = ANY($2)`
 		if len(sortParams) == 2 {
 			selectStatement += "ORDER BY " + sortParams[0] + " " + sortParams[1]
 		}
@@ -493,7 +494,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 			selectStatement += " LIMIT " + limit + " "
 		}
 		p.psqlLogger.Info(selectStatement)
-		rows, err = p.conn.Query(p.ctx, selectStatement, owner)
+		rows, err = p.conn.Query(p.ctx, selectStatement, owner, appsList)
 		if err != nil {
 			p.psqlLogger.Error(" could not retrieve apps", zap.Error(err))
 			return totals, 0, nil, err
@@ -529,13 +530,12 @@ func (p *PostgreSqlRepo) UpdateAppData(appData *domain.ApplicationData) error {
 						namespace=COALESCE(NULLIF($6,E''), namespace),
 						schedule_type=COALESCE(NULLIF($7,E''), schedule_type),
 						port=COALESCE(NULLIF($8,0), port),
-						ip_address=COALESCE(NULLIF($9,E''), ip_address),
-						alert_ids=$10
-						WHERE name=$11`
+						ip_address=COALESCE(NULLIF($9,E''), ip_address)
+						WHERE name=$10`
 
 	row, err := p.conn.Exec(p.ctx, updateStatement, appData.Description, appData.IsRunning, appData.UpdatedTimestamp,
 		appData.FlagArguments, appData.ParamArguments, appData.Namespace, appData.ScheduleType, zeronull.Int8(int64(*appData.Port)),
-		zeronull.Text(*appData.IpAddress), appData.AlertIDs, appData.Name)
+		zeronull.Text(*appData.IpAddress), appData.Name)
 	if err != nil {
 		p.psqlLogger.Error(" could not update app ", zap.Error(err))
 		return err

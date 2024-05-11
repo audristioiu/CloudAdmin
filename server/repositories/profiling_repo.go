@@ -7,6 +7,11 @@ import (
 	"go.uber.org/zap"
 )
 
+/*
+Endpoint : /debug/pprof for profilling data over server
+go tool pprof -pdf .\profile_cpu.prof > profile_cpu.pdf
+*/
+
 // ProfilingService represents a WebService that can start/stop a CPU profile and write results to a file
 type ProfilingService struct {
 	Cpuprofile string   // the output filename to write profile results, e.g. myservice.prof

@@ -30,11 +30,6 @@ import (
 	"golang.org/x/net/http2"
 )
 
-/*
-Endpoint : /debug/pprof for profilling data over server
-go tool pprof -pdf .\profile_cpu.prof > profile_cpu.pdf (also use cpu profiler)
-*/
-
 // Service describes the structure used for starting the web service
 type Service struct {
 }
@@ -52,7 +47,8 @@ func (s *Service) StartWebService() {
 
 	ws := new(restful.WebService)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
+	defer cancel()
 
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -108,9 +104,6 @@ func (s *Service) StartWebService() {
 		return
 	}
 	zapLogger.Debug("Initialized Kubernetes client")
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
-	defer cancel()
 
 	dockerUsername := os.Getenv("DOCKER_USERNAME")
 	dockerPassword := os.Getenv("DOCKER_PASSWORD")
