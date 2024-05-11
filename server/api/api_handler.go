@@ -872,6 +872,24 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 					response.WriteEntity(errorData)
 					return
 				}
+				if app.IpAddress != nil && *app.IpAddress != "" {
+					err := api.kubeClient.DeleteAutoScaler(deployName, app.Namespace)
+					if err != nil {
+						errorData.Message = "Internal error/ failed to delete autoscaler"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+					err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
+					if err != nil {
+						errorData.Message = "Internal error/ failed to delete load balancer"
+						errorData.StatusCode = http.StatusInternalServerError
+						response.WriteHeader(http.StatusInternalServerError)
+						response.WriteEntity(errorData)
+						return
+					}
+				}
 			}
 		}
 		namespaces := api.kubeClient.ListNamespaces()
@@ -2027,9 +2045,6 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 				errorData.Message = "Internal error / error retrieving apps"
 				errorData.StatusCode = http.StatusInternalServerError
 				appsInfo.Errors = append(appsInfo.Errors, errorData)
-				response.WriteEntity(appsInfo)
-				return
-
 			}
 		}
 		if len(appsData) == 0 {
@@ -2037,8 +2052,6 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			errorData.Message = "No apps found"
 			errorData.StatusCode = http.StatusNotFound
 			appsInfo.Errors = append(appsInfo.Errors, errorData)
-			response.WriteEntity(appsInfo)
-			return
 		}
 		if len(appNamesList) > 0 {
 			for _, appData := range appsData {
@@ -2055,9 +2068,6 @@ func (api *API) GetAppsInfo(request *restful.Request, response *restful.Response
 			}
 		}
 
-		if len(appsInfo.Response) > 1 {
-			appsInfo = helpers.Unique(appsInfo)
-		}
 		appsName := helpers.GetAppsName(appsInfo.Response)
 		if !helpers.CheckAppsExist(userData.Applications, appsName) && userData.UserName != "admin" {
 			api.apiLogger.Error("User forbidden for apps", zap.Any("apps", appsName))
@@ -2423,14 +2433,6 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				return
 			}
 		}
-		err = api.psqlRepo.DeleteUserAppsData(strings.TrimSpace(appName), username)
-		if err != nil {
-			errorData.Message = "Internal Error / error in Delete app from user"
-			errorData.StatusCode = http.StatusInternalServerError
-			response.WriteHeader(http.StatusInternalServerError)
-			response.WriteEntity(errorData)
-			return
-		}
 	}
 
 	for _, app := range appsData {
@@ -2446,7 +2448,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				response.WriteEntity(errorData)
 				return
 			}
-			if app.IpAddress != nil {
+			if app.IpAddress != nil && *app.IpAddress != "" {
 				err := api.kubeClient.DeleteAutoScaler(deployName, app.Namespace)
 				if err != nil {
 					errorData.Message = "Internal error/ failed to delete autoscaler"

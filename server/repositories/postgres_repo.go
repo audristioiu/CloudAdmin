@@ -232,23 +232,6 @@ func (p *PostgreSqlRepo) UpdateUserAppsData(appName, userName string) error {
 	return nil
 }
 
-// DeleteUserAppsData deletes user app from PostgreSql table
-func (p *PostgreSqlRepo) DeleteUserAppsData(appName, userName string) error {
-	updateStatement := "UPDATE users SET applications=array_remove(applications, $1) WHERE username=$2"
-
-	row, err := p.conn.Exec(p.ctx, updateStatement, appName, userName)
-	if err != nil {
-		p.psqlLogger.Error(" could not update user without app", zap.String("user_name", userName), zap.String("app_name", appName), zap.Error(err))
-		return err
-	}
-	if row.RowsAffected() != 1 {
-		p.psqlLogger.Error(" no row found to update")
-		return errors.New("no row found to update")
-	}
-	p.psqlLogger.Info("Successfuly updated user apps(delete)", zap.String("deleted_app", appName))
-	return nil
-}
-
 // DeleteUserData deletes user from PostgreSql table
 func (p *PostgreSqlRepo) DeleteUserData(username string) error {
 	deleteStatement := "DELETE FROM users WHERE username=$1"
@@ -364,7 +347,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 	//Parse fql filter
 	filters, err := helpers.ParseFQLFilter(filterConditions, p.psqlLogger)
 	if err != nil {
-		return 0, 0, nil, err
+		return totals, 0, nil, err
 	}
 	if len(filters) > 0 && len(filters[0]) >= 3 {
 		selectStatement := `SELECT name,COALESCE(description, '') as description, is_running, created_timestamp, updated_timestamp, 
@@ -456,7 +439,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 				}
 			} else if len(filterParams) == 2 || len(filterParams) > 4 {
 				p.psqlLogger.Error(" Invalid filter", zap.Any("filter_params", filterParams))
-				return 0, 0, nil, fmt.Errorf("invalid fql filter")
+				return totals, 0, nil, fmt.Errorf("invalid fql filter")
 			}
 
 			if i != len(filters)-1 && len(filterParams) == 1 {
@@ -487,7 +470,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 		rows, err = p.conn.Query(p.ctx, selectStatement, filterArguments)
 		if err != nil {
 			p.psqlLogger.Error(" could not retrieve app", zap.Error(err))
-			return 0, 0, nil, err
+			return totals, 0, nil, err
 		}
 
 	} else {
@@ -513,7 +496,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 		rows, err = p.conn.Query(p.ctx, selectStatement, owner)
 		if err != nil {
 			p.psqlLogger.Error(" could not retrieve apps", zap.Error(err))
-			return 0, 0, nil, err
+			return totals, 0, nil, err
 		}
 	}
 
@@ -525,7 +508,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 			&applicationData.Port, &applicationData.IpAddress, &applicationData.AlertIDs)
 		if err != nil {
 			p.psqlLogger.Error(" could not scan app", zap.Error(err))
-			return 0, 0, nil, err
+			return totals, 0, nil, err
 		}
 		applicationsData = append(applicationsData, applicationData)
 	}

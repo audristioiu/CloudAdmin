@@ -144,25 +144,6 @@ func CheckSliceContains(elements []string, searchElem string) string {
 	return ""
 }
 
-// Unique removes dups from slice
-func Unique(s domain.GetApplicationsData) domain.GetApplicationsData {
-	inResult := make(map[string]bool)
-	var result domain.GetApplicationsData
-	for _, str := range s.Response {
-		if _, ok := inResult[str.Name]; !ok {
-			inResult[str.Name] = true
-			result.Response = append(result.Response, str)
-		}
-	}
-	for _, str := range s.Errors {
-		if _, ok := inResult[str.Message]; !ok {
-			inResult[str.Message] = true
-			result.Errors = append(result.Errors, str)
-		}
-	}
-	return result
-}
-
 /*
 example of combined filters
 description=NULL&&is_running="false"||kname="test"&&created_timestamp<"1day"
