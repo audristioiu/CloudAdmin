@@ -241,14 +241,8 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 				k.kubeLogger.Error("failed to update the  scheduler cluster role binding", zap.Error(err))
 				return "", err
 			}
-			//todo
-			schedulerCommands := []string{
-				// "--scheduler-name=" + scheduleTypeName+"-deployment",
-				// "--lock-object-name=" + scheduleTypeName+"-deployment",
-			}
-
 			_, err = k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName, "default", scheduleTypeName+"-deployment",
-				"", schedulerCommands, int32(0), int32(1))
+				"", int32(0), int32(1))
 			if err != nil {
 				k.kubeLogger.Error("failed to create deployment for scheduler", zap.Error(err), zap.String("schedule_type", scheduleType))
 				return "", err
@@ -361,7 +355,7 @@ func (k *KubernetesClient) DeleteLoadBalancer(serviceName, namespace string) err
 
 // CreateDeployment creates a deployment for image in the required namespace with a specific nr of replicas
 func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName,
-	schedulerName string, schedulerCommands []string, portNr, nrReplicas int32) (string, error) {
+	schedulerName string, portNr, nrReplicas int32) (string, error) {
 	var cpuLimit, memLimit, cpuReq, memReq string
 	if schedulerName != "" {
 		cpuLimit = "500m"
@@ -585,7 +579,7 @@ func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) ([]strin
 }
 
 // CreateAutoScaler creates a horizontal pod auto scaler for deploymentName
-func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) (*hpav2.HorizontalPodAutoscaler, error) {
+func (k *KubernetesClient) CreateAutoScaler(deploymentName, namespace string, minReplicas, maxReplicas int32) (*hpav2.HorizontalPodAutoscaler, error) {
 	memoryTargetUtilization := int32(70)
 	cpuTargetUtilization := int32(50)
 	autoscaler := &hpav2.HorizontalPodAutoscaler{
@@ -640,7 +634,7 @@ func (k *KubernetesClient) CreateAutoScaler(deploymentName string, namespace str
 }
 
 // UpdateAutoScaler updates auto scaler with min and max replicas
-func (k *KubernetesClient) UpdateAutoScaler(deploymentName string, namespace string, minReplicas, maxReplicas int32) error {
+func (k *KubernetesClient) UpdateAutoScaler(deploymentName, namespace string, minReplicas, maxReplicas int32) error {
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Retrieve the latest version of HPA before attempting update
 		// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver

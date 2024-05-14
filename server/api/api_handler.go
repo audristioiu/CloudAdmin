@@ -2823,7 +2823,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				return
 			}
 			publicIp, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
-				[]string{}, int32(serverPort), int32(nrReplicas))
+				int32(serverPort), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -2841,7 +2841,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 		} else if scheduleType != "normal" {
 			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
-				[]string{}, int32(0), int32(nrReplicas))
+				int32(0), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -2851,7 +2851,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 		} else {
 			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", "",
-				[]string{}, int32(0), int32(nrReplicas))
+				int32(0), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError

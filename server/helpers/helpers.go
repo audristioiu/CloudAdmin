@@ -120,7 +120,7 @@ func GetAppsName(applications []*domain.ApplicationData) []string {
 }
 
 // CheckAppsExists validates that the list of applications appears in user apps
-func CheckAppsExist(applications []string, appsData []string) bool {
+func CheckAppsExist(applications, appsData []string) bool {
 	if len(applications) == 0 || len(appsData) == 0 {
 		return false
 	}

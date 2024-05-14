@@ -83,6 +83,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			To(api.UserRegister).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusFound, "Already found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -129,6 +130,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Writes(domain.QueryResponse{}).
 			To(api.UpdateUserProfile).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
@@ -145,6 +147,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.DeleteUser).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -159,6 +162,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.GenerateOTPToken).
+			Writes(domain.GenerateOTPResponse{}).
 			Returns(http.StatusOK, "OK", domain.GenerateOTPResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -174,6 +178,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.VerifyOTPToken).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -189,6 +194,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.ValidateOTPToken).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -204,6 +210,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.DisableOTP).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -223,6 +230,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes("multipart/form-data").
 			Filter(api.BasicAuthenticate).
 			To(api.UploadApp).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusFound, "Already found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -281,6 +289,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.UpdateApp).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -297,6 +306,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.DeleteApp).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
@@ -318,6 +328,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.ScheduleApps).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User/Apps Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
@@ -335,6 +346,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.GetPodResults).
+			Writes(domain.GetLogsFromPod{}).
 			Returns(http.StatusOK, "OK", domain.GetLogsFromPod{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
@@ -349,7 +361,8 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.SubmitForm).
-			Returns(http.StatusOK, "OK", []domain.QueryResponse{}).
+			Writes(domain.QueryResponse{}).
+			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
 	ws.Route(
 		ws.
@@ -358,6 +371,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			To(api.GetFormStats).
+			Writes([]*domain.FormStatistics{}).
 			Returns(http.StatusOK, "OK", []*domain.FormStatistics{}))
 	ws.Route(
 		ws.
@@ -370,6 +384,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			To(api.GetGrafanaDashboardData).
+			Writes([]*domain.GrafanaDataSourceResponse{}).
 			Returns(http.StatusOK, "OK", []domain.GrafanaDataSourceResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}))
 	ws.Route(
@@ -384,6 +399,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.CreateAppAlert).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User/App Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusFound, "Alert already exists", domain.ErrorResponse{}).
@@ -404,6 +420,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.UpdateAppAlert).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User/App Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
@@ -421,6 +438,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.DeleteAppAlert).
+			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
 			Returns(http.StatusNotFound, "User/App/Alert Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
@@ -438,6 +456,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			To(api.GetAlertTriggerNotification).
+			Writes(domain.AlertNotification{}).
 			Returns(http.StatusOK, "OK", domain.AlertNotification{}).
 			Returns(http.StatusNotFound, "User/App/Alert Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
