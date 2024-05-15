@@ -47,8 +47,7 @@ func (s *Service) StartWebService() {
 
 	ws := new(restful.WebService)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
-	defer cancel()
+	ctx := context.Background()
 
 	err := godotenv.Load(".env")
 	if err != nil {
@@ -188,7 +187,7 @@ func (s *Service) StartWebService() {
 
 	// Optionally, you may need to enable CORS for the UI to work.
 	cors := restful.CrossOriginResourceSharing{
-		AllowedHeaders: []string{"Content-Type", "Accept", "USER-AUTH", "USER-UUID"},
+		AllowedHeaders: []string{"Content-Type", "Accept", "Accept-Encoding", "USER-AUTH", "USER-UUID"},
 		AllowedDomains: []string{"https://localhost:3000"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		CookiesAllowed: false,

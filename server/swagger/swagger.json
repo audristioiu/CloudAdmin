@@ -1,1274 +1,1362 @@
 {
   "openapi": "3.0.1",
   "info": {
-    "title": "Cloud Admin API",
-    "description": "Cloud API which servers for schedulling apps",
-    "contact": {
-      "name": "Alexandru-Mihai Cioplean, Alexandru Udristioiu",
-      "email": "alexandru.cioplean@gmail.com, udristioiualexandru@gmail.com"
-    },
-    "license": {
-      "name": "Apache 2.0",
-      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
-    },
-    "version": "1.9.5"
+      "title": "Cloud Admin API",
+      "description": "Cloud API which servers for schedulling apps",
+      "contact": {
+          "name": "Alexandru-Mihai Cioplean, Alexandru Udristioiu",
+          "email": "alexandru.cioplean@gmail.com, udristioiualexandru@gmail.com"
+      },
+      "license": {
+          "name": "Apache 2.0",
+          "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+      },
+      "version": "1.9.5"
   },
   "tags": [
-    {
-      "name": "users",
-      "description": "Managing users"
-    },
-    {
-      "name": "apps",
-      "description": "Managing apps"
-    },
-    {
-      "name": "schedule",
-      "description": "Schedulling apps"
-    }
+      {
+          "name": "users",
+          "description": "Managing users"
+      },
+      {
+          "name": "apps",
+          "description": "Managing apps"
+      },
+      {
+          "name": "schedule",
+          "description": "Schedulling apps"
+      }
   ],
   "paths": {
-    "/app": {
-      "get": {
-        "tags": [
-          "apps"
-        ],
-        "summary": "Retrieve apps information by name",
-        "operationId": "GetAppsInfo",
-        "parameters": [
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "appnames",
-            "in": "query",
-            "description": "name of the apps",
-            "allowEmptyValue": true,
-            "style": "form",
-            "explode": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "owner of the apps",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filter",
-            "in": "query",
-            "description": "filter apps using fql filter(AND-&&,OR-||) or using simple field filtering",
-            "allowEmptyValue": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "description": "sort applications by name,created_timestamp or updated_timestamp",
-            "allowEmptyValue": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "limit number of applications shown",
-            "allowEmptyValue": true,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "start index from which apps will be shown",
-            "allowEmptyValue": true,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.GetApplicationsData"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.GetApplicationsData"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "App Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.GetApplicationsData"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "apps"
-        ],
-        "summary": "Update app information",
-        "operationId": "UpdateApp",
-        "parameters": [
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "owner of the app",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "nr_replicas",
-            "in": "query",
-            "description": "change nr replicas of the pod(only if it is running)",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "new_image",
-            "in": "query",
-            "description": "change current image to a new one(only if it is running)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/domain.ApplicationData"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.QueryResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User/Apps Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "x-codegen-request-body-name": "body"
-      },
-      "delete": {
-        "tags": [
-          "apps"
-        ],
-        "summary": "Delete app",
-        "operationId": "DeleteApp",
-        "parameters": [
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "appnames",
-            "in": "query",
-            "description": "name of the apps you want to delete",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "owner of the apps",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.QueryResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "User not allowed as admin",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User/Apps Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/app/aggregates": {
-      "get": {
-        "tags": [
-          "apps"
-        ],
-        "summary": "Retrieve aggregates about applications",
-        "operationId": "GetAppsAggregates",
-        "parameters": [
-          {
-            "name": "username",
-            "in": "query",
-            "description": "owner of the apps",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.AppsAggregatesInfo"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/login": {
-      "post": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Login user",
-        "operationId": "UserLogin",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/domain.UserData"
-              }
-            }
-          },
-          "required": true
-        },
-        "parameters": [
-          {
-            "name": "old_password",
-            "in": "query",
-            "description": "old pass for changing password",
-            "required": false,
-            "allowEmptyValue": true,
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.UserData"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "x-codegen-request-body-name": "body"
-      }
-    },
-    "/register/app": {
-      "post": {
-        "tags": [
-          "apps"
-        ],
-        "summary": "Upload app to s3",
-        "operationId": "UploadApp",
-        "parameters": [
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "owner of the apps",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "is_complex",
-            "in": "query",
-            "description": "flag for complex app split in multi source files",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "required": [
-                  "type"
-                ],
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "array",
-                    "description": "zip archives which contain the code and description files(same name for both,description being txt)",
-                    "items": {
-                      "type": "string",
-                      "format": "binary"
-                    }
+      "/app": {
+          "get": {
+              "tags": [
+                  "apps"
+              ],
+              "summary": "Retrieve apps information by name",
+              "operationId": "GetAppsInfo",
+              "parameters": [
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "appnames",
+                      "in": "query",
+                      "description": "name of the apps",
+                      "allowEmptyValue": true,
+                      "style": "form",
+                      "explode": false,
+                      "schema": {
+                          "type": "array",
+                          "items": {
+                              "type": "string"
+                          }
+                      }
+                  },
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "owner of the apps",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "filter",
+                      "in": "query",
+                      "description": "filter apps using fql filter(AND-&&,OR-||) or using simple field filtering",
+                      "allowEmptyValue": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "sort",
+                      "in": "query",
+                      "description": "sort applications by name,created_timestamp or updated_timestamp",
+                      "allowEmptyValue": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "limit",
+                      "in": "query",
+                      "description": "limit number of applications shown",
+                      "allowEmptyValue": true,
+                      "schema": {
+                          "type": "integer"
+                      }
+                  },
+                  {
+                      "name": "offset",
+                      "in": "query",
+                      "description": "start index from which apps will be shown",
+                      "allowEmptyValue": true,
+                      "schema": {
+                          "type": "integer"
+                      }
                   }
-                }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.GetApplicationsData"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.GetApplicationsData"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "App Not Found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.GetApplicationsData"
+                              }
+                          }
+                      }
+                  }
               }
-            }
           },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.QueryResponse"
-                }
-              }
-            }
+          "put": {
+              "tags": [
+                  "apps"
+              ],
+              "summary": "Update app information",
+              "operationId": "UpdateApp",
+              "parameters": [
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "owner of the app",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "nr_replicas",
+                      "in": "query",
+                      "description": "change nr replicas of the pod(only if it is running)",
+                      "required": false,
+                      "schema": {
+                          "type": "integer"
+                      }
+                  },
+                  {
+                      "name": "new_image",
+                      "in": "query",
+                      "description": "change current image to a new one(only if it is running)",
+                      "required": false,
+                      "schema": {
+                          "type": "string"
+                      }
+                  }
+              ],
+              "requestBody": {
+                  "content": {
+                      "application/json": {
+                          "schema": {
+                              "$ref": "#/components/schemas/domain.ApplicationData"
+                          }
+                      }
+                  },
+                  "required": true
+              },
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.QueryResponse"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User/Apps Not Found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              },
+              "x-codegen-request-body-name": "body"
           },
-          "302": {
-            "description": "Already found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
+          "delete": {
+              "tags": [
+                  "apps"
+              ],
+              "summary": "Delete app",
+              "operationId": "DeleteApp",
+              "parameters": [
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "appnames",
+                      "in": "query",
+                      "description": "name of the apps you want to delete",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "owner of the apps",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.QueryResponse"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "403": {
+                      "description": "User not authorized",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User/Apps Not Found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
               }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
           }
-        }
-      }
-    },
-    "/register/user": {
-      "post": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Register user",
-        "operationId": "UserRegister",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/domain.UserData"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.QueryResponse"
-                }
-              }
-            }
-          },
-          "302": {
-            "description": "Already found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "x-codegen-request-body-name": "body"
-      }
-    },
-    "/schedule": {
-      "get": {
-        "tags": [
-          "schedule"
-        ],
-        "summary": "Schedule apps",
-        "operationId": "ScheduleApps",
-        "parameters": [
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "appnames",
-            "in": "query",
-            "description": "name of the apps you want to schedule",
-            "required": true,
-            "allowEmptyValue": false,
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "owner of the apps",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "schedule_type",
-            "in": "query",
-            "description": "type of schedulling",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "nr_replicas",
-            "in": "query",
-            "description": "nr of replicas",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "server_port",
-            "in": "query",
-            "description": "server port for app",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.QueryResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "User not allowed as admin",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User/Apps Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/getresults": {
-      "get": {
-        "tags": [
-          "schedule"
-        ],
-        "summary": "Get pod results",
-        "operationId": "GetPodResults",
-        "parameters": [
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "username",
-            "in": "query",
-            "description": "owner of the apps",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "app_name",
-            "in": "query",
-            "description": "app name for which you want to get logs for",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.GetLogsFromPod"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User/Apps/Pod not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user": {
-      "put": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Updates user profile",
-        "operationId": "UpdateUserProfile",
-        "parameters": [
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/domain.UserData"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.QueryResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "x-codegen-request-body-name": "body"
       },
-      "get": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Retrieve user profile",
-        "operationId": "GetUserProfile",
-        "parameters": [
-          {
-            "name": "username",
-            "in": "query",
-            "description": "username of the account",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
+      "/app/aggregates": {
+          "get": {
+              "tags": [
+                  "apps"
+              ],
+              "summary": "Retrieve aggregates about applications",
+              "operationId": "GetAppsAggregates",
+              "parameters": [
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "owner of the apps",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.AppsAggregatesInfo"
+                              }
+                          }
+                      }
+                  }
+              }
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.UserData"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          }
-        }
       },
-      "delete": {
-        "tags": [
-          "users"
-        ],
-        "summary": "Delete user",
-        "operationId": "DeleteUser",
-        "parameters": [
-          {
-            "name": "USER-AUTH",
-            "in": "header",
-            "description": "role used for auth",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "USER-UUID",
-            "in": "header",
-            "description": "user unique id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "usernames",
-            "in": "query",
-            "description": "usernames to delete",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
+      "/login": {
+          "post": {
+              "tags": [
+                  "users"
+              ],
+              "summary": "Login user",
+              "operationId": "UserLogin",
+              "requestBody": {
+                  "content": {
+                      "application/json": {
+                          "schema": {
+                              "$ref": "#/components/schemas/domain.UserData"
+                          }
+                      }
+                  },
+                  "required": true
+              },
+              "parameters": [
+                  {
+                      "name": "old_password",
+                      "in": "query",
+                      "description": "old pass for changing password",
+                      "required": false,
+                      "allowEmptyValue": true,
+                      "schema": {
+                          "type": "boolean"
+                      }
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.UserData"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User Not Found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              },
+              "x-codegen-request-body-name": "body"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.QueryResponse"
-                }
+      },
+      "/register/app": {
+          "post": {
+              "tags": [
+                  "apps"
+              ],
+              "summary": "Upload app to s3",
+              "operationId": "UploadApp",
+              "parameters": [
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "owner of the apps",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "is_complex",
+                      "in": "query",
+                      "description": "flag for complex app split in multi source files",
+                      "required": false,
+                      "schema": {
+                          "type": "boolean"
+                      }
+                  }
+              ],
+              "requestBody": {
+                  "content": {
+                      "multipart/form-data": {
+                          "schema": {
+                              "required": [
+                                  "type"
+                              ],
+                              "type": "object",
+                              "properties": {
+                                  "type": {
+                                      "type": "array",
+                                      "description": "zip archives which contain the code and description files(same name for both,description being txt)",
+                                      "items": {
+                                          "type": "string",
+                                          "format": "binary"
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  },
+                  "required": true
+              },
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.QueryResponse"
+                              }
+                          }
+                      }
+                  },
+                  "302": {
+                      "description": "Already found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
               }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "User not allowed as admin",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/domain.ErrorResponse"
-                }
-              }
-            }
           }
-        }
+      },
+      "/register/user": {
+          "post": {
+              "tags": [
+                  "users"
+              ],
+              "summary": "Register user",
+              "operationId": "UserRegister",
+              "requestBody": {
+                  "content": {
+                      "application/json": {
+                          "schema": {
+                              "$ref": "#/components/schemas/domain.UserData"
+                          }
+                      }
+                  },
+                  "required": true
+              },
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.QueryResponse"
+                              }
+                          }
+                      }
+                  },
+                  "302": {
+                      "description": "Already found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              },
+              "x-codegen-request-body-name": "body"
+          }
+      },
+      "/schedule": {
+          "get": {
+              "tags": [
+                  "schedule"
+              ],
+              "summary": "Schedule apps",
+              "operationId": "ScheduleApps",
+              "parameters": [
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "appnames",
+                      "in": "query",
+                      "description": "name of the apps you want to schedule",
+                      "required": true,
+                      "allowEmptyValue": false,
+                      "schema": {
+                          "type": "array",
+                          "items": {
+                              "type": "string"
+                          }
+                      }
+                  },
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "owner of the apps",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "schedule_type",
+                      "in": "query",
+                      "description": "type of schedulling",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "nr_replicas",
+                      "in": "query",
+                      "description": "nr of replicas",
+                      "required": true,
+                      "schema": {
+                          "type": "integer"
+                      }
+                  },
+                  {
+                      "name": "server_port",
+                      "in": "query",
+                      "description": "server port for app",
+                      "required": false,
+                      "schema": {
+                          "type": "integer"
+                      }
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.QueryResponse"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "403": {
+                      "description": "User not authorized",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User/Apps Not Found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      },
+      "/getresults": {
+          "get": {
+              "tags": [
+                  "schedule"
+              ],
+              "summary": "Get pod results",
+              "operationId": "GetPodResults",
+              "parameters": [
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "owner of the apps",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "app_name",
+                      "in": "query",
+                      "description": "app name for which you want to get logs for",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.GetLogsFromPod"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User/Apps/Pod not found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      },
+      "/getpodfie": {
+          "get": {
+              "tags": [
+                  "schedule"
+              ],
+              "summary": "Get pod file",
+              "operationId": "GetPodFile",
+              "parameters": [
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "owner of the apps",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "app_name",
+                      "in": "query",
+                      "description": "app name from where you want to get file from",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "file_name",
+                      "in": "query",
+                      "description": "name of the file you want to download",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/octet-stream": {
+                              "schema": {
+                                  "$ref": ""
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User/Apps/Pod not found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      },
+      "/user": {
+          "put": {
+              "tags": [
+                  "users"
+              ],
+              "summary": "Updates user profile",
+              "operationId": "UpdateUserProfile",
+              "parameters": [
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  }
+              ],
+              "requestBody": {
+                  "content": {
+                      "application/json": {
+                          "schema": {
+                              "$ref": "#/components/schemas/domain.UserData"
+                          }
+                      }
+                  },
+                  "required": true
+              },
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.QueryResponse"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User not found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              },
+              "x-codegen-request-body-name": "body"
+          },
+          "get": {
+              "tags": [
+                  "users"
+              ],
+              "summary": "Retrieve user profile",
+              "operationId": "GetUserProfile",
+              "parameters": [
+                  {
+                      "name": "username",
+                      "in": "query",
+                      "description": "username of the account",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.UserData"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User Not Found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              }
+          },
+          "delete": {
+              "tags": [
+                  "users"
+              ],
+              "summary": "Delete user",
+              "operationId": "DeleteUser",
+              "parameters": [
+                  {
+                      "name": "USER-AUTH",
+                      "in": "header",
+                      "description": "role used for auth",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "USER-UUID",
+                      "in": "header",
+                      "description": "user unique id",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  },
+                  {
+                      "name": "usernames",
+                      "in": "query",
+                      "description": "usernames to delete",
+                      "required": true,
+                      "schema": {
+                          "type": "string"
+                      }
+                  }
+              ],
+              "responses": {
+                  "200": {
+                      "description": "OK",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.QueryResponse"
+                              }
+                          }
+                      }
+                  },
+                  "400": {
+                      "description": "Bad Request",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "403": {
+                      "description": "User not authorized",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  },
+                  "404": {
+                      "description": "User Not Found",
+                      "content": {
+                          "application/json": {
+                              "schema": {
+                                  "$ref": "#/components/schemas/domain.ErrorResponse"
+                              }
+                          }
+                      }
+                  }
+              }
+          }
       }
-    }
   },
   "components": {
-    "schemas": {
-      "domain.ApplicationData": {
-        "required": [
-          "created_timestamp",
-          "description",
-          "is_running",
-          "name",
-          "updated_timestamp",
-          "owner",
-          "namespace",
-          "schedule_type",
-          "flag_arguments",
-          "param_arguments",
-          "is_main",
-          "subgroup_files",
-          "port",
-          "ip_address",
-          "alert_ids"
-        ],
-        "type": "object",
-        "properties": {
-          "created_timestamp": {
-            "type": "string",
-            "format": "date-time"
+      "schemas": {
+          "domain.ApplicationData": {
+              "required": [
+                  "created_timestamp",
+                  "description",
+                  "is_running",
+                  "name",
+                  "updated_timestamp",
+                  "owner",
+                  "namespace",
+                  "schedule_type",
+                  "flag_arguments",
+                  "param_arguments",
+                  "is_main",
+                  "subgroup_files",
+                  "port",
+                  "ip_address",
+                  "alert_ids"
+              ],
+              "type": "object",
+              "properties": {
+                  "created_timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                  },
+                  "description": {
+                      "type": "string"
+                  },
+                  "is_running": {
+                      "type": "boolean"
+                  },
+                  "owner": {
+                      "type": "string"
+                  },
+                  "namespace": {
+                      "type": "string"
+                  },
+                  "schedule_type": {
+                      "type": "string"
+                  },
+                  "port": {
+                      "type": "integer"
+                  },
+                  "ip_address": {
+                      "type": "string"
+                  },
+                  "name": {
+                      "type": "string"
+                  },
+                  "flag_arguments": {
+                      "type": "array",
+                      "items": {
+                          "type": "string"
+                      }
+                  },
+                  "param_arguments": {
+                      "type": "array",
+                      "items": {
+                          "type": "string"
+                      }
+                  },
+                  "subgroup_files": {
+                      "type": "array",
+                      "items": {
+                          "type": "string"
+                      }
+                  },
+                  "alert_ids": {
+                      "type": "array",
+                      "items": {
+                          "type": "string"
+                      }
+                  },
+                  "is_main": {
+                      "type": "boolean"
+                  },
+                  "updated_timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                  }
+              }
           },
-          "description": {
-            "type": "string"
+          "domain.GetLogsFromPod": {
+              "required": [
+                  "print_message",
+                  "app_name"
+              ],
+              "type": "object",
+              "properties": {
+                  "print_message": {
+                      "type": "string"
+                  },
+                  "app_name": {
+                      "type": "string"
+                  }
+              }
           },
-          "is_running": {
-            "type": "boolean"
+          "domain.AppsAggregatesInfo": {
+              "required": [
+                  "QueryInfo"
+              ],
+              "type": "object",
+              "properties": {
+                  "QueryInfo": {
+                      "items": {
+                          "$ref": "#/components/schemas/domain.GetAppInfo"
+                      }
+                  }
+              }
           },
-          "owner": {
-            "type": "string"
+          "domain.AppsMetaInfo": {
+              "required": [
+                  "total",
+                  "resources_count"
+              ],
+              "type": "object",
+              "properties": {
+                  "total": {
+                      "type": "integer",
+                      "format": "integer"
+                  },
+                  "resources_count": {
+                      "type": "integer",
+                      "format": "integer"
+                  }
+              }
           },
-          "namespace": {
-            "type": "string"
+          "domain.GetAppInfo": {
+              "required": [
+                  "main_apps_owner_count",
+                  "main_apps_total_count",
+                  "running_apps_owner_count",
+                  "running_apps_total_count"
+              ],
+              "properties": {
+                  "main_apps_owner_count": {
+                      "type": "integer",
+                      "format": "int64"
+                  },
+                  "main_apps_total_count": {
+                      "type": "integer",
+                      "format": "int64"
+                  },
+                  "running_apps_owner_count": {
+                      "type": "integer",
+                      "format": "int64"
+                  },
+                  "running_apps_total_count": {
+                      "type": "integer",
+                      "format": "int64"
+                  }
+              }
           },
-          "schedule_type": {
-            "type": "string"
+          "domain.ErrorResponse": {
+              "required": [
+                  "message",
+                  "status_code"
+              ],
+              "type": "object",
+              "properties": {
+                  "message": {
+                      "type": "string"
+                  },
+                  "status_code": {
+                      "type": "integer",
+                      "format": "integer"
+                  }
+              }
           },
-          "port": {
-            "type": "integer"
+          "domain.GetApplicationsData": {
+              "required": [
+                  "QueryInfo",
+                  "Errors",
+                  "Response"
+              ],
+              "type": "object",
+              "properties": {
+                  "Errors": {
+                      "type": "array",
+                      "items": {
+                          "$ref": "#/components/schemas/domain.ErrorResponse"
+                      }
+                  },
+                  "QueryInfo": {
+                      "items": {
+                          "$ref": "#/components/schemas/domain.AppsMetaInfo"
+                      }
+                  },
+                  "Response": {
+                      "type": "array",
+                      "items": {
+                          "$ref": "#/components/schemas/domain.ApplicationData"
+                      }
+                  }
+              }
           },
-          "ip_address": {
-            "type": "string"
+          "domain.UserData": {
+              "required": [
+                  "username",
+                  "full_name",
+                  "email",
+                  "birth_date",
+                  "job_role",
+                  "applications"
+              ],
+              "type": "object",
+              "properties": {
+                  "applications": {
+                      "type": "array",
+                      "items": {
+                          "type": "string"
+                      }
+                  },
+                  "birth_date": {
+                      "type": "string"
+                  },
+                  "job_role": {
+                      "type": "string"
+                  },
+                  "email": {
+                      "type": "string"
+                  },
+                  "full_name": {
+                      "type": "string"
+                  },
+                  "joined_date": {
+                      "type": "string",
+                      "format": "date-time"
+                  },
+                  "last_time_online": {
+                      "type": "string",
+                      "format": "date-time"
+                  },
+                  "password": {
+                      "type": "string"
+                  },
+                  "role": {
+                      "type": "string"
+                  },
+                  "user_id": {
+                      "type": "string"
+                  },
+                  "username": {
+                      "type": "string"
+                  },
+                  "want_notify": {
+                      "type": "boolean"
+                  }
+              }
           },
-          "name": {
-            "type": "string"
-          },
-          "flag_arguments": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "param_arguments": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "subgroup_files": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "alert_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "is_main": {
-            "type": "boolean"
-          },
-          "updated_timestamp": {
-            "type": "string",
-            "format": "date-time"
+          "domain.QueryResponse": {
+              "required": [
+                  "resources_affected",
+                  "message"
+              ],
+              "type": "object",
+              "properties": {
+                  "resources_affected": {
+                      "type": "array",
+                      "items": {
+                          "type": "string"
+                      }
+                  },
+                  "message": {
+                      "type": "string"
+                  }
+              }
           }
-        }
-      },
-      "domain.GetLogsFromPod": {
-        "required": [
-          "print_message",
-          "app_name"
-        ],
-        "type": "object",
-        "properties": {
-          "print_message": {
-            "type": "string"
-          },
-          "app_name": {
-            "type": "string"
-          }
-        }
-      },
-      "domain.AppsAggregatesInfo": {
-        "required": [
-          "QueryInfo"
-        ],
-        "type": "object",
-        "properties": {
-          "QueryInfo": {
-            "items": {
-              "$ref": "#/components/schemas/domain.GetAppInfo"
-            }
-          }
-        }
-      },
-      "domain.AppsMetaInfo": {
-        "required": [
-          "total",
-          "resources_count"
-        ],
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "integer",
-            "format": "integer"
-          },
-          "resources_count": {
-            "type": "integer",
-            "format": "integer"
-          }
-        }
-      },
-      "domain.GetAppInfo": {
-        "required": [
-          "main_apps_owner_count",
-          "main_apps_total_count",
-          "running_apps_owner_count",
-          "running_apps_total_count"
-        ],
-        "properties": {
-          "main_apps_owner_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "main_apps_total_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "running_apps_owner_count": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "running_apps_total_count": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "domain.ErrorResponse": {
-        "required": [
-          "message",
-          "status_code"
-        ],
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "status_code": {
-            "type": "integer",
-            "format": "integer"
-          }
-        }
-      },
-      "domain.GetApplicationsData": {
-        "required": [
-          "QueryInfo",
-          "Errors",
-          "Response"
-        ],
-        "type": "object",
-        "properties": {
-          "Errors": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/domain.ErrorResponse"
-            }
-          },
-          "QueryInfo": {
-            "items": {
-              "$ref": "#/components/schemas/domain.AppsMetaInfo"
-            }
-          },
-          "Response": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/domain.ApplicationData"
-            }
-          }
-        }
-      },
-      "domain.UserData": {
-        "required": [
-          "username",
-          "full_name",
-          "email",
-          "birth_date",
-          "job_role",
-          "applications"
-        ],
-        "type": "object",
-        "properties": {
-          "applications": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "birth_date": {
-            "type": "string"
-          },
-          "job_role": {
-            "type": "string"
-          },
-          "email": {
-            "type": "string"
-          },
-          "full_name": {
-            "type": "string"
-          },
-          "joined_date": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "last_time_online": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "password": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "user_id": {
-            "type": "string"
-          },
-          "username": {
-            "type": "string"
-          },
-          "want_notify": {
-            "type": "boolean"
-          }
-        }
-      },
-      "domain.QueryResponse": {
-        "required": [
-          "resources_affected",
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "resources_affected": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "message": {
-            "type": "string"
-          }
-        }
       }
-    }
   }
 }

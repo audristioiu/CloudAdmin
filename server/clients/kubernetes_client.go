@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -536,11 +538,11 @@ func (k *KubernetesClient) ListPods(namespace string) []string {
 }
 
 // GetLogsForPodName iterates through replicas of podName and returns logs
-func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) ([]string, error) {
+func (k *KubernetesClient) GetLogsForPodName(deploymentName, namespace string) ([]string, error) {
 	logList := make([]string, 0)
 	podsClient := k.kubeClient.CoreV1().Pods(namespace)
 	for {
-		pods, err := podsClient.List(k.ctx, metav1.ListOptions{LabelSelector: "app=" + podName})
+		pods, err := podsClient.List(k.ctx, metav1.ListOptions{LabelSelector: "app=" + deploymentName})
 		if err != nil {
 			k.kubeLogger.Error("failed to list pods", zap.Error(err))
 			return nil, err
@@ -576,6 +578,53 @@ func (k *KubernetesClient) GetLogsForPodName(podName, namespace string) ([]strin
 
 	}
 	return logList, nil
+}
+
+// GetPodFile retrieves file from pod
+func (k *KubernetesClient) GetPodFile(fileName, appName, deploymentName, namespace string) ([]byte, error) {
+	containerName := ""
+	podName := ""
+	podsClient := k.kubeClient.CoreV1().Pods(namespace)
+	for {
+		pods, err := podsClient.List(k.ctx, metav1.ListOptions{LabelSelector: "app=" + deploymentName})
+		if err != nil {
+			k.kubeLogger.Error("failed to list pods", zap.Error(err))
+			return nil, err
+		}
+		for _, pod := range pods.Items {
+
+			if pod.Status.Phase == apiv1.PodPending {
+				k.kubeLogger.Warn("waiting for pod to be ready")
+			} else {
+				containerName = pod.Spec.Containers[0].Name
+				podName = pod.Name
+			}
+		}
+		if containerName == "" {
+			k.kubeLogger.Warn("no pods found")
+			return nil, fmt.Errorf("no pods found")
+		} else {
+			break
+		}
+
+	}
+	cmd := []string{"kubectl", "cp", "-n", namespace, podName + ":" + appName, fileName}
+	command := exec.Command(cmd[0], cmd[1:]...)
+
+	var out bytes.Buffer
+	command.Stdout = &out
+	err := command.Run()
+	if err != nil {
+		k.kubeLogger.Error("failed to run kubectl cp command", zap.Error(err))
+		return nil, err
+	}
+	fileContent, err := os.ReadFile(fileName)
+	if err != nil {
+		k.kubeLogger.Error("failed to read file", zap.Error(err))
+		return nil, err
+	}
+	return fileContent, nil
+
 }
 
 // CreateAutoScaler creates a horizontal pod auto scaler for deploymentName

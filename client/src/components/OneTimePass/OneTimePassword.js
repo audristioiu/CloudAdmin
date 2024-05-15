@@ -72,6 +72,7 @@ const OneTimePassword = () => {
             const config = {
               headers: {
                 "Content-type": "application/json",
+                "Accept-Encoding" : "gzip",
                 "USER-AUTH": userInfo?.role,
                 "USER-UUID": userInfo?.user_id,
               },

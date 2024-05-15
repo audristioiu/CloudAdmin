@@ -34,6 +34,7 @@ function Register() {
         const config = {
           headers: {
             "Content-type": "application/json",
+            "Accept-Encoding" : "gzip"
           },
         };
         const agent = new Agent({

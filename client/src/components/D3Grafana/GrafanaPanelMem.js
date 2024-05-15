@@ -14,7 +14,8 @@ const GrafanaPanelMem = () => {
         // Fetch data from Grafana backend
         const response = await axios.get('https://localhost:9443/grafana/datasource', {
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            "Accept-Encoding" : "gzip"
           },
           params: {
             'appname' : appName,

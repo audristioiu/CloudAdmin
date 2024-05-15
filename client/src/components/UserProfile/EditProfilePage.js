@@ -37,6 +37,7 @@ const EditProfilePage = () => {
         const config = {
           headers: {
             "Content-type": "application/json",
+            "Accept-Encoding" : "gzip",
             "USER-AUTH": userInfo?.role,
             "USER-UUID": userInfo?.user_id,
           },
@@ -59,6 +60,7 @@ const EditProfilePage = () => {
               const config = {
                 headers: {
                   "Content-type": "application/json",
+                  "Accept-Encoding" : "gzip",
                 },
                 params: {
                   "old_password": true,

@@ -30,6 +30,7 @@ function Home() {
             {
               headers: {
                 'Content-type': 'application/json',
+                "Accept-Encoding" : "gzip",
               },
               params: {
                 username,
