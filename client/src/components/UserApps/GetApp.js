@@ -10,7 +10,8 @@ function GetApp(props) {
   const [podName, setPodName] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  let handleSubmit = async (event) => {
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
     try {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -18,64 +19,57 @@ function GetApp(props) {
       const agent = new Agent({
         cert: certs.certFile,
         key: certs.keyFile,
-      })
+      });
 
       const config = {
         headers: {
           "Content-type": "application/json",
-          "Accept-Encoding" : "gzip",
+          "Accept-Encoding": "gzip",
           "USER-AUTH": userInfo?.role,
           "USER-UUID": userInfo?.user_id,
         },
         params: {
-          "username": username,
+          username,
         }
       };
 
       await axios.get(`https://localhost:9443/getresults`, {
-        "pod_name": podName,
-      }, config,
-        { httpsAgent: agent },);
+        params: {
+          pod_name: podName,
+        },
+        ...config,
+        httpsAgent: agent,
+      });
 
     } catch (error) {
-      setErrorMessage('Failed to schedule APP. Please try again. /' +error.response.data.message);
+      setErrorMessage('Failed to schedule APP. Please try again. /' + error.response.data.message);
     }
   };
 
   return (
-    <div>
-    <form onSubmit={handleSubmit}>
-      <div className="modal-title">
-        Get {appName} info
-      </div>
-
-      <div className="user-box">
-        <label>
-          Pod Name
-          <input
-            className='input-style app-description'
-            type='text'
-            value={podName}
-            onChange={(e) => setPodName(e.target.value)}
-          />
-
-        </label>
-
-      </div>
-
-
-      <a type="submit" onClick={handleSubmit}>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        Get app stats
-      </a>
-    </form>
-    {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
+    <div className="modal-container">
+      <form onSubmit={handleSubmit}>
+        <div className="modal-title">
+          Get {appName} info
+        </div>
+        <div className="user-box">
+          <label>
+            Pod Name
+            <input
+              className='input-style app-description'
+              type='text'
+              value={podName}
+              onChange={(e) => setPodName(e.target.value)}
+            />
+          </label>
+        </div>
+        <button type="submit" className='button-3'>
+          Get App Stats
+        </button>
+      </form>
+      {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </div>
-  )
+  );
 }
-
 
 export default GetApp;

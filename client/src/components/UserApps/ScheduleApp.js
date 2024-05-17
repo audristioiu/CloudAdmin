@@ -55,7 +55,7 @@ function ScheduleApp({ app }) {
   };
 
   return (
-    <div>
+    <div className="modal-container">
       <form onSubmit={handleSubmit}>
         <div className="modal-title">
           Schedule {appName}
@@ -72,7 +72,7 @@ function ScheduleApp({ app }) {
         </div>
         <div className="user-box">
           <label>
-            Number of replicas
+            Number of replicas:
             <input
               className='input-style app-description'
               type='number'
@@ -83,7 +83,7 @@ function ScheduleApp({ app }) {
         </div>
         <div className="user-box">
           <label>
-            Server Port
+            Server Port:
             <input
               className='input-style app-description'
               type='number'
