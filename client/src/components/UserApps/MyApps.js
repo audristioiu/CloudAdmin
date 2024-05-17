@@ -19,6 +19,7 @@ function MyApps() {
   const [selectedFilterType, setSelectedFilterType] = useState('normal');
   const [itemOffset, setItemOffset] = useState(0);
   const [pageCount, setPageCount] = useState(0);
+  const [fileName, setFileName] = useState('No file chosen');
 
   const timeRanges = {
     "1 day": "1day",
@@ -51,7 +52,7 @@ function MyApps() {
     } else {
       setApps(prevApps =>
         prevApps.map(app =>
-          app.name === appId ? { ...app, isSelected : isSelected} : app
+          app.name === appId ? { ...app, isSelected: isSelected } : app
         )
       );
     }
@@ -99,7 +100,7 @@ function MyApps() {
       try {
         await axios.post('https://localhost:9443/register/app', formData, config_app, { httpsAgent: agent });
       } catch (error) {
-        setErrorMessage(`Failed to upload app. Error : ` +error.response.data.message);
+        setErrorMessage(`Failed to upload app. Error : ` + error.response.data.message);
       }
     }
   };
@@ -185,7 +186,7 @@ function MyApps() {
         setPageCount(Math.ceil(responseApps.data.QueryInfo.total / itemsPerPage));
       }
     } catch (error) {
-      setErrorMessage(`Could not retrieve your apps. Error : ` +error.response.data.message);
+      // setErrorMessage(`Could not retrieve your apps. Error : ` +error.response.data.message);
       setApps([]);
     }
   };
@@ -198,11 +199,11 @@ function MyApps() {
     if (apps) {
       return apps.map((app, i) => (
         <AppItem
-        key={i}
-        app={app}
-        onSelect={toggleAppSelection}
-        isSelected={app.isSelected || selectAll}
-      />
+          key={i}
+          app={app}
+          onSelect={toggleAppSelection}
+          isSelected={app.isSelected || selectAll}
+        />
       ));
     }
   };
@@ -305,7 +306,7 @@ function MyApps() {
   const deleteSelectedApps = async () => {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
     const username = userInfo?.username;
-    const appnames = apps.filter(app => app.isSelected).map(app => app.name );
+    const appnames = apps.filter(app => app.isSelected).map(app => app.name);
 
     try {
       const agent = new Agent({
@@ -330,14 +331,13 @@ function MyApps() {
     }
   }
 
+  const handleFileChange = (event) => {
+    const files = event.target.files;
+    setFileName(files.length > 0 ? files[0].name : 'No file chosen');
+  };
+
   return (
     <div className='myapps_container'>
-      <input
-        type="checkbox"
-        checked={selectAll}
-        onChange={toggleSelectAll}
-      />
-      Select All
       <div className="search_bar filter_type_select">
         <label>
           Filter Type:
@@ -354,7 +354,14 @@ function MyApps() {
         <table className="table">
           <thead>
             <tr>
-            <th>&nbsp;</th>
+              <th>
+                <input
+                  type="checkbox"
+                  checked={selectAll}
+                  onChange={toggleSelectAll}
+                />
+                Select All
+              </th>
               <th>App Name</th>
               <th>Description</th>
               <th>Status</th>
@@ -363,7 +370,7 @@ function MyApps() {
               <th>ScheduleType</th>
               <th>Port</th>
               <th>IPAddress</th>
-              <th>&nbsp;</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -385,18 +392,24 @@ function MyApps() {
           previousClassName='item previous'
         />
       </div>
-      <form>
-        <input type="file" id="input" multiple={true} />
-        <button type="button" className='button-3' onClick={() => handleUpload(false)}>
-          SubmitArchive
-        </button>
-        <button type="button" className='button-3' onClick={() => handleUpload(true)}>
-          SubmitComplexArchive
-        </button>
-      </form>
-      <button type="button" className='button-3' onClick={deleteSelectedApps} disabled={apps.length === 0}>
-        Delete Apps
-      </button>
+      <div className='file-input-container'>
+        <form>
+          <label htmlFor="input" className="custom-file-button">
+            Choose Files
+          </label>
+          <input type="file" id="input" multiple={true} onChange={handleFileChange} />
+          <span className='file-name'>{fileName}</span>
+          <button type="button" className='button-3' onClick={() => handleUpload(false)}>
+            SubmitArchive
+          </button>
+          <button type="button" className='button-3' onClick={() => handleUpload(true)}>
+            SubmitComplexArchive
+          </button>
+          <button type="button" className='button-3' onClick={deleteSelectedApps} disabled={apps.length === 0}>
+            Delete Apps
+          </button>
+        </form>
+      </div>
       {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </div>
 

@@ -5,7 +5,7 @@ import certs from '../../Certs/certs.js';
 import '../../assets/Error.scss';
 
 function ScheduleApp(props) {
-  const { app } = props.app;
+  const { app } = props;
   const [appName, setAppName] = useState(app.name);
   const [appScheduleType, setAppScheduleType] = useState(app.schedule_type);
   const [appNrReplicas, setAppNrReplicas] = useState(0);
@@ -95,7 +95,7 @@ function ScheduleApp(props) {
         <span></span>
         <span></span>
         <span></span>
-        Update
+        Schedule App
       </a>
     </form>
     {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}

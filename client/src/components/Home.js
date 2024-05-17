@@ -53,7 +53,7 @@ function Home() {
           });
         }
       } catch (error) {
-        setErrorMessage(`Could not retrieve apps count details. Error : ` + error.response.data.message);
+        // setErrorMessage(`Could not retrieve apps count details. Error : ` + error.response.data.message);
       }
     };
 

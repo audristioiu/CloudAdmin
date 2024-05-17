@@ -5,7 +5,7 @@ import certs from '../../Certs/certs.js';
 import '../../assets/Error.scss';
 
 function EditApp(props) {
-  const {app} = props.app;
+  const {app} = props;
   const [appName, setAppName] = useState(app.name);
   const [appDescription, setAppDescr] = useState("");
   const [appFlagArguments, setAppFlags] = useState("");

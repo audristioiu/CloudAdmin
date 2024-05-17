@@ -5,7 +5,7 @@ import certs from '../../Certs/certs.js';
 import '../../assets/Error.scss';
 
 function GetApp(props) {
-  const { app } = props.app;
+  const { app } = props;
   const [appName, setAppName] = useState(app.name);
   const [podName, setPodName] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -68,7 +68,7 @@ function GetApp(props) {
         <span></span>
         <span></span>
         <span></span>
-        Update
+        Get app stats
       </a>
     </form>
     {errorMessage && <div className="error-message"> <span className = "error-text">{errorMessage}</span> </div>}
