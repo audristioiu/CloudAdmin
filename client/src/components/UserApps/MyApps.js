@@ -6,6 +6,8 @@ import '../../assets/Error.scss';
 import { Agent } from 'https';
 import certs from '../../Certs/certs.js';
 import ReactPaginate from 'react-paginate';
+import Modal from 'react-modal';
+import ScheduleApp from './ScheduleApp.js';
 
 function MyApps() {
   const [apps, setApps] = useState([]);
@@ -20,6 +22,7 @@ function MyApps() {
   const [itemOffset, setItemOffset] = useState(0);
   const [pageCount, setPageCount] = useState(0);
   const [fileName, setFileName] = useState('No file chosen');
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   const timeRanges = {
     "1 day": "1day",
@@ -358,6 +361,14 @@ function MyApps() {
     setFileName(files.length > 0 ? files[0].name : 'No file chosen');
   };
 
+  const handleOpenScheduleModal = () => {
+    setIsScheduleModalOpen(true);
+  };
+
+  const handleCloseScheduleModal = () => {
+    setIsScheduleModalOpen(false);
+  };
+
   return (
     <div className='myapps_container'>
       {renderFilter()}
@@ -419,6 +430,17 @@ function MyApps() {
           <button type="button" className='button-3' onClick={deleteSelectedApps} disabled={apps.length === 0}>
             Delete Apps
           </button>
+          <button type="button" className='button-3' onClick={() => setIsScheduleModalOpen(true)} disabled={apps.length === 0}>
+            Schedule Apps
+          </button>
+          <Modal
+            isOpen={isScheduleModalOpen}
+            onRequestClose={() => setIsScheduleModalOpen(false)}
+            className="Modal"
+            overlayClassName="Overlay"
+          >
+            <ScheduleApp app={{ name: apps.filter(app => app.isSelected).map(app => app.name).join(', ') }} />
+          </Modal>
         </form>
       </div>
       {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
