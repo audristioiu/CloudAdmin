@@ -73,7 +73,7 @@ function AppItem({ app, onSelect, isSelected }) {
 
   return (
     <tr>
-     <td>
+      <td>
         <input
           type="checkbox"
           checked={isSelected}
@@ -82,9 +82,9 @@ function AppItem({ app, onSelect, isSelected }) {
       </td>
       <td>{appName}</td>
       <td>{appDescription}</td>
-      <td className={"status"}>
-        <span className={getStatusClass()}> 
-          {getStatusClass() == "active" ? "Active" : "Not running"}
+      <td className="status">
+        <span className={getStatusClass()}>
+          {getStatusClass() === "active" ? "Active" : "Not running"}
         </span>
       </td>
       <td>{appCreatedTimestamp}</td>
@@ -93,16 +93,14 @@ function AppItem({ app, onSelect, isSelected }) {
       <td>{appPort}</td>
       <td>{appIPAddress}</td>
       <td>
-      <button className='button-3' onClick={handleOpenScheduleModal}>
+        <button className='button-3' onClick={handleOpenScheduleModal}>
           Schedule App
         </button>
-
-        <Modal 
-           isOpen={isScheduleModalOpen}
-           contentLabel="onRequestClose Example"
-           onRequestClose={handleCloseScheduleModal}
-           className="Modal"
-           overlayClassName="Overlay"
+        <Modal
+          isOpen={isScheduleModalOpen}
+          onRequestClose={handleCloseScheduleModal}
+          className="Modal"
+          overlayClassName="Overlay"
         >
           <ScheduleApp app={app} />
         </Modal>
@@ -110,13 +108,11 @@ function AppItem({ app, onSelect, isSelected }) {
         <button className='button-3' onClick={handleOpenEditModal}>
           Edit App
         </button>
-
-        <Modal 
-           isOpen={isEditModalOpen}
-           contentLabel="onRequestClose Example"
-           onRequestClose={handleCloseEditModal}
-           className="Modal"
-           overlayClassName="Overlay"
+        <Modal
+          isOpen={isEditModalOpen}
+          onRequestClose={handleCloseEditModal}
+          className="Modal"
+          overlayClassName="Overlay"
         >
           <EditApp app={app} />
         </Modal>
@@ -124,23 +120,25 @@ function AppItem({ app, onSelect, isSelected }) {
         <button className='button-3' onClick={handleOpenGetAppModal}>
           Get App Stats
         </button>
-
-        <Modal 
-           isOpen={isGetAppModalOpen}
-           contentLabel="onRequestClose Example"
-           onRequestClose={handleCloseGetAppModal}
-           className="Modal"
-           overlayClassName="Overlay"
+        <Modal
+          isOpen={isGetAppModalOpen}
+          onRequestClose={handleCloseGetAppModal}
+          className="Modal"
+          overlayClassName="Overlay"
         >
           <GetApp app={app} />
         </Modal>
-        { (appRunningState == "true") &&
-        (<div><button className='button-3' onClick={getDashboardCPU}>
-          Get Dashboard CPU Usage
-        </button>
-        <button className='button-3' onClick={getDashboardMemory}>
-          Get Dashboard Memory Usage
-        </button></div>)}
+
+        {appRunningState === "true" && (
+          <>
+            <button className='button-3' onClick={getDashboardCPU}>
+              Get Dashboard CPU Usage
+            </button>
+            <button className='button-3' onClick={getDashboardMemory}>
+              Get Dashboard Memory Usage
+            </button>
+          </>
+        )}
       </td>
     </tr>
   );

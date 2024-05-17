@@ -135,83 +135,99 @@ button {
 }
 
 .table-container {
-  padding-top: 20px;
-  padding-bottom: 30px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 100%;
-  align-items: center;
-}
+  padding: 20px;
+  border-radius: 8px;
+  color: #ecf0f1;
+  overflow-x: auto; /* Ensure the table is scrollable on small screens */
 
-.table {
-  min-width: 1000px !important;
-  width: 100%;
-  box-shadow: 0px 5px 12px -12px rgba(0, 0, 0, 0.29);
+  .table {
+    min-width: 1000px !important;
+    width: 100%;
+    box-shadow: 0px 5px 12px -12px rgba(0, 0, 0, 0.29);
+    border-spacing: 0;
 
-  thead th {
-    border: none;
-    padding: 30px;
-    font-size: 13px;
-    font-weight: 500;
-    color: gray;
-  }
-
-  thead tr {
-    background: #141e30;
-    border-bottom: 4px solid #eceffa;
-  }
-
-  tbody tr {
-    margin-bottom: 10px;
-    border-bottom: 4px solid #f8f9fd;
-
-    &:last-child {
-      border-bottom: 0;
+    thead th {
+      border: none;
+      padding: 15px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #ecf0f1;
+      background-color: #141e30;
+      text-align: center; /* Center align column headers */
     }
-  }
 
-  tbody th,
-  tbody td {
-    border: none;
-    padding: 15px 40px;
-    font-size: 14px;
-    background: #141e30;
-    text-align: center;
+    thead tr {
+      background: #141e30;
+      border-bottom: 4px solid #eceffa;
+    }
 
-    &.status span {
-      position: relative;
-      display: inline-block;
-      border-radius: 30px;
-      padding: 4px 10px 4px 25px;
-
-      &:after {
-        position: absolute;
-        top: 9px;
-        left: 10px;
-        width: 10px;
-        height: 10px;
-        content: "";
-        border-radius: 50%;
+    tbody tr {
+      margin-bottom: 10px;
+      border-bottom: 4px solid #f8f9fd;
+      &:hover {
+        background-color: #3a506b;
+      }
+      &:last-child {
+        border-bottom: 0;
       }
     }
 
-    &.status .active {
-      background: #cff6dd;
-      color: #1fa750;
+    tbody th,
+    tbody td {
+      border: none;
+      padding: 15px;
+      font-size: 14px;
+      background: #141e30;
+      text-align: center; /* Center align table data */
 
-      &:after {
-        background: #23bd5a;
+      &.status span {
+        position: relative;
+        display: inline-block;
+        border-radius: 30px;
+        padding: 4px 10px 4px 25px;
+        &:after {
+          position: absolute;
+          top: 9px;
+          left: 10px;
+          width: 10px;
+          height: 10px;
+          content: "";
+          border-radius: 50%;
+        }
+      }
+
+      &.status .active {
+        background: #cff6dd;
+        color: #1fa750;
+        &:after {
+          background: #23bd5a;
+        }
+      }
+
+      &.status .inactive {
+        background: #fdf5dd;
+        color: #cfa00c;
+        &:after {
+          background: #f2be1d;
+        }
       }
     }
 
-    &.status .inactive {
-      background: #fdf5dd;
-      color: #cfa00c;
-
-      &:after {
-        background: #f2be1d;
+    .button-3 {
+      padding: 8px 12px;
+      margin: 4px; /* Add margin to create space between buttons */
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.3s ease;
+      &:hover {
+        background-color: #2980b9;
+      }
+      &:disabled {
+        background-color: #7f8c8d;
+        cursor: not-allowed;
       }
     }
   }
@@ -409,6 +425,16 @@ label {
   padding-left: 15px;
 }
 
+.pagination {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  height: 60px;
+  justify-content: center;
+  list-style-type: none;
+  margin: 20px 0; /* Add some margin for spacing */
+}
+
 .item {
   align-items: center;
   color: #fff;
@@ -418,7 +444,7 @@ label {
   height: 40px;
   justify-content: center;
   width: 40px;
-  margin: 10px;
+  margin: 0 5px; /* Adjust margin for spacing between items */
 }
 
 .disabled-page {
@@ -436,33 +462,14 @@ label {
 
 .next {
   border-left: solid 1px #808e9b;
-  height: 60px;
-  position: absolute;
-  right: 0;
-  width: 150px;
-}
-
-.pagination {
-  align-items: center;
-  display: flex;
-  flex-direction: row;
-  height: 60px;
-  justify-content: center;
-  list-style-type: none;
-  position: relative;
-  width: 1000px;
-}
-
-.pagination-page {
-  font-weight: 700;
+  height: 40px; /* Adjust height to match item height */
+  width: 80px; /* Adjust width for better spacing */
 }
 
 .previous {
   border-right: solid 1px #808e9b;
-  height: 60px;
-  left: 0;
-  position: absolute;
-  width: 150px;
+  height: 40px; /* Adjust height to match item height */
+  width: 80px; /* Adjust width for better spacing */
 }
 
 .file-input-container {
