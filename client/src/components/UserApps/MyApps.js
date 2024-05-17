@@ -78,7 +78,7 @@ function MyApps() {
       const config_app = {
         headers: {
           'Content-type': 'multipart/form-data',
-          "Accept-Encoding" : "gzip",
+          "Accept-Encoding": "gzip",
           'USER-AUTH': userInfo?.role,
           'USER-UUID': userInfo?.user_id,
         },
@@ -169,7 +169,7 @@ function MyApps() {
       const userConfig = {
         headers: {
           'Content-type': 'application/json',
-          "Accept-Encoding" : "gzip",
+          "Accept-Encoding": "gzip",
           'USER-AUTH': userInfo?.role,
           'USER-UUID': userInfo?.user_id,
         }
@@ -214,14 +214,24 @@ function MyApps() {
     return (
       <form onSubmit={handleSearchApp}>
         <div className='search_bar'>
-          <input
-            type="search"
-            placeholder="Search apps here"
-            onChange={(e) => setSearchInput(e.target.value)}
-            value={searchInput}
-          />
-          <label>
-            Pick filter:
+          <div className="input-container">
+            <label>Filter Type:</label>
+            <select name="filter_type" className="input-style filter-type" onChange={(e) => setSelectedFilterType(e.target.value)}>
+              <option value="normal">Normal</option>
+              <option value="complex">Complex</option>
+            </select>
+          </div>
+          <div className='input-container'>
+            <label>Search:</label>
+            <input
+              type="search"
+              placeholder="Search apps here"
+              onChange={(e) => setSearchInput(e.target.value)}
+              value={searchInput}
+            />
+          </div>
+          <div className='input-container'>
+            <label>Pick filter:</label>
             <select value={typeInput} onChange={(e) => setTypeInput(e.target.value)}>
               <option value="name">name</option>
               <option value="kname">name(keyword)</option>
@@ -234,10 +244,10 @@ function MyApps() {
               <option value="schedule_type">ScheduleType</option>
               <option value="custom_filter">CustomFilter</option>
             </select>
-          </label>
+          </div>
           {timestampOn &&
-            <label>
-              Pick Range:
+            <div className='input-container'>
+              <label>Pick Range:</label>
               <select value={timestampInput} onChange={(e) => setTimestampInput(e.target.value)}>
                 <option value="1 day">1 day</option>
                 <option value="3 days">3 days</option>
@@ -247,10 +257,10 @@ function MyApps() {
                 <option value="60 days">60 days</option>
                 <option value="90 days">90 days</option>
               </select>
-            </label>
+            </div>
           }
-          <label>
-            Sorting Types:
+          <div className='input-container'>
+            <label>Sorting Types:</label>
             <select value={sortQueryInput} onChange={(e) => setSortQueryInput(e.target.value)}>
               <option value="name|asc">Sort names ascending</option>
               <option value="name|desc">Sort names descending</option>
@@ -259,7 +269,7 @@ function MyApps() {
               <option value="updated_timestamp|asc">Sort by Last Updated ascending</option>
               <option value="updated_timestamp|desc">Sort by Last Updated descending</option>
             </select>
-          </label>
+          </div>
           <button type="submit" className='button-3'>
             Submit
           </button>
@@ -272,14 +282,24 @@ function MyApps() {
     return (
       <form onSubmit={handleSearchApp}>
         <div className='search_bar'>
-          <input
-            type="search"
-            placeholder="Build your filter query"
-            onChange={(e) => setSearchInput(e.target.value)}
-            value={searchInput}
-          />
-          <label>
-            Sorting Types:
+          <div className="input-container">
+            <label>Filter Type:</label>
+            <select name="filter_type" className="input-style filter-type" onChange={(e) => setSelectedFilterType(e.target.value)}>
+              <option value="normal">Normal</option>
+              <option value="complex">Complex</option>
+            </select>
+          </div>
+          <div className="input-container">
+            <label>Search:</label>
+            <input
+              type="search"
+              placeholder="Build your filter query"
+              onChange={(e) => setSearchInput(e.target.value)}
+              value={searchInput}
+            />
+          </div>
+          <div className='input-container'>
+            <label>Sorting Types:</label>
             <select value={sortQueryInput} onChange={(e) => setSortQueryInput(e.target.value)}>
               <option value="name|asc">Sort names ascending</option>
               <option value="name|desc">Sort names descending</option>
@@ -288,7 +308,7 @@ function MyApps() {
               <option value="updated_timestamp|asc">Sort by Last Updated ascending</option>
               <option value="updated_timestamp|desc">Sort by Last Updated descending</option>
             </select>
-          </label>
+          </div>
           <button type="submit" className='button-3'>
             Submit
           </button>
@@ -340,18 +360,7 @@ function MyApps() {
 
   return (
     <div className='myapps_container'>
-      <div className="search_bar filter_type_select">
-        <label>
-          Filter Type:
-          <select name="filter_type" className="input-style filter-type" onChange={(e) => setSelectedFilterType(e.target.value)}>
-            <option value="normal">Normal</option>
-            <option value="complex">Complex</option>
-          </select>
-        </label>
-
-      </div>
       {renderFilter()}
-
       <div className="table-container" id='container'>
         <table className="table">
           <thead>
