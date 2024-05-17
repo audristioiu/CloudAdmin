@@ -2,6 +2,7 @@ package api
 
 import (
 	"archive/zip"
+	"bytes"
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
 
@@ -77,6 +78,17 @@ func (api *API) BasicAuthenticate(request *restful.Request, response *restful.Re
 		return
 	}
 	chain.ProcessFilter(request, response)
+}
+
+// CompressedEncodingFilter compresses response
+func (api *API) CompressedEncodingFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	// wrap responseWriter into a compressing one
+	compress, _ := restful.NewCompressingResponseWriter(resp.ResponseWriter, restful.ENCODING_GZIP)
+	resp.ResponseWriter = compress
+	defer func() {
+		compress.Close()
+	}()
+	chain.ProcessFilter(req, resp)
 }
 
 // UserRegister creates a user
@@ -850,7 +862,7 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 			}
 		}
 
-		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "is_running=true", "", "", userApps, []string{})
+		_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, `is_running="true"`, "", "", userApps, []string{})
 		if err != nil {
 			api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 			errorData.Message = "Internal error / error in retrieving apps"
@@ -2384,7 +2396,7 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 	}
 
 	appsData := make([]*domain.ApplicationData, 0)
-	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "is_running=true", "", "", appNamesList, []string{})
+	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, `is_running="true"`, "", "", appNamesList, []string{})
 	if err != nil {
 		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
 		errorData.Message = "Internal error / error in retrieving apps"
@@ -2691,7 +2703,6 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	for _, app := range appsInfo.Response {
 		go func(app *domain.ApplicationData) {
 			defer wg.Done()
-
 			dirName := strings.ReplaceAll(strings.Split(app.Name, ".")[0], "_", "-")
 			filesFromAppFolder := make([]string, 0)
 
@@ -3035,7 +3046,106 @@ func (api *API) GetPodResults(request *restful.Request, response *restful.Respon
 	podLogsResponse.PrintMessage = podLogs
 	podLogsResponse.AppName = podName
 	response.WriteEntity(podLogsResponse)
+}
 
+func (api *API) GetPodFile(request *restful.Request, response *restful.Response) {
+
+	errorData := domain.ErrorResponse{}
+
+	username := request.QueryParameter("username")
+	if username == "" {
+		api.apiLogger.Error(" Couldn't read username query parameter")
+		errorData.Message = "Bad Request/ empty username"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appName := request.QueryParameter("app_name")
+	if appName == "" {
+		api.apiLogger.Error(" Couldn't read app name query parameter")
+		errorData.Message = "Bad Request/ empty app name"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	podName := strings.ReplaceAll(appName, "_", "-")
+	podName = strings.ReplaceAll(podName, ".", "-") + "-deployment"
+
+	userData, err := api.psqlRepo.GetUserData(username)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", username))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	userUUID := request.HeaderParameter("USER-UUID")
+	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
+	if err != nil {
+		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
+		errorData.Message = "User not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserName != checkUserData.UserName {
+		errorData.Message = "Status forbidden"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+	if userData.UserLocked {
+		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
+		errorData.StatusCode = http.StatusForbidden
+		response.WriteHeader(http.StatusForbidden)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
+		api.apiLogger.Error("Apps not found", zap.Any("apps", appName))
+		errorData.Message = "Apps not found"
+		errorData.StatusCode = http.StatusNotFound
+		response.WriteHeader(http.StatusNotFound)
+		response.WriteEntity(errorData)
+		return
+
+	}
+
+	appData := domain.ApplicationData{}
+	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{appName}, []string{})
+	if err != nil {
+		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
+		errorData.Message = "Internal error / error in retrieving apps"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
+	appData = *userAppsData[0]
+
+	fileName := request.QueryParameter("file_name")
+	podFileContent, err := api.kubeClient.GetPodFile(fileName, appName, podName, appData.Namespace)
+	if err != nil {
+		errorData.Message = "Bad Request/ no pod found"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	totalRequestsMetric.Inc(1)
+	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
+	response.AddHeader("Content-Disposition", "attachment; filename="+fileName)
+	response.AddHeader("Content-Type", "application/octet-stream")
+	io.Copy(response, bytes.NewReader(podFileContent))
 }
 
 // SubmitForm submits form

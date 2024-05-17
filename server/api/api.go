@@ -24,6 +24,7 @@ const (
 	aggregatesPath          = "/aggregates"
 	schedulePath            = "/schedule"
 	getPodResultPath        = "/getresults"
+	getPodFilePath          = "/getpodfile"
 	grafanaDataSourcePath   = "/grafana/datasource"
 	grafanaAlertPath        = "/grafana/alert"
 	grafanaUpdateAlertPath  = "/grafana/update_alert"
@@ -113,6 +114,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.GetUserProfile).
 			Writes(domain.UserData{}).
 			Returns(http.StatusOK, "OK", domain.UserData{}).
@@ -130,6 +132,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			Writes(domain.QueryResponse{}).
 			To(api.UpdateUserProfile).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -146,6 +149,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.DeleteUser).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -161,6 +165,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.GenerateOTPToken).
 			Writes(domain.GenerateOTPResponse{}).
 			Returns(http.StatusOK, "OK", domain.GenerateOTPResponse{}).
@@ -177,6 +182,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.VerifyOTPToken).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -193,6 +199,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.ValidateOTPToken).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -209,6 +216,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.DisableOTP).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -229,6 +237,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes("multipart/form-data").
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.UploadApp).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -253,6 +262,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.GetAppsInfo).
 			Writes(domain.GetApplicationsData{}).
 			Returns(http.StatusOK, "OK", domain.GetApplicationsData{}).
@@ -288,6 +298,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.UpdateApp).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -305,6 +316,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.DeleteApp).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -327,6 +339,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.ScheduleApps).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -345,9 +358,27 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.GetPodResults).
 			Writes(domain.GetLogsFromPod{}).
 			Returns(http.StatusOK, "OK", domain.GetLogsFromPod{}).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			GET(getPodFilePath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("app_name", "app name from where you want to get file from").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("file_name", "name of the file you want to download").DataType("string").Required(false).AllowEmptyValue(true)).
+			Doc("Download pod file").
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_OCTET).
+			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
+			To(api.GetPodFile).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
 	ws.Route(
@@ -360,6 +391,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.SubmitForm).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -398,6 +430,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.CreateAppAlert).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -419,6 +452,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.UpdateAppAlert).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -437,6 +471,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.DeleteAppAlert).
 			Writes(domain.QueryResponse{}).
 			Returns(http.StatusOK, "OK", domain.QueryResponse{}).
@@ -455,6 +490,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
 			To(api.GetAlertTriggerNotification).
 			Writes(domain.AlertNotification{}).
 			Returns(http.StatusOK, "OK", domain.AlertNotification{}).

@@ -78,6 +78,7 @@ function MyApps() {
       const config_app = {
         headers: {
           'Content-type': 'multipart/form-data',
+          "Accept-Encoding" : "gzip",
           'USER-AUTH': userInfo?.role,
           'USER-UUID': userInfo?.user_id,
         },
@@ -168,6 +169,7 @@ function MyApps() {
       const userConfig = {
         headers: {
           'Content-type': 'application/json',
+          "Accept-Encoding" : "gzip",
           'USER-AUTH': userInfo?.role,
           'USER-UUID': userInfo?.user_id,
         }

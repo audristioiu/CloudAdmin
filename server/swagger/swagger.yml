@@ -201,7 +201,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/domain.ErrorResponse'
         '403':
-          description: User not allowed as admin
+          description: User not authorized
           content:
             application/json:
               schema:
@@ -435,7 +435,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/domain.ErrorResponse'
         '403':
-          description: User not allowed as admin
+          description: User not authorized
           content:
             application/json:
               schema:
@@ -496,6 +496,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/domain.ErrorResponse'
+  /getpodfie:
+    get:
+      tags:
+        - schedule
+      summary: Get pod file
+      operationId: GetPodFile
+      parameters:
+        - name: USER-AUTH
+          in: header
+          description: role used for auth
+          required: true
+          schema:
+            type: string
+        - name: USER-UUID
+          in: header
+          description: user unique id
+          required: true
+          schema:
+            type: string
+        - name: username
+          in: query
+          description: owner of the apps
+          required: true
+          schema:
+            type: string
+        - name: app_name
+          in: query
+          description: app name from where you want to get file from
+          required: true
+          schema:
+            type: string
+        - name: file_name
+          in: query
+          description: name of the file you want to download
+          required: true
+          schema:
+            type: string            
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                $ref: ''
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/domain.ErrorResponse'
+        '404':
+          description: User/Apps/Pod not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/domain.ErrorResponse'                
   /user:
     put:
       tags:
@@ -622,7 +678,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/domain.ErrorResponse'
         '403':
-          description: User not allowed as admin
+          description: User not authorized
           content:
             application/json:
               schema:

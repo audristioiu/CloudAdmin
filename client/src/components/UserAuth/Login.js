@@ -21,6 +21,7 @@ function Login({ setAuth }) {
       const config = {
         headers: {
           "Content-type": "application/json",
+          "Accept-Encoding" : "gzip"
         },
       };
 

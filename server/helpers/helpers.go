@@ -585,15 +585,15 @@ func GenerateDockerFile(dirName,
 			}
 		}
 		//check if extra files does exist in directory
-		_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".in")
+		_, err = os.Stat(filepath.Join(path, strings.Split(appData.Name, ".")[0]+".in"))
 		if err == nil {
-			copy(path+strings.Split(appData.Name, ".")[0]+".in", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".in")))
+			copy(filepath.Join(path, strings.Split(appData.Name, ".")[0]+".in"), filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".in")))
 			inFile := strings.Split(appData.Name, ".")[0] + ".in"
 			inOutFiles = append(inOutFiles, inFile+" "+inFile)
 		}
-		_, err = os.Stat(path + strings.Split(appData.Name, ".")[0] + ".out")
+		_, err = os.Stat(filepath.Join(path, strings.Split(appData.Name, ".")[0]+".out"))
 		if err == nil {
-			copy(path+strings.Split(appData.Name, ".")[0]+".out", filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".out")))
+			copy(filepath.Join(path, strings.Split(appData.Name, ".")[0]+".out"), filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".out")))
 			outFile := strings.Split(appData.Name, ".")[0] + ".out"
 			inOutFiles = append(inOutFiles, outFile+" "+outFile)
 		}
@@ -973,7 +973,6 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 		var stderr bytes.Buffer
 		execCommand.Stdout = &out
 		execCommand.Stderr = &stderr
-
 		start := time.Now()
 		err := execCommand.Run()
 		if err != nil {

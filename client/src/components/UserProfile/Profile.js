@@ -38,6 +38,7 @@ const ProfilePage = () => {
       const config = {
         headers: {
           "Content-type": "application/json",
+          "Accept-Encoding" : "gzip",
           "USER-AUTH": userInfo?.role,
           "USER-UUID": userInfo?.user_id,
         },
@@ -59,6 +60,7 @@ const ProfilePage = () => {
       const config = {
         headers: {
           "Content-type": "application/json",
+          "Accept-Encoding" : "gzip",
           "USER-AUTH": userInfo?.role,
           "USER-UUID": userInfo?.user_id,
         },
@@ -131,6 +133,7 @@ const ProfilePage = () => {
             {
               headers: {
                 "Content-type": "application/json",
+                "Accept-Encoding" : "gzip",
               },
               params: {
                 "old_password": false,
@@ -141,6 +144,7 @@ const ProfilePage = () => {
           const config = {
             headers: {
               "Content-type": "application/json",
+              "Accept-Encoding" : "gzip",
               "USER-AUTH": userInfo?.role,
               "USER-UUID": userInfo?.user_id,
             },
