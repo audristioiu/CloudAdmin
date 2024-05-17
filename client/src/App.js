@@ -8,6 +8,7 @@ import Main from './components/Main';
 import ProfilePage from './components/UserProfile/Profile';
 import EditProfilePage from './components/UserProfile/EditProfilePage';
 import MyApps from './components/UserApps/MyApps';
+import MyAppsAlerts from './components/AppAlerts/MyAppsAlerts';
 import EditApp from './components/UserApps/EditApp';
 import OneTimePassword from "./components/OneTimePass/OneTimePassword";
 import OneTimePasswordValidate from "./components/OneTimePass/OneTimePasswordValidate";
@@ -53,6 +54,10 @@ function App() {
         <Route path='/myapps' element={<>
           <Navbar />
           <MyApps />
+        </>} />
+        <Route path='/myappsalerts' element={<>
+          <Navbar />
+          <MyAppsAlerts />
         </>} />
         <Route path='/editapp' element={<EditApp />} />
         <Route path='/grafana/cpu' element={<GrafanaPanelCPU />} />

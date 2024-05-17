@@ -26,7 +26,10 @@ const Navbar = () => {
             Profile
           </NavLink>
           <NavLink to='/myapps' activeclassname="active" className="nav-link">
-            MyApps
+            My Apps
+          </NavLink>
+          <NavLink to='/myappsalerts' activeclassname="active" className="nav-link">
+            My Apps Alerts
           </NavLink>
           <button className='logout-btn' onClick={logout}>
             Logout
