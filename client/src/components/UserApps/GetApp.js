@@ -35,12 +35,12 @@ function GetApp(props) {
 
       await axios.get(`https://localhost:9443/getresults`, {
         params: {
-          pod_name: podName,
+          app_name: podName,
         },
         ...config,
         httpsAgent: agent,
       });
-
+      setErrorMessage();
     } catch (error) {
       setErrorMessage('Failed to schedule APP. Please try again. /' + error.response.data.message);
     }

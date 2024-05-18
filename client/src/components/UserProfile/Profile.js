@@ -50,6 +50,7 @@ const ProfilePage = () => {
       await axios.post(
         "https://localhost:9443/otp/disable",
         {}, config, { httpsAgent: agent },);
+      setErrorMessage();  
     } catch (error) {
       setErrorMessage("Could not disable otp : " + error.response.data.message);
     }

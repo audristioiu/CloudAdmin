@@ -52,9 +52,10 @@ function Home() {
             nrTotalMainApps: main_apps_total_count,
             nrTotalRunningApps: running_apps_total_count,
           });
+          setErrorMessage();
         }
       } catch (error) {
-        // setErrorMessage(`Could not retrieve apps count details. Error : ` + error.response.data.message);
+        setErrorMessage(`Could not retrieve apps count details. Error : ` + error.response.data.message);
       }
     };
 

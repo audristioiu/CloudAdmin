@@ -584,7 +584,7 @@ func GenerateDockerFile(dirName,
 				return "", nil, err
 			}
 		}
-		//check if extra files does exist in directory
+		//check if extra files do exist in directory
 		_, err = os.Stat(filepath.Join(path, strings.Split(appData.Name, ".")[0]+".in"))
 		if err == nil {
 			copy(filepath.Join(path, strings.Split(appData.Name, ".")[0]+".in"), filepath.Join(mkDirName, filepath.Base(strings.Split(appData.Name, ".")[0]+".in")))
@@ -597,15 +597,15 @@ func GenerateDockerFile(dirName,
 			outFile := strings.Split(appData.Name, ".")[0] + ".out"
 			inOutFiles = append(inOutFiles, outFile+" "+outFile)
 		}
-		_, err = os.Stat(path + "package.json")
+		_, err = os.Stat(filepath.Join(path, "package.json"))
 		if err == nil {
 			hasPkg = true
 		}
-		_, err = os.Stat(path + "requirements.txt")
+		_, err = os.Stat(filepath.Join(path, "requirements.txt"))
 		if err == nil {
 			hasReqs = true
 		}
-		_, err = os.Stat(path + "go.mod")
+		_, err = os.Stat(filepath.Join(path, "go.mod"))
 		if err == nil {
 			hasGoMod = true
 		}

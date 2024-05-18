@@ -40,8 +40,10 @@ function Login({ setAuth }) {
       localStorage.setItem("userInfo", JSON.stringify(data));
       setAuth(true);
       if (data.otp_data.otp_enabled) {
+        setErrorMessage();
         history('/otp/validate');
       } else {
+        setErrorMessage();
         history('/');
       }
      

@@ -47,7 +47,7 @@ function Register() {
           config,
           { httpsAgent: agent },
         );
-
+        setErrorMessage();
         history('/login');
       } catch (error) {
 

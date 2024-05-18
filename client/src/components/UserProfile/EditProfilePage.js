@@ -73,6 +73,7 @@ const EditProfilePage = () => {
                 config,
                 { httpsAgent: agent },
               );
+              setErrorMessage();
             } catch (error) {
               setErrorMessage("Wrong old password / " +error.response.data.message);
               return
@@ -85,11 +86,13 @@ const EditProfilePage = () => {
           const response = await axios.put(`https://localhost:9443/user/`, updatedData, config, { httpsAgent: agent },);
           if (response.status === 200) {
             // Profile updated successfully, navigate back to profile page
+            setErrorMessage();
             navigate('/profile');
           }
         } else {
           const response = await axios.put(`https://localhost:9443/user/`, updatedData, config, { httpsAgent: agent },);
           if (response.status === 200) {
+            setErrorMessage();
             // Profile updated successfully, navigate back to profile page
             navigate('/profile');
           }

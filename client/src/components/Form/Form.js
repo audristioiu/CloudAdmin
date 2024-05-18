@@ -103,6 +103,7 @@ const Questions = () => {
             },
             { httpsAgent: agent },
           );
+          setErrorMessage();
       } catch (error) {
         setErrorMessage('Error submitting form:' +error.response.data.message);
       }

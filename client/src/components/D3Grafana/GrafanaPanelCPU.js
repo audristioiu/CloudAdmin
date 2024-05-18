@@ -27,7 +27,8 @@ const GrafanaPanelCPU = () => {
         });
         // Assuming the response data is in JSON format
         const data = response.data
-        setPanelData(data)
+        setPanelData(data);
+        setErrorMessage();
       } catch (error) {
         setErrorMessage('Error fetching grafana cpu data:' +error.response.data.message);
       }

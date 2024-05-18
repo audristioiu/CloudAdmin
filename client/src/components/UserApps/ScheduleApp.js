@@ -48,7 +48,7 @@ function ScheduleApp({ app }) {
         ...config,
         httpsAgent: agent,
       });
-
+      setErrorMessage();
     } catch (error) {
       setErrorMessage('Failed to schedule APP. Please try again. /' + error.response.data.message);
     }

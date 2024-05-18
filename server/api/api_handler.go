@@ -2734,7 +2734,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			var tagName string
 
 			// Build and push images concurrently
-			if math.Trunc(time.Since(app.UpdatedTimestamp).Seconds()) <= float64(10) || app.UpdatedTimestamp.UnixNano() == app.CreatedTimestamp.UnixNano() {
+			if math.Trunc(time.Since(app.UpdatedTimestamp).Seconds()) <= float64(60) || app.UpdatedTimestamp.UnixNano() == app.CreatedTimestamp.UnixNano() {
 				err = api.dockerClient.BuildImage(imageName)
 				if err != nil {
 					errChan <- err
@@ -3385,7 +3385,7 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 					IntervalMs:    1000,
 					MaxDataPoints: 43200,
 					RefID:         "A",
-					Target:        fmt.Sprintf(`cloudadminapi.default.*.%s.mem_usage.value`, deployAppName),
+					Target:        fmt.Sprintf(`cloudadminapi.*.*.%s.mem_usage.value`, deployAppName),
 				},
 			},
 			{
@@ -3502,7 +3502,8 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 	alertBody.Title = "CPU Alert for app " + appName
 	alertBody.Annotations.Description = "CPU Alert for app " + appName
 	alertBody.Annotations.Summary = "CPU Alert for app " + appName
-	alertBody.Data[0].Model.Target = fmt.Sprintf(`cloudadminapi.default.*.%s.cpu_usage.value`, deployAppName)
+	alertBody.Updated = time.Now().Format(time.RFC3339)
+	alertBody.Data[0].Model.Target = fmt.Sprintf(`cloudadminapi.*.*.%s.cpu_usage.value`, deployAppName)
 	alertBody.Data[2].Model.Conditions[0].Evaluator.Params[0] = 500
 
 	respAlert, err = api.grafanaHTTPClient.CreateAlertRule(alertBody)
@@ -3689,7 +3690,7 @@ func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Respo
 					IntervalMs:    1000,
 					MaxDataPoints: 43200,
 					RefID:         "A",
-					Target:        fmt.Sprintf(`cloudadminapi.default.*.%s.mem_usage.value`, deployAppName),
+					Target:        fmt.Sprintf(`cloudadminapi.*.*.%s.mem_usage.value`, deployAppName),
 				},
 			},
 			{
@@ -3786,7 +3787,8 @@ func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Respo
 	alertBody.Title = "CPU Alert for app " + appName
 	alertBody.Annotations.Description = "CPU Alert for app " + appName
 	alertBody.Annotations.Summary = "CPU Alert for app " + appName
-	alertBody.Data[0].Model.Target = fmt.Sprintf(`cloudadminapi.default.*.%s.cpu_usage.value`, deployAppName)
+	alertBody.Updated = time.Now().Format(time.RFC3339)
+	alertBody.Data[0].Model.Target = fmt.Sprintf(`cloudadminapi.*.*.%s.cpu_usage.value`, deployAppName)
 	alertBody.Data[2].Model.Conditions[0].Evaluator.Params[0] = int(newCPUTreshholdValue)
 	alertBody.UID = alertUIDs[1]
 	err = api.grafanaHTTPClient.UpdateAlertRule(alertUIDs[1], alertBody)
@@ -3916,21 +3918,12 @@ func (api *API) DeleteAppAlert(request *restful.Request, response *restful.Respo
 
 func (api *API) GetAlertTriggerNotification(request *restful.Request, response *restful.Response) {
 	errorData := domain.ErrorResponse{}
+	alertsStatus := make([]*domain.AlertNotification, 0)
 
 	username := request.QueryParameter("username")
 	if username == "" {
 		api.apiLogger.Error(" Couldn't read username query parameter")
 		errorData.Message = "Bad Request/ empty username"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-
-	alertRuleID := request.QueryParameter("alert_id")
-	if alertRuleID == "" {
-		api.apiLogger.Error(" Couldn't read alert_id query parameter")
-		errorData.Message = "Bad Request/ empty alert id"
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
 		response.WriteEntity(errorData)
@@ -3991,7 +3984,7 @@ func (api *API) GetAlertTriggerNotification(request *restful.Request, response *
 		return
 	}
 
-	alertRuleInfo, err := api.grafanaHTTPClient.GetAlertRuleByID(alertRuleID)
+	alertRuleInfo, err := api.grafanaHTTPClient.GetAlertRuleByID(appInfo[0].AlertIDs[0])
 	if err != nil {
 		errorData.Message = "Bad Request/ " + err.Error()
 		errorData.StatusCode = http.StatusBadRequest
@@ -3999,7 +3992,6 @@ func (api *API) GetAlertTriggerNotification(request *restful.Request, response *
 		response.WriteEntity(errorData)
 		return
 	}
-
 	alertTriggerInformation, err := api.grafanaHTTPClient.GetAlertNotification(alertRuleInfo.ID)
 	if err != nil {
 		errorData.Message = "Bad Request/ " + err.Error()
@@ -4008,8 +4000,27 @@ func (api *API) GetAlertTriggerNotification(request *restful.Request, response *
 		response.WriteEntity(errorData)
 		return
 	}
+	alertsStatus = append(alertsStatus, alertTriggerInformation[0])
 
-	response.WriteEntity(alertTriggerInformation[0])
+	alertRuleInfo, err = api.grafanaHTTPClient.GetAlertRuleByID(appInfo[0].AlertIDs[1])
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	alertTriggerInformation, err = api.grafanaHTTPClient.GetAlertNotification(alertRuleInfo.ID)
+	if err != nil {
+		errorData.Message = "Bad Request/ " + err.Error()
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	alertsStatus = append(alertsStatus, alertTriggerInformation[0])
+
+	response.WriteEntity(alertsStatus)
 }
 
 // StartProfiler starts the cpu profiler

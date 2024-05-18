@@ -85,6 +85,7 @@ const OneTimePassword = () => {
               "https://localhost:9443/otp/verify",
             {"token": codeData},config, { httpsAgent : agent },);
             if (response.status === 200) {
+                setErrorMessage();
                 history('/profile')
             }
             

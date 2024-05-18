@@ -74,6 +74,7 @@ const OneTimePasswordValidate = () => {
               "https://localhost:9443/otp/validate",
             {token: codeData},config, { httpsAgent : agent },);
              if (response.status === 200){
+                setErrorMessage();
                 history('/')
              }
           } catch (error) {

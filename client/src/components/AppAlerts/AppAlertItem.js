@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import Modal from 'react-modal';
 import '../../assets/MyApps.scss';
+import certs from '../../Certs/certs.js';
+import axios from 'axios';
 import GetAlert from "./GetAlert";
-import { useNavigate } from 'react-router-dom';
+import { Agent } from 'https';
 
 function AppAlertItem({ app, onSelect, isSelected }) {
   const [appName, setAppName] = useState(app.name);
@@ -13,7 +15,9 @@ function AppAlertItem({ app, onSelect, isSelected }) {
   const [appScheduleType, setAppScheduleType] = useState(app.schedule_type);
   const [appPort, setAppPort] = useState(app.port);
   const [appIPAddress, setAppIPAddress] = useState(app.ip_address);
+  const [appAlertIDs, setAppAlertIDs] = useState(app.alert_ids);
   const [isGetAlertModalOpen, setIsGetAlertModalOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const toggleSelection = () => {
     onSelect(app.name, !app.isSelected);
@@ -28,6 +32,7 @@ function AppAlertItem({ app, onSelect, isSelected }) {
     setAppScheduleType(app.schedule_type);
     setAppPort(app.port);
     setAppIPAddress(app.ip_address);
+    setAppAlertIDs(app.alert_ids)
   }, [app]);
 
   const getStatusClass = () => (appRunningState == "true" ? 'active' : 'inactive');
@@ -41,11 +46,69 @@ function AppAlertItem({ app, onSelect, isSelected }) {
   };
 
   const handleCreateAlert = async () => {
-		
+    try {
+      const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+      const username = userInfo?.username;
+      const agent = new Agent({
+        cert: certs.certFile,
+        key: certs.keyFile,
+      });
+
+      const config = {
+        headers: {
+          "Content-type": "application/json",
+          "Accept-Encoding": "gzip",
+          "USER-AUTH": userInfo?.role,
+          "USER-UUID": userInfo?.user_id,
+        },
+        params: {
+          username,
+          app_name: appName,
+        }
+      };
+
+      await axios.get(`https://localhost:9443/grafana/alert`, {
+        ...config,
+        httpsAgent: agent,
+      });
+      setErrorMessage();
+    } catch (error) {
+      setErrorMessage('Failed to create alert for APP. Please try again. /' + error.response.data.message);
+    }
+
 	};
 
   const handleDeleteAlert = async () => {
-		
+    try {
+      const userInfo = JSON.parse(localStorage.getItem('userInfo'));
+      const username = userInfo?.username;
+      const agent = new Agent({
+        cert: certs.certFile,
+        key: certs.keyFile,
+      });
+
+      const config = {
+        headers: {
+          "Content-type": "application/json",
+          "Accept-Encoding": "gzip",
+          "USER-AUTH": userInfo?.role,
+          "USER-UUID": userInfo?.user_id,
+        },
+        params: {
+          username,
+          app_name: appName,
+          alert_ids: appAlertIDs.join(),
+        }
+      };
+
+      await axios.delete(`https://localhost:9443/grafana/alert`, {
+        ...config,
+        httpsAgent: agent,
+      });
+      setErrorMessage();
+    } catch (error) {
+      setErrorMessage('Failed to delete alert for APP. Please try again. /' + error.response.data.message);
+    }
 	};
 
   return (

@@ -26,7 +26,8 @@ const GrafanaPanelMem = () => {
         });
         // Assuming the response data is in JSON format
         const data = response.data
-        setPanelData(data)
+        setPanelData(data);
+        setErrorMessage();
       } catch (error) {
         setErrorMessage('Error fetching grafana mem data:' +error.response.data.message);
       }

@@ -100,7 +100,7 @@ function MyApps() {
       for (var i = 0; i < selectedFiles.length; i++) {
         formData.append("file", selectedFiles[i]);
       }
-
+      setErrorMessage();
       try {
         await axios.post('https://localhost:9443/register/app', formData, config_app, { httpsAgent: agent });
       } catch (error) {
@@ -118,6 +118,7 @@ function MyApps() {
   const buildAppConfig = (userInfo, query_my_apps, username) => ({
     headers: {
       'Content-type': 'application/json',
+      'Accept-Encoding' : 'gzip',
       'USER-AUTH': userInfo?.role,
       'USER-UUID': userInfo?.user_id,
     },
@@ -163,37 +164,40 @@ function MyApps() {
     const userInfo = JSON.parse(localStorage.getItem('userInfo'));
     const username = userInfo?.username;
 
-    try {
-      const agent = new Agent({
-        rejectUnauthorized: false,
-        cert: certs.certFile,
-        key: certs.keyFile,
-      });
-      const userConfig = {
-        headers: {
-          'Content-type': 'application/json',
-          "Accept-Encoding": "gzip",
-          'USER-AUTH': userInfo?.role,
-          'USER-UUID': userInfo?.user_id,
-        }
-      };
-      const responseUser = await axios.get(`https://localhost:9443/user/${username}`, userConfig, { httpsAgent: agent });
+    const agent = new Agent({
+      rejectUnauthorized: false,
+      cert: certs.certFile,
+      key: certs.keyFile,
+    });
+    const userConfig = {
+      headers: {
+        'Content-type': 'application/json',
+        "Accept-Encoding": "gzip",
+        'USER-AUTH': userInfo?.role,
+        'USER-UUID': userInfo?.user_id,
+      }
+    };
+    const responseUser = await axios.get(`https://localhost:9443/user/${username}`, userConfig, { httpsAgent: agent });
 
-      const my_apps = responseUser.data?.applications;
+    const my_apps = responseUser.data?.applications;
 
-      if (my_apps !== undefined) {
-        const query_my_apps = my_apps.join();
-        let config_app = buildAppConfig(userInfo, query_my_apps, username);
-        config_app = buildSearchConfig(config_app, typeInput, searchInput, sortQueryInput);
-        config_app = buildPaginationConfig(config_app, itemsPerPage, itemOffset)
-        const responseApps = await axios.get('https://localhost:9443/app', config_app, { httpsAgent: agent });
+    if (my_apps !== undefined) {
+      const query_my_apps = my_apps.join();
+      let config_app = buildAppConfig(userInfo, query_my_apps, username);
+      config_app = buildSearchConfig(config_app, typeInput, searchInput, sortQueryInput);
+      config_app = buildPaginationConfig(config_app, itemsPerPage, itemOffset)
+      const responseApps = await axios.get('https://localhost:9443/app', config_app, { httpsAgent: agent });
+      const errors = responseApps.data.Errors
+      if (errors.length > 0 ) {
+        setErrorMessage(`Could not retrieve your apps. Error : ` +errors[0].message);
+        setApps([]);
+      } else {
         setApps(responseApps.data.Response);
         setPageCount(Math.ceil(responseApps.data.QueryInfo.total / itemsPerPage));
+        setErrorMessage();
       }
-    } catch (error) {
-      // setErrorMessage(`Could not retrieve your apps. Error : ` +error.response.data.message);
-      setApps([]);
     }
+    
   };
 
   useEffect(() => {

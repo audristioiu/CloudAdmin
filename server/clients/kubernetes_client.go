@@ -115,7 +115,6 @@ func (k *KubernetesClient) ListPodsMetrics() (map[string]map[string][]domain.Pod
 		}
 
 	}
-	// return podMetricsList
 	return podMetricsMap, nil
 }
 

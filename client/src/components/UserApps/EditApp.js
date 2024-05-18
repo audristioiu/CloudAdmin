@@ -41,6 +41,7 @@ function EditApp(props) {
         flag_arguments: appFlagArguments,
         param_arguments: appParamArguments
       }, config, { httpsAgent: agent });
+      setErrorMessage(); 
 
     } catch (error) {
       setErrorMessage('Failed to update APP. Please try again. /' + error.response.data.message);

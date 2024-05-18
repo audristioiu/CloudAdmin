@@ -31,16 +31,17 @@ function GetAlert(props) {
         },
         params: {
           "username": username,
+          "app_name": appName,
         }
       };
 
-      await axios.get(`https://localhost:9443/grafana/alert`, {
-        "app_name": appName,
+     const resp =  await axios.get(`https://localhost:9443/grafana/alert_trigger`, {
       }, config,
         { httpsAgent: agent },);
-
+      setErrorMessage();  
+      console.log(resp)
     } catch (error) {
-      setErrorMessage('Failed to update APP. Please try again. /' + error.response.data.message);
+      setErrorMessage('Failed to get alert status for APP. Please try again. /' + error.response.data.message);
     }
   };
 

@@ -485,15 +485,14 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("app_name", "name of the app you want to get alert details").DataType("string").Required(true)).
-			Param(ws.QueryParameter("alert_id", "id of the alert you want get trigger info ").DataType("string").Required(true)).
 			Doc("Get alert trigger details").
 			Produces(restful.MIME_JSON).
 			Consumes(restful.MIME_JSON).
 			Filter(api.BasicAuthenticate).
 			Filter(api.CompressedEncodingFilter).
 			To(api.GetAlertTriggerNotification).
-			Writes(domain.AlertNotification{}).
-			Returns(http.StatusOK, "OK", domain.AlertNotification{}).
+			Writes([]domain.AlertNotification{}).
+			Returns(http.StatusOK, "OK", []domain.AlertNotification{}).
 			Returns(http.StatusNotFound, "User/App/Alert Not Found", domain.ErrorResponse{}).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusForbidden, "User not allowed", domain.ErrorResponse{}))
