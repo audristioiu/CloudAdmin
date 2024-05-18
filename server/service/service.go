@@ -188,7 +188,7 @@ func (s *Service) StartWebService() {
 	// Optionally, you may need to enable CORS for the UI to work.
 	cors := restful.CrossOriginResourceSharing{
 		AllowedHeaders: []string{"Content-Type", "Accept", "Accept-Encoding", "USER-AUTH", "USER-UUID"},
-		AllowedDomains: []string{"https://localhost:3000"},
+		AllowedDomains: []string{"https://localhost:3000", "http://localhost:3000"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		CookiesAllowed: false,
 		Container:      restful.DefaultContainer}
