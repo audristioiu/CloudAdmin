@@ -139,21 +139,29 @@ type PodContainerMetrics struct {
 
 // DockerFile represents fields used to create a Dockerfile
 type DockerFile struct {
-	User       string
-	Workdir    string
-	Copy       string
-	From       string
-	Env        string
-	Label      string
-	Run        string
-	Arg        string
-	CopyArgs   []string
-	Shell      []string
-	Cmd        []string
-	RunApt     []string
-	Volume     []string
-	EntryPoint []string
-	ExposePort int32
+	User               string
+	Workdir            string
+	Copy               string
+	CopyPy             string
+	CopyJs             string
+	From               string
+	SecondStageWorkdir string
+	SecondStageCopy    string
+	SecondStageFrom    string
+	SecondStageRun     string
+	Env                string
+	Label              string
+	Run                string
+	RunC               string
+	RunPy              string
+	Arg                string
+	CopyArgs           []string
+	Shell              []string
+	Cmd                []string
+	RunApt             []string
+	Volume             []string
+	EntryPoint         []string
+	ExposePort         int32
 }
 
 // VTResponse represents response coming from file analysis with VT

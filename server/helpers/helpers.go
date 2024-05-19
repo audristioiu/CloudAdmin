@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"math/big"
 	"os"
@@ -278,7 +279,21 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 		}
 	}
 
-	_, err = sb.WriteString("COPY " + dockProperties.Copy)
+	if dockProperties.RunC != "" {
+		_, err = sb.WriteString("RUN " + dockProperties.RunC)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+
+	_, err = sb.WriteString("WORKDIR " + dockProperties.Workdir)
 	if err != nil {
 		logger.Error("could not writeString", zap.Error(err))
 		return err
@@ -290,7 +305,49 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 		return err
 	}
 
-	_, err = sb.WriteString("WORKDIR " + dockProperties.Workdir)
+	if dockProperties.CopyPy != "" {
+		_, err = sb.WriteString("COPY " + dockProperties.CopyPy)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+
+	if dockProperties.CopyJs != "" {
+		_, err = sb.WriteString("COPY " + dockProperties.CopyJs)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+
+	if dockProperties.RunPy != "" {
+		_, err = sb.WriteString("RUN " + dockProperties.RunPy)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+
+	_, err = sb.WriteString("COPY " + dockProperties.Copy)
 	if err != nil {
 		logger.Error("could not writeString", zap.Error(err))
 		return err
@@ -327,6 +384,100 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 		if err != nil {
 			logger.Error("could not writeString", zap.Error(err))
 			return err
+		}
+	}
+
+	if dockProperties.SecondStageFrom != "" {
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err := sb.WriteString("FROM " + dockProperties.SecondStageFrom)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+	if dockProperties.SecondStageRun != "" {
+		_, err = sb.WriteString("RUN " + dockProperties.SecondStageRun)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+
+	if dockProperties.SecondStageWorkdir != "" {
+		_, err = sb.WriteString("WORKDIR " + dockProperties.SecondStageWorkdir)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+	if dockProperties.SecondStageCopy != "" {
+		_, err = sb.WriteString("COPY " + dockProperties.SecondStageCopy)
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+
+		_, err = sb.WriteString("\n")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+	}
+
+	if len(dockProperties.EntryPoint) > 0 {
+		_, err = sb.WriteString("ENTRYPOINT " + "[")
+		if err != nil {
+			logger.Error("could not writeString", zap.Error(err))
+			return err
+		}
+		for i, entryPointArg := range dockProperties.EntryPoint {
+			_, err = sb.WriteString(fmt.Sprintf("\"%s\"", entryPointArg))
+			if err != nil {
+				logger.Error("could not writeString", zap.Error(err))
+				return err
+			}
+			if i != len(dockProperties.EntryPoint)-1 {
+				_, err = sb.WriteString(",")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+			} else {
+				_, err = sb.WriteString("]\n")
+				if err != nil {
+					logger.Error("could not writeString", zap.Error(err))
+					return err
+				}
+				break
+			}
 		}
 	}
 
@@ -405,35 +556,6 @@ func WriteDockerFile(dockerFile *os.File, dockProperties domain.DockerFile, logg
 				return err
 			}
 			if i != len(dockProperties.Volume)-1 {
-				_, err = sb.WriteString(",")
-				if err != nil {
-					logger.Error("could not writeString", zap.Error(err))
-					return err
-				}
-			} else {
-				_, err = sb.WriteString("]\n")
-				if err != nil {
-					logger.Error("could not writeString", zap.Error(err))
-					return err
-				}
-				break
-			}
-		}
-	}
-
-	if len(dockProperties.EntryPoint) > 0 {
-		_, err = sb.WriteString("ENTRYPOINT " + "[")
-		if err != nil {
-			logger.Error("could not writeString", zap.Error(err))
-			return err
-		}
-		for i, entryPointArg := range dockProperties.EntryPoint {
-			_, err = sb.WriteString(fmt.Sprintf("\"%s\"", entryPointArg))
-			if err != nil {
-				logger.Error("could not writeString", zap.Error(err))
-				return err
-			}
-			if i != len(dockProperties.EntryPoint)-1 {
 				_, err = sb.WriteString(",")
 				if err != nil {
 					logger.Error("could not writeString", zap.Error(err))
@@ -544,6 +666,21 @@ func copy(src, dst string) (int64, error) {
 	return nBytes, err
 }
 
+func find(root, ext string) []string {
+	var a []string
+	unwantedFiles := []string{"package.json", "package-log.json", "go.mod", "go.sum", "requirements.txt"}
+	filepath.WalkDir(root, func(s string, d fs.DirEntry, e error) error {
+		if e != nil {
+			return e
+		}
+		if filepath.Ext(d.Name()) == ext && !slices.Contains(unwantedFiles, s) {
+			a = append(a, s)
+		}
+		return nil
+	})
+	return a
+}
+
 // GenerateDockerFile returns name of the dockerfile created using app info + task item
 func GenerateDockerFile(dirName,
 	scheduleType string,
@@ -552,8 +689,8 @@ func GenerateDockerFile(dirName,
 	appData *domain.ApplicationData,
 	logger *zap.Logger) (string, []domain.TaskItem, error) {
 	mkDirName := dirName + "-" + strings.Split(appData.Name, ".")[1]
-	var packageJs []string
 	var inOutFiles []string
+	var dataFiles []string
 	var runJs, runPy, runGo string
 	hasPkg := false
 	hasReqs := false
@@ -609,6 +746,23 @@ func GenerateDockerFile(dirName,
 		if err == nil {
 			hasGoMod = true
 		}
+		csvFiles := find(path, ".csv")
+		if len(csvFiles) > 0 {
+			dataFiles = append(dataFiles, csvFiles...)
+		}
+		jsonFiles := find(path, ".json")
+		if len(jsonFiles) > 0 {
+			dataFiles = append(dataFiles, jsonFiles...)
+		}
+		txtFiles := find(path, ".txt")
+		if len(txtFiles) > 0 {
+			dataFiles = append(dataFiles, txtFiles...)
+		}
+		jpgFiles := find(path, ".jpg")
+		if len(jpgFiles) > 0 {
+			dataFiles = append(dataFiles, jpgFiles...)
+		}
+
 	} else {
 		for _, file := range files {
 			if strings.Contains(file, ".in") || strings.Contains(file, ".out") {
@@ -616,16 +770,17 @@ func GenerateDockerFile(dirName,
 			}
 			if strings.Contains(file, "package.json") {
 				hasPkg = true
-				packageJs = []string{"package.json package.json", "package-lock.json package-lock.json"}
-				runJs = "npm install"
 			}
 			if strings.Contains(file, "requirements.txt") {
 				hasReqs = true
-				runPy = "pip install -r requirements.txt"
 			}
 			if strings.Contains(file, "go.mod") {
 				hasGoMod = true
-				runGo = "go mod download"
+			}
+			if (strings.Contains(file, ".txt") && file != "requirements.txt" && !strings.Contains(file, appData.Name)) ||
+				(strings.Contains(file, ".json") && file != "package.json" && file != "package-lock.json") ||
+				strings.Contains(file, ".csv") || strings.Contains(file, "jpg") {
+				dataFiles = append(dataFiles, file)
 			}
 		}
 	}
@@ -640,17 +795,19 @@ func GenerateDockerFile(dirName,
 	if extension == "js" && hasPkg {
 		copy(filepath.Join(path, filepath.Base("package.json")), filepath.Join(mkDirName, filepath.Base("package.json")))
 		copy(filepath.Join(path, filepath.Base("package-lock.json")), filepath.Join(mkDirName, filepath.Base("package-lock.json")))
-		packageJs = []string{"package.json package.json", "package-lock.json package-lock.json"}
-		runJs = "npm install"
+		runJs = "npm install --production"
 	}
 	if extension == "py" && hasReqs {
 		copy(filepath.Join(path, filepath.Base("requirements.txt")), filepath.Join(mkDirName, filepath.Base("requirements.txt")))
-		runPy = "pip install -r requirements.txt"
+		runPy = "pip install --no-cache-dir -r requirements.txt"
 	}
 	if extension == "go" && hasGoMod {
 		copy(filepath.Join(path, filepath.Base("go.mod")), filepath.Join(mkDirName, filepath.Base("go.mod")))
 		copy(filepath.Join(path, filepath.Base("go.sum")), filepath.Join(mkDirName, filepath.Base("go.sum")))
 		runGo = "go mod download"
+	}
+	for _, file := range dataFiles {
+		copy(file, filepath.Join(mkDirName, filepath.Base(file)))
 	}
 	os := runtime.GOOS
 	switch mapCodeExtension[extension] {
@@ -666,12 +823,12 @@ func GenerateDockerFile(dirName,
 			}
 			execName := strings.Split(appName, ".")[0]
 			dockProps := domain.DockerFile{
-				From:     "node:latest",
-				Workdir:  "/" + execName + "/",
-				CopyArgs: packageJs,
-				Copy:     ". /" + execName,
-				Run:      runJs,
-				Cmd:      newCMD,
+				From:    "node:alpine",
+				Workdir: "/" + execName,
+				CopyJs:  " package*.json ./",
+				Copy:    ". .",
+				Run:     runJs,
+				Cmd:     newCMD,
 			}
 			if len(inOutFiles) > 0 {
 				dockProps.CopyArgs = inOutFiles
@@ -696,19 +853,26 @@ func GenerateDockerFile(dirName,
 	case "golang":
 		{
 			execName := strings.Split(appName, ".")[0]
-			newCMD := []string{"go", "run", appName}
+			newCMD := make([]string, 0)
+			localNewCMD := []string{"go", "run", appName}
 			if appData.FlagArguments != "" {
 				newCMD = append(newCMD, appData.FlagArguments)
+				localNewCMD = append(localNewCMD, appData.FlagArguments)
 			}
 			if appData.ParamArguments != "" {
 				newCMD = append(newCMD, appData.ParamArguments)
+				localNewCMD = append(localNewCMD, appData.ParamArguments)
 			}
 			dockProps := domain.DockerFile{
-				From:    "golang:1.21.3",
-				Workdir: "/" + execName + "/",
-				Copy:    ". /" + execName,
-				Run:     runGo,
-				Cmd:     newCMD,
+				From:               "golang:alpine AS builder",
+				Workdir:            "/" + execName,
+				Copy:               ". .",
+				SecondStageFrom:    "scratch",
+				SecondStageCopy:    "--from=builder " + "/" + execName + "/" + execName + " /" + execName + "/",
+				SecondStageWorkdir: "/" + execName,
+				Run:                runGo + " && go build -o " + execName + " .",
+				EntryPoint:         []string{"/" + execName + "/" + execName},
+				Cmd:                newCMD,
 			}
 			if len(inOutFiles) > 0 {
 				dockProps.CopyArgs = inOutFiles
@@ -722,7 +886,7 @@ func GenerateDockerFile(dirName,
 				return "", nil, err
 			}
 			if scheduleType == "rr_sjf_scheduler" {
-				taskExecutionTime, err = GetExecutionTimeForTasks(newCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
+				taskExecutionTime, err = GetExecutionTimeForTasks(localNewCMD, []string{appData.FlagArguments}, []string{appData.ParamArguments},
 					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, []string{}, logger)
 				if err != nil {
 					return "", nil, err
@@ -744,9 +908,10 @@ func GenerateDockerFile(dirName,
 			}
 			dockProps := domain.DockerFile{
 				From:    "python:3.10-slim",
-				Workdir: "/" + execName + "/",
-				Copy:    ". /" + execName,
-				Run:     runPy,
+				Workdir: "/" + execName,
+				CopyPy:  "requirements.txt .",
+				RunPy:   runPy,
+				Copy:    ". .",
 				Cmd:     newCMD,
 			}
 			if len(inOutFiles) > 0 {
@@ -809,11 +974,13 @@ func GenerateDockerFile(dirName,
 			var newRun string
 
 			newCMD := make([]string, 0)
+			localNewCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
 			if appData.ParamArguments != "" {
-				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
+				newCMD = append(newCMD, appData.ParamArguments)
+				localNewCMD = append(localNewCMD, "./"+execName, appData.ParamArguments)
 			} else {
-				newCMD = append(newCMD, "./"+execName)
+				localNewCMD = append(localNewCMD, "./"+execName)
 			}
 			if appData.FlagArguments != "" {
 				newRun = "gcc -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
@@ -822,11 +989,16 @@ func GenerateDockerFile(dirName,
 			}
 
 			dockProps := domain.DockerFile{
-				From:    "gcc:latest",
-				Workdir: "/" + execName + "/",
-				Copy:    ". " + "/" + execName,
-				Run:     newRun,
-				Cmd:     newCMD,
+				From:               "alpine:latest AS builder",
+				Workdir:            "/" + execName,
+				Copy:               ". .",
+				RunC:               "apk add --no-cache gcc musl-dev",
+				Run:                newRun,
+				SecondStageFrom:    "alpine:latest",
+				SecondStageCopy:    "--from=builder " + "/" + execName + "/" + execName + " /" + execName + "/",
+				SecondStageWorkdir: "/" + execName,
+				EntryPoint:         []string{"/" + execName + "/" + execName},
+				Cmd:                newCMD,
 			}
 			if len(inOutFiles) > 0 {
 				dockProps.CopyArgs = inOutFiles
@@ -841,12 +1013,12 @@ func GenerateDockerFile(dirName,
 			}
 
 			if os == "windows" {
-				newCMD[0] = newCMD[0] + ".exe"
+				localNewCMD[0] = localNewCMD[0] + ".exe"
 			}
 
 			if scheduleType == "rr_sjf_scheduler" {
 				taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
-					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
+					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, localNewCMD, logger)
 				if err != nil {
 					return "", nil, err
 				}
@@ -858,11 +1030,13 @@ func GenerateDockerFile(dirName,
 			var newRun string
 
 			newCMD := make([]string, 0)
+			localNewCMD := make([]string, 0)
 			execName := strings.Split(appName, ".")[0]
 			if appData.ParamArguments != "" {
-				newCMD = append(newCMD, "./"+execName, appData.ParamArguments)
+				newCMD = append(newCMD, appData.ParamArguments)
+				localNewCMD = append(localNewCMD, "./"+execName, appData.ParamArguments)
 			} else {
-				newCMD = append(newCMD, "./"+execName)
+				localNewCMD = append(localNewCMD, "./"+execName)
 			}
 			if appData.FlagArguments != "" {
 				newRun = "g++ -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ") + " " + appData.FlagArguments
@@ -870,11 +1044,17 @@ func GenerateDockerFile(dirName,
 				newRun = "g++ -o " + execName + " " + appName + " " + strings.Join(appData.SubgroupFiles, " ")
 			}
 			dockProps := domain.DockerFile{
-				From:    "gcc:latest",
-				Workdir: "/" + execName + "/",
-				Copy:    ". " + "/" + execName,
-				Run:     newRun,
-				Cmd:     newCMD,
+				From:               "alpine:latest AS builder",
+				Workdir:            "/" + execName,
+				Copy:               ". .",
+				RunC:               "apk add --no-cache g++ musl-dev",
+				Run:                newRun,
+				SecondStageFrom:    "alpine:latest",
+				SecondStageCopy:    "--from=builder " + "/" + execName + "/" + execName + " /" + execName + "/",
+				SecondStageWorkdir: "/" + execName,
+				SecondStageRun:     "apk add --no-cache libstdc++",
+				EntryPoint:         []string{"/" + execName + "/" + execName},
+				Cmd:                newCMD,
 			}
 			if len(inOutFiles) > 0 {
 				dockProps.CopyArgs = inOutFiles
@@ -888,11 +1068,11 @@ func GenerateDockerFile(dirName,
 				return "", nil, err
 			}
 			if os == "windows" {
-				newCMD[0] = newCMD[0] + ".exe"
+				localNewCMD[0] = localNewCMD[0] + ".exe"
 			}
 			if scheduleType == "rr_sjf_scheduler" {
 				taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
-					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, newCMD, logger)
+					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, localNewCMD, logger)
 				if err != nil {
 					return "", nil, err
 				}
@@ -1078,7 +1258,6 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 			appTxt = strings.Split(path, "/")[1]
 
 		} else {
-			//+ write in s3
 			nowTime := time.Now()
 			appData.CreatedTimestamp = nowTime
 			appData.UpdatedTimestamp = nowTime

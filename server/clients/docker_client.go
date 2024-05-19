@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/registry"
@@ -33,7 +34,8 @@ type DockerClient struct {
 
 // NewDockerClient returns a DockerClient
 func NewDockerClient(ctx context.Context, logger *zap.Logger, dockerID, dockerUser, dockerPass string) *DockerClient {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation(),
+		client.WithTimeout(time.Minute*60))
 	if err != nil {
 		logger.Error("failed to create new docker client", zap.Error(err))
 		return nil
@@ -63,6 +65,7 @@ func (dock *DockerClient) BuildImage(dirName string) error {
 		Dockerfile: "Dockerfile",
 		Tags:       []string{dock.dockerRegistryUserID + "/" + strings.ToLower(dirName)},
 		Remove:     true,
+		Version:    types.BuilderBuildKit,
 	}
 
 	res, err := dock.dockerClient.ImageBuild(dock.ctx, tar, opts)

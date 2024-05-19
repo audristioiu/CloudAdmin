@@ -1829,9 +1829,19 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				defer rc.Close()
 				if strings.Contains(f.Name, ".txt") && f.Name != "requirements.txt" {
 					if i%2 == 0 && i+1 < len(r.File) {
-						appData.Name = r.File[i+1].Name
+						if r.File[i+1].Name == "requirements.txt" {
+							appData.Name = r.File[i-1].Name
+						} else {
+							appData.Name = r.File[i+1].Name
+						}
+
 					} else if i-1 >= 0 {
-						appData.Name = r.File[i-1].Name
+						if r.File[i-1].Name == "requirements.txt" {
+							appData.Name = r.File[i+1].Name
+						} else {
+							appData.Name = r.File[i-1].Name
+						}
+
 					}
 					appData.Description = string(descr)
 
@@ -2726,8 +2736,10 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 			newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, filesFromAppFolder, int32(serverPort), app, api.apiLogger)
 			if err != nil {
-				errChan <- err
-				return
+				if !strings.Contains(err.Error(), "file already exists") {
+					errChan <- err
+					return
+				}
 			}
 
 			imageName := newDirName
