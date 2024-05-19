@@ -7,7 +7,7 @@ import '../../assets/Error.scss';
 function ScheduleApp({ app }) {
   const [appName, setAppName] = useState(app.name);
   const [appScheduleType, setAppScheduleType] = useState("normal");
-  const [appNrReplicas, setAppNrReplicas] = useState(0);
+  const [appNrReplicas, setAppNrReplicas] = useState(1);
   const [appServerPort, setAppServerPort] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -35,19 +35,15 @@ function ScheduleApp({ app }) {
         },
         params: {
           username,
-        }
-      };
-
-      await axios.get(`https://localhost:9443/schedule`, {
-        params: {
           appnames: appName,
           schedule_type: appScheduleType,
           nr_replicas: appNrReplicas,
           server_port: appServerPort,
         },
-        ...config,
         httpsAgent: agent,
-      });
+      };
+
+      await axios.get(`https://localhost:9443/schedule`, config);
       setErrorMessage();
     } catch (error) {
       setErrorMessage('Failed to schedule APP. Please try again. /' + error.response.data.message);

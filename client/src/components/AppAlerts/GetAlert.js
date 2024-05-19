@@ -52,13 +52,9 @@ function GetAlert(props) {
           Get alerts for {appName}
         </div>
 
-        <a type="submit" onClick={handleSubmit}>
-          <span></span>
-          <span></span>
-          <span></span>
-          <span></span>
+        <button type="submit" className='button-3'>
           Get Alert
-        </a>
+        </button>
       </form>
       {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </div>
