@@ -2666,6 +2666,40 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		return
 	}
 
+	appPrioritiesString := request.QueryParameter("app_priorities")
+	if scheduleType == "user_priority_min_min_scheduler" && appPrioritiesString == "" {
+		api.apiLogger.Error(" Couldn't read app priorities query parameter")
+		errorData.Message = "Bad Request/ empty schedule type"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appPrioritiesList := strings.Split(appPrioritiesString, ",")
+
+	if len(appNamesList) != len(appPrioritiesList) {
+		errorData.Message = "Mismatched number of apps and priority values"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+
+	appPriorityMap := make(map[string]int)
+	for i, appName := range appNamesList {
+		priority, err := strconv.Atoi(appPrioritiesList[i])
+		if err != nil {
+			api.apiLogger.Error("Invalid priority value", zap.String("priority", appPrioritiesList[i]))
+			errorData.Message = "Invalid priority value"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+		appPriorityMap[appName] = priority
+	}
+
 	var appsInfo domain.GetApplicationsData
 	appsInfo.Response = make([]*domain.ApplicationData, 0)
 	appsInfo.Errors = make([]domain.ErrorResponse, 0)
@@ -2788,6 +2822,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
+	// aici if nou
 	if scheduleType == "rr_sjf_scheduler" {
 
 		file, err := os.Create("tasks_duration.json")
@@ -2817,6 +2852,16 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			return
 		}
 		pairNames = schedule_alghoritms.RoundRobinShortestJobFirstAlgorithm(tasksPQ, pairNames, api.apiLogger)
+	} else if scheduleType == "user_priority_min_min_scheduler" {
+		tasksPQ, err := schedule_alghoritms.CreatePriorityQueueBasedOnPriority(appPriorityMap, appNamesList, api.apiLogger)
+		if err != nil {
+			errorData.Message = "Internal error / failed to create priority queue"
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
+		pairNames = schedule_alghoritms.UserPriorityMinMinAlgorithm(tasksPQ, pairNames, api.apiLogger)
 	}
 
 	// create deployments for each app and take into account schedulerType

@@ -11,7 +11,7 @@ var (
 	// DefaultNrDeployedApps represents default number of deployed apps for a new registered user
 	DefaultNrDeployedApps int = 0
 	// ScheduleTypes represents allowed scheduling types
-	ScheduleTypes = []string{"normal", "random_scheduler", "rr_sjf_scheduler", "multi_qos_scheduler"}
+	ScheduleTypes = []string{"normal", "random_scheduler", "rr_sjf_scheduler", "user_priority_min_min_scheduler"}
 	// LoginAttempts represents number of login attempts before timeout
 	LoginAttempts = 5
 	// TimeoutLimit represents limit of timeouts a user has
