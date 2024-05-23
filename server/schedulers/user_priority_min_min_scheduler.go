@@ -17,7 +17,7 @@ import (
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
-const MinMinSchedulerName = "user-priority-minmin-scheduler-go-deployment"
+const MinMinSchedulerName = "user-priority-min-min-scheduler-go-deployment"
 
 // UserPriorityMinMinScheduler represents a scheduler that implements the User Priority Guided Min-Min Algorithm
 type UserPriorityMinMinScheduler struct {
@@ -44,6 +44,8 @@ func NewUserPriorityMinMinScheduler(podQueue chan *v1.Pod, quit chan struct{}) U
 		log.Fatal("Failed to create metrics client:", err)
 	}
 
+	log.Println("created min min scheduler")
+
 	return UserPriorityMinMinScheduler{
 		clientset:     clientset,
 		metricsClient: metricsClient,
@@ -53,6 +55,7 @@ func NewUserPriorityMinMinScheduler(podQueue chan *v1.Pod, quit chan struct{}) U
 }
 
 func (s *UserPriorityMinMinScheduler) Run(quit chan struct{}) {
+	log.Println("started running")
 	wait.Until(s.ScheduleOne, 0, quit)
 }
 
@@ -89,16 +92,20 @@ func (s *UserPriorityMinMinScheduler) Run(quit chan struct{}) {
 // }
 
 func (s *UserPriorityMinMinScheduler) ScheduleOne() {
+	log.Println("entering scheduleone")
 	p := <-s.podQueue
 	fmt.Println("found a pod to schedule:", p.Namespace, "/", p.Name)
+	log.Println("found a pod to schedule:", p.Namespace, "/", p.Name)
 
 	nodes, err := s.nodeLister.List(labels.Everything())
+	log.Println("listed all nodes")
 	if err != nil {
 		log.Println("failed to list nodes", err.Error())
 		return
 	}
 
 	bestNode := s.findBestFit(p, nodes)
+	log.Println("found best node")
 	if bestNode == "" {
 		log.Println("cannot find node that fits pod")
 		return
@@ -147,6 +154,8 @@ func (s *UserPriorityMinMinScheduler) calculateCompletionTime(node *v1.Node, pod
 
 	cpuUtilization := float64(cpuUsage) / float64(cpuCapacity)
 
+	log.Println("node cpu:", cpuUtilization)
+
 	return cpuUtilization * 100.0
 }
 
@@ -174,7 +183,7 @@ func (s *UserPriorityMinMinScheduler) emitEvent(p *v1.Pod, message string) error
 		FirstTimestamp: metav1.NewTime(timestamp),
 		Type:           "Normal",
 		Source: v1.EventSource{
-			Component: hybridSchedulerName,
+			Component: MinMinSchedulerName,
 		},
 		InvolvedObject: v1.ObjectReference{
 			Kind:      "Pod",
