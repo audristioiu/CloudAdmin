@@ -169,6 +169,7 @@ func (s *Service) StartWebService() {
 	grafanaDataSourceUUID := os.Getenv("GF_DATASOURCE_UUID")
 	grafanaHTTPClient := clients.NewGrafanaClient(ctx, grafanaHost, grafanaUser, grafanaPass, grafanaDataSourceUUID, zapLogger)
 	zapLogger.Debug("Initialized Grafana Client")
+
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, zapLogger, profilerRepo, dockerClient, kubernetesClient, s3Client,
 		graphiteAddr, requestCount, maxRequestPerMinute, vtClient, grafanaHTTPClient)

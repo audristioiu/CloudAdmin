@@ -607,7 +607,7 @@ func (k *KubernetesClient) GetPodFile(fileName, appName, deploymentName, namespa
 		}
 
 	}
-	cmd := []string{"kubectl", "cp", "-n", namespace, podName + ":" + appName, fileName}
+	cmd := []string{"kubectl", "cp", "-n", namespace, podName + ":" + fileName, fileName}
 	command := exec.Command(cmd[0], cmd[1:]...)
 
 	var out bytes.Buffer

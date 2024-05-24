@@ -156,6 +156,7 @@ function AppAlertItem({ app, onSelect, isSelected }) {
         </Modal>
 
       </td>
+      {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </tr>
   );
 }

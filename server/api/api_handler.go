@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"cloudadmin/domain"
 	"cloudadmin/helpers"
+	"path/filepath"
 
 	schedule_alghoritms "cloudadmin/schedule_algorithms"
 	"encoding/json"
@@ -1431,15 +1432,29 @@ func (api *API) UploadApp(request *restful.Request, response *restful.Response) 
 				defer rc.Close()
 				if strings.Contains(f.Name, ".txt") && f.Name != "requirements.txt" {
 					if i%2 == 0 && i+1 < len(r.File) {
-						appTxt = r.File[i+1].Name
+						if r.File[i+1].Name == "requirements.txt" {
+							appData.Name = r.File[i-1].Name
+						} else {
+							appData.Name = r.File[i+1].Name
+						}
+
 					} else if i-1 >= 0 {
-						appTxt = r.File[i-1].Name
+						if r.File[i-1].Name == "requirements.txt" {
+							appData.Name = r.File[i+1].Name
+						} else {
+							appData.Name = r.File[i-1].Name
+						}
+
 					}
 					appsDescription = string(descr)
 					api.apiLogger.Debug("got text", zap.String("text", appTxt))
 					api.apiLogger.Debug("got app description", zap.String("app_descr", appsDescription))
 
 				} else {
+					if strings.Contains(f.Name, ".txt") || strings.Contains(f.Name, ".csv") ||
+						strings.Contains(f.Name, ".jpg") || strings.Contains(f.Name, ".json") {
+						continue
+					}
 					nowTime := time.Now()
 					appData.CreatedTimestamp = nowTime
 					appData.UpdatedTimestamp = nowTime
@@ -2912,6 +2927,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		}
 
 		userData.NrDeployedApps = userData.NrDeployedApps + 1
+		userData.Password = ""
 		err = api.psqlRepo.UpdateUserData(userData)
 		if err != nil {
 			errorData.Message = "Internal error / failed to update user"
@@ -3157,6 +3173,8 @@ func (api *API) GetPodFile(request *restful.Request, response *restful.Response)
 	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
 	response.AddHeader("Content-Disposition", "attachment; filename="+fileName)
 	response.AddHeader("Content-Type", "application/octet-stream")
+	path, _ := os.Getwd()
+	os.Remove(filepath.Join(path, filepath.Base(fileName)))
 	io.Copy(response, bytes.NewReader(podFileContent))
 }
 
@@ -3365,13 +3383,19 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 		response.WriteEntity(errorData)
 		return
 	}
+	if !appInfo[0].IsRunning {
+		errorData.Message = "Bad Request / App is not running"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	deployAppName := strings.ReplaceAll(strings.ReplaceAll(appName, ".", "-"), "_", "-") + "-deployment"
 
 	// create mem alert for app
 	alertBody := domain.GrafanaAlertInfo{
 		OrgID:     1,
-		FolderUID: "efe8a245-bb05-4919-b8cc-9a2c9620a6e0",
 		RuleGroup: "cloud-admin-team",
 		Title:     "Mem Alert for app " + appName,
 		Condition: "C",
@@ -3391,7 +3415,7 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 					From: 10800,
 					To:   0,
 				},
-				DatasourceUUID: "P6575522ED8660310",
+				DatasourceUUID: os.Getenv("GF_DATASOURCE_UUID"),
 				Model: domain.Model{
 					Hide:          false,
 					IntervalMs:    1000,
@@ -3481,7 +3505,7 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 			},
 		},
 	}
-
+	alertBody.FolderUID = os.Getenv("GF_FOLDER_UID")
 	respAlert, err := api.grafanaHTTPClient.CreateAlertRule(alertBody)
 	if err != nil {
 		errorData.Message = "Bad Request/ " + err.Error()
@@ -3676,7 +3700,6 @@ func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Respo
 	// update mem alert
 	alertBody := domain.GrafanaAlertInfo{
 		OrgID:     1,
-		FolderUID: "efe8a245-bb05-4919-b8cc-9a2c9620a6e0",
 		RuleGroup: "cloud-admin-team",
 		Title:     "Mem Alert for app " + appName,
 		Condition: "C",
@@ -3696,7 +3719,7 @@ func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Respo
 					From: 10800,
 					To:   0,
 				},
-				DatasourceUUID: "P6575522ED8660310",
+				DatasourceUUID: os.Getenv("GF_DATASOURCE_UUID"),
 				Model: domain.Model{
 					Hide:          false,
 					IntervalMs:    1000,
@@ -3786,6 +3809,7 @@ func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Respo
 			},
 		},
 	}
+	alertBody.FolderUID = os.Getenv("GF_FOLDER_UID")
 	err = api.grafanaHTTPClient.UpdateAlertRule(alertUIDs[0], alertBody)
 	if err != nil {
 		errorData.Message = "Bad Request/ " + err.Error()
@@ -4012,6 +4036,13 @@ func (api *API) GetAlertTriggerNotification(request *restful.Request, response *
 		response.WriteEntity(errorData)
 		return
 	}
+	if len(alertTriggerInformation) == 0 {
+		errorData.Message = "Internal error / Failed to get trigger alert status"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
+		response.WriteEntity(errorData)
+		return
+	}
 	alertsStatus = append(alertsStatus, alertTriggerInformation[0])
 
 	alertRuleInfo, err = api.grafanaHTTPClient.GetAlertRuleByID(appInfo[0].AlertIDs[1])
@@ -4027,6 +4058,13 @@ func (api *API) GetAlertTriggerNotification(request *restful.Request, response *
 		errorData.Message = "Bad Request/ " + err.Error()
 		errorData.StatusCode = http.StatusBadRequest
 		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
+	if len(alertTriggerInformation) == 0 {
+		errorData.Message = "Internal error / Failed to get trigger alert status"
+		errorData.StatusCode = http.StatusInternalServerError
+		response.WriteHeader(http.StatusInternalServerError)
 		response.WriteEntity(errorData)
 		return
 	}

@@ -1228,7 +1228,7 @@ func CreateFilesFromDir(filePath string, logger *zap.Logger) (mainApp domain.App
 			logger.Error("error in filepath Walk function", zap.Error(err))
 			return err
 		}
-		if !info.IsDir() {
+		if !info.IsDir() && !strings.Contains(path, ".txt") {
 			pathFiles = append(pathFiles, path)
 		}
 
