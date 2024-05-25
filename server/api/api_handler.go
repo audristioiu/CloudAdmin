@@ -2712,6 +2712,13 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	}
 
 	serverPort, _ := strconv.ParseInt(request.QueryParameter("server_port"), 0, 32)
+	if scheduleType != "random_scheduler" && scheduleType != "normal" && serverPort != int64(0) {
+		errorData.Message = "Bad Request / Server can run only on normal and random schedulling"
+		errorData.StatusCode = http.StatusBadRequest
+		response.WriteHeader(http.StatusBadRequest)
+		response.WriteEntity(errorData)
+		return
+	}
 
 	taskItems := make([]domain.TaskItem, 0)
 	pairNames := make([][]string, 0)
@@ -2889,7 +2896,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 		} else {
 			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", "",
-				int32(0), int32(nrReplicas))
+				int32(serverPort), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
