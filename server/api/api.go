@@ -25,6 +25,7 @@ const (
 	schedulePath            = "/schedule"
 	getPodResultPath        = "/getresults"
 	getPodFilePath          = "/getpodfile"
+	portForwardPath         = "/portforward"
 	grafanaDataSourcePath   = "/grafana/datasource"
 	grafanaAlertPath        = "/grafana/alert"
 	grafanaUpdateAlertPath  = "/grafana/update_alert"
@@ -379,6 +380,23 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Filter(api.BasicAuthenticate).
 			Filter(api.CompressedEncodingFilter).
 			To(api.GetPodFile).
+			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
+			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
+	ws.Route(
+		ws.
+			GET(portForwardPath).
+			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("app_name", "app name from where you want to get file from").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(false)).
+			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
+			Param(ws.QueryParameter("file_name", "name of the file you want to download").DataType("string").Required(false).AllowEmptyValue(true)).
+			Doc("Port forward deployment").
+			Metadata(restfulspec.KeyOpenAPITags, tags).
+			Produces(restful.MIME_JSON).
+			Consumes(restful.MIME_JSON).
+			Filter(api.BasicAuthenticate).
+			Filter(api.CompressedEncodingFilter).
+			To(api.PortForward).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
 	ws.Route(

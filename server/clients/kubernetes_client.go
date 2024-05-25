@@ -626,6 +626,21 @@ func (k *KubernetesClient) GetPodFile(fileName, appName, deploymentName, namespa
 
 }
 
+// PortForwarding executes kubectl port forward command
+func (k *KubernetesClient) PortForwarding(deploymentName, namespace, port string) error {
+	command := exec.Command("kubectl", "port-forward", "deployment.apps/"+deploymentName, port+":"+port, "-n", namespace)
+
+	var out bytes.Buffer
+	command.Stdout = &out
+	command.Stderr = os.Stderr
+	err := command.Run()
+	if err != nil {
+		k.kubeLogger.Error("failed to run kubectl port-forward command", zap.Error(err))
+		return err
+	}
+	return nil
+}
+
 // CreateAutoScaler creates a horizontal pod auto scaler for deploymentName
 func (k *KubernetesClient) CreateAutoScaler(deploymentName, namespace string, minReplicas, maxReplicas int32) (*hpav2.HorizontalPodAutoscaler, error) {
 	memoryTargetUtilization := int32(70)
