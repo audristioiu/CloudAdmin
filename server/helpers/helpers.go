@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cloudadmin/domain"
 	"cloudadmin/priority_queue"
+	"cloudadmin/priority_queue_min_min"
 	"container/heap"
 	"crypto/rand"
 	"crypto/sha512"
@@ -1305,6 +1306,21 @@ func CreatePQ(items []domain.TaskItem) priority_queue.PriorityQueue {
 			TaskDuration:        taskDuration,
 			InitialTaskDuration: taskDuration,
 			Index:               i,
+		}
+		i++
+	}
+	heap.Init(&tasksPriorityQueue)
+	return tasksPriorityQueue
+}
+
+func CreateMinMinPQ(appPrioritiesMap map[string]int, appNames []string) priority_queue_min_min.PriorityQueue {
+	tasksPriorityQueue := make(priority_queue_min_min.PriorityQueue, len(appNames))
+	i := 0
+	for _, appName := range appNames {
+		tasksPriorityQueue[i] = &domain.MinMinItem{
+			Name:         appName,
+			UserPriority: appPrioritiesMap[appName],
+			Index:        i,
 		}
 		i++
 	}

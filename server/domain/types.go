@@ -418,3 +418,11 @@ type Item struct {
 	TaskDuration        time.Duration
 	Index               int
 }
+
+type MinMinItem struct {
+	Name                string
+	InitialTaskDuration time.Duration
+	TaskDuration        time.Duration
+	UserPriority        int
+	Index               int
+}
