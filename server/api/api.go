@@ -335,6 +335,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.QueryParameter("schedule_type", "type of schedulling").DataType("string").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("nr_replicas", "nr of replicas").DataType("integer").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("server_port", "server port for app").DataType("integer").Required(false).AllowEmptyValue(true)).
+			Param(ws.QueryParameter("app_priorities", "user app priorities").DataType("string").Required(false).AllowEmptyValue(true).AllowMultiple(true)).
 			Doc("Schedule apps").
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).

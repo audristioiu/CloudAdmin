@@ -2885,7 +2885,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				return
 			}
 		} else if scheduleType != "normal" {
-			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
+			publicIp, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
 				int32(0), int32(nrReplicas))
 			if err != nil {
 				errorData.Message = "Internal error / error in creating deployment"

@@ -27,6 +27,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/rcrowley/go-metrics"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/net/http2"
 )
 
@@ -42,7 +43,26 @@ func NewService() *Service {
 // StartWebService initializez logger,restful and swagger api, postgres and s3 repo, local cache,docker and kubernetes clients + metrics for grafana
 func (s *Service) StartWebService() {
 
-	zapLogger, _ := zap.NewDevelopment()
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.TimeKey = "timestamp"
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+	loggerConfig := zap.Config{
+		Level:             zap.NewAtomicLevelAt(zap.InfoLevel),
+		Development:       false,
+		DisableCaller:     false,
+		DisableStacktrace: false,
+		Sampling:          nil,
+		Encoding:          "json",
+		EncoderConfig:     encoderCfg,
+		OutputPaths: []string{
+			"stderr",
+		},
+		ErrorOutputPaths: []string{
+			"stderr",
+		},
+	}
+	zapLogger := zap.Must(loggerConfig.Build())
 	defer zapLogger.Sync()
 
 	ws := new(restful.WebService)
@@ -55,7 +75,7 @@ func (s *Service) StartWebService() {
 		return
 	}
 
-	zapLogger.Debug("Env variables are loaded")
+	zapLogger.Info("Env variables are loaded")
 
 	//initialize local cache for get info endpoints
 	cache, err := ristretto.NewCache(&ristretto.Config{
@@ -68,7 +88,7 @@ func (s *Service) StartWebService() {
 		return
 	}
 
-	zapLogger.Debug("Initalized local Ristretto Cache")
+	zapLogger.Info("Initalized local Ristretto Cache")
 
 	psqlUser := os.Getenv("POSTGRES_USER")
 	psqlPass := os.Getenv("POSTGRES_PASSWORD")
@@ -82,13 +102,13 @@ func (s *Service) StartWebService() {
 		zapLogger.Fatal("[FATAL] Error in starting postgres service")
 		return
 	}
-	zapLogger.Debug("Initalized Postgres Repo")
+	zapLogger.Info("Initalized Postgres Repo")
 
 	var profilerRepo *repositories.ProfilingService
 	activateCPUProfiler := os.Getenv("ACTIVATE_CPU_PROFILER")
 	if activateCPUProfiler == "true" {
 		profilerRepo = repositories.NewProfileService("profile_cpu.prof", zapLogger)
-		zapLogger.Debug("Initialized Profiling Repo")
+		zapLogger.Info("Initialized Profiling Repo")
 	} else {
 		profilerRepo = repositories.NewProfileService("", zapLogger)
 	}
@@ -102,7 +122,7 @@ func (s *Service) StartWebService() {
 		zapLogger.Fatal("[FATAL] Error in creating kubernetes client")
 		return
 	}
-	zapLogger.Debug("Initialized Kubernetes client")
+	zapLogger.Info("Initialized Kubernetes client")
 
 	dockerUsername := os.Getenv("DOCKER_USERNAME")
 	dockerPassword := os.Getenv("DOCKER_PASSWORD")
@@ -116,7 +136,7 @@ func (s *Service) StartWebService() {
 		zapLogger.Fatal("[FATAL] Error in creating docker client")
 		return
 	}
-	zapLogger.Debug("Initialized Docker client")
+	zapLogger.Info("Initialized Docker client")
 
 	// initialize tcp address for graphite
 	graphiteHost := os.Getenv("GRAPHITE_HOST")
@@ -125,7 +145,7 @@ func (s *Service) StartWebService() {
 		zapLogger.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
 		return
 	}
-	zapLogger.Debug("Initialized graphite for metrics")
+	zapLogger.Info("Initialized graphite for metrics")
 
 	requestCount := make(map[string]int)
 	maxRequestPerMinute := 1000
@@ -139,7 +159,7 @@ func (s *Service) StartWebService() {
 			zapLogger.Fatal("[FATAL] Failed to create new virus total client")
 			return
 		}
-		zapLogger.Debug("Initialized VT Client")
+		zapLogger.Info("Initialized VT Client")
 	} else {
 		vtClient = nil
 	}
@@ -157,7 +177,7 @@ func (s *Service) StartWebService() {
 			zapLogger.Fatal("[FATAL] Error in creating s3 client")
 			return
 		}
-		zapLogger.Debug("Initialized S3 Client")
+		zapLogger.Info("Initialized S3 Client")
 	} else {
 		s3Client = nil
 	}
@@ -168,7 +188,7 @@ func (s *Service) StartWebService() {
 	grafanaHost := os.Getenv("GF_HOST")
 	grafanaDataSourceUUID := os.Getenv("GF_DATASOURCE_UUID")
 	grafanaHTTPClient := clients.NewGrafanaClient(ctx, grafanaHost, grafanaUser, grafanaPass, grafanaDataSourceUUID, zapLogger)
-	zapLogger.Debug("Initialized Grafana Client")
+	zapLogger.Info("Initialized Grafana Client")
 
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, zapLogger, profilerRepo, dockerClient, kubernetesClient, s3Client,
@@ -236,7 +256,7 @@ func (s *Service) StartWebService() {
 			metrics.Unregister(metric)
 		}
 
-		zapLogger.Debug("Stopped serving new connections.")
+		zapLogger.Info("Stopped serving new connections.")
 	}()
 	kubernetesMetrics := make([]string, 0)
 
@@ -302,7 +322,7 @@ func (s *Service) StartWebService() {
 		metrics.Unregister(metric)
 	}
 
-	zapLogger.Debug("Graceful shutdown complete.")
+	zapLogger.Info("Graceful shutdown complete.")
 }
 
 // enrichSwaggerObject describes swagger specs
@@ -323,7 +343,7 @@ func enrichSwaggerObject(swo *spec.Swagger) {
 					URL:  "http://mit.org",
 				},
 			},
-			Version: "1.9.5",
+			Version: "2.0.0",
 		},
 	}
 	swo.Tags = []spec.Tag{{TagProps: spec.TagProps{

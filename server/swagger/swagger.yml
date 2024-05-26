@@ -8,7 +8,7 @@ info:
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
-  version: 1.9.5
+  version: 2.0.0
 tags:
   - name: users
     description: Managing users
@@ -421,6 +421,12 @@ paths:
           required: false
           schema:
             type: integer
+        - name: app_priorities
+          in: query
+          description: user app priorities
+          required: false
+          schema:
+            type: string    
       responses:
         '200':
           description: OK
