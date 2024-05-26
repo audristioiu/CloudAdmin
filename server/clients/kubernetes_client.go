@@ -220,15 +220,42 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 				k.kubeLogger.Error("failed to create service account", zap.Error(err))
 				return "", err
 			}
+			clusterRole := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node-pod-metrics-reader",
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"metrics.k8s.io"},
+						Resources: []string{"nodes"},
+						Verbs:     []string{"get", "list", "watch"},
+					},
+					{
+						APIGroups: []string{""},
+						Resources: []string{"nodes", "pods"},
+						Verbs:     []string{"get", "list", "watch"},
+					},
+					{
+						APIGroups: []string{""},
+						Resources: []string{"pods/binding", "events"},
+						Verbs:     []string{"create"},
+					},
+				},
+			}
+			_, err = k.kubeClient.RbacV1().ClusterRoles().Create(k.ctx, clusterRole, metav1.CreateOptions{})
+			if err != nil {
+				k.kubeLogger.Error("Failed to create ClusterRole", zap.Error(err))
+				return "", err
+			}
 			// do it only once
 			_, err = k.kubeClient.RbacV1().ClusterRoleBindings().Update(k.ctx, &rbacv1.ClusterRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: scheduleTypeName + "-deployment",
+					Name: scheduleTypeName + "-node-pod-metrics-binding",
 				},
 				RoleRef: rbacv1.RoleRef{
 					APIGroup: "rbac.authorization.k8s.io",
 					Kind:     "ClusterRole",
-					Name:     "system:kube-scheduler",
+					Name:     "node-pod-metrics-reader",
 				},
 				Subjects: []rbacv1.Subject{
 					{
