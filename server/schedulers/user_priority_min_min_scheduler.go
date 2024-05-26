@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -58,38 +57,6 @@ func (s *UserPriorityMinMinScheduler) Run(quit chan struct{}) {
 	log.Println("started running")
 	wait.Until(s.ScheduleOne, 0, quit)
 }
-
-// func (s *UserPriorityMinMinScheduler) ScheduleOne() {
-// 	p := <-s.podQueue
-// 	fmt.Println("found a pod to schedule:", p.Namespace, "/", p.Name)
-
-// 	nodes, err := s.nodeLister.List(labels.Everything())
-// 	if err != nil {
-// 		log.Println("failed to list nodes", err.Error())
-// 		return
-// 	}
-
-// 	priorities := s.prioritize(nodes)
-// 	bestNode := s.findBestNode(priorities, s.counter)
-// 	if err != nil {
-// 		log.Println("cannot find node that fits pod", err.Error())
-// 		return
-// 	}
-
-// 	err = s.bindPod(p, bestNode)
-// 	if err != nil {
-// 		log.Println("failed to bind pod", err.Error())
-// 		return
-// 	}
-
-// 	message := fmt.Sprintf("Placed pod [%s/%s] on %s\n", p.Namespace, p.Name, bestNode)
-
-// 	err = s.emitEvent(p, message)
-// 	if err != nil {
-// 		log.Println("failed to emit scheduled event", err.Error())
-// 		return
-// 	}
-// }
 
 func (s *UserPriorityMinMinScheduler) ScheduleOne() {
 	log.Println("entering scheduleone")
@@ -146,7 +113,7 @@ func (s *UserPriorityMinMinScheduler) calculateCompletionTime(node *v1.Node, pod
 	nodeMetrics, err := s.metricsClient.MetricsV1beta1().NodeMetricses().Get(context.Background(), node.Name, metav1.GetOptions{})
 	if err != nil {
 		log.Printf("error getting node metrics: %v", err)
-		return float64(rand.Intn(100))
+		return float64(0)
 	}
 
 	cpuUsage := nodeMetrics.Usage.Cpu().MilliValue()
@@ -201,25 +168,3 @@ func (s *UserPriorityMinMinScheduler) emitEvent(p *v1.Pod, message string) error
 	}
 	return nil
 }
-
-// func (s *UserPriorityMinMinScheduler) prioritize(nodes []*v1.Node) map[string]int {
-// 	priorities := make(map[string]int)
-// 	count := 0
-// 	for _, node := range nodes {
-// 		priorities[node.Name] = count
-// 		count++
-// 	}
-// 	log.Println("calculated priorities:", priorities)
-// 	return priorities
-// }
-
-// func (s *UserPriorityMinMinScheduler) findBestNode(priorities map[string]int, value int) string {
-// 	var bestNode string
-// 	for node, p := range priorities {
-// 		if p == value {
-// 			bestNode = node
-// 			break
-// 		}
-// 	}
-// 	return bestNode
-// }
