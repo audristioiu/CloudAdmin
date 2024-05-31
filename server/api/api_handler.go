@@ -2636,7 +2636,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		return
 	}
 
-	appNamesList := strings.Split(appnames, ",")
+	appNamesList := strings.Split(appnames, ", ")
 
 	if !helpers.CheckAppsExist(userData.Applications, appNamesList) {
 		api.apiLogger.Error("Apps not found", zap.Any("apps", appNamesList))
@@ -2666,38 +2666,41 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		return
 	}
 
-	appPrioritiesString := request.QueryParameter("app_priorities")
-	if scheduleType == "user_priority_min_min_scheduler" && appPrioritiesString == "" {
-		api.apiLogger.Error(" Couldn't read app priorities query parameter")
-		errorData.Message = "Bad Request/ empty schedule type"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-
-	appPrioritiesList := strings.Split(appPrioritiesString, ",")
-
-	if len(appNamesList) != len(appPrioritiesList) {
-		errorData.Message = "Mismatched number of apps and priority values"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-
 	appPriorityMap := make(map[string]int)
-	for i, appName := range appNamesList {
-		priority, err := strconv.Atoi(appPrioritiesList[i])
-		if err != nil {
-			api.apiLogger.Error("Invalid priority value", zap.String("priority", appPrioritiesList[i]))
-			errorData.Message = "Invalid priority value"
+	if scheduleType == "user_priority_min_min_scheduler" {
+
+		appPrioritiesString := request.QueryParameter("app_priorities")
+		if appPrioritiesString == "" {
+			api.apiLogger.Error(" Couldn't read app priorities query parameter")
+			errorData.Message = "Bad Request/ empty schedule type"
 			errorData.StatusCode = http.StatusBadRequest
 			response.WriteHeader(http.StatusBadRequest)
 			response.WriteEntity(errorData)
 			return
 		}
-		appPriorityMap[appName] = priority
+
+		appPrioritiesList := strings.Split(appPrioritiesString, ", ")
+
+		if len(appNamesList) != len(appPrioritiesList) {
+			errorData.Message = "Mismatched number of apps and priority values"
+			errorData.StatusCode = http.StatusBadRequest
+			response.WriteHeader(http.StatusBadRequest)
+			response.WriteEntity(errorData)
+			return
+		}
+
+		for i, appName := range appNamesList {
+			priority, err := strconv.Atoi(appPrioritiesList[i])
+			if err != nil {
+				api.apiLogger.Error("Invalid priority value", zap.String("priority", appPrioritiesList[i]))
+				errorData.Message = "Invalid priority value"
+				errorData.StatusCode = http.StatusBadRequest
+				response.WriteHeader(http.StatusBadRequest)
+				response.WriteEntity(errorData)
+				return
+			}
+			appPriorityMap[appName] = priority
+		}
 	}
 
 	var appsInfo domain.GetApplicationsData
