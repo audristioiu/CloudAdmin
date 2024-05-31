@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -75,7 +74,7 @@ func (dock *DockerClient) BuildImage(dirName string) error {
 	}
 	defer res.Body.Close()
 
-	err = print(res.Body)
+	err = print(res.Body, dock.dockerLogger)
 	if err != nil {
 		return err
 	}
@@ -102,7 +101,7 @@ func (dock *DockerClient) PushImage(dirName string) (string, error) {
 
 	defer rd.Close()
 
-	err = print(rd)
+	err = print(rd, dock.dockerLogger)
 	if err != nil {
 		return "", err
 	}
@@ -133,13 +132,13 @@ func (dock *DockerClient) ListImagesAndDelete(dirName string) error {
 	return nil
 }
 
-func print(rd io.Reader) error {
+func print(rd io.Reader, logger *zap.Logger) error {
 	var lastLine string
 
 	scanner := bufio.NewScanner(rd)
 	for scanner.Scan() {
 		lastLine = scanner.Text()
-		fmt.Println(scanner.Text())
+		logger.Debug(scanner.Text())
 	}
 
 	errLine := &domain.ErrorLine{}

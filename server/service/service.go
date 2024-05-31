@@ -46,6 +46,7 @@ func (s *Service) StartWebService() {
 	encoderCfg := zap.NewProductionEncoderConfig()
 	encoderCfg.TimeKey = "timestamp"
 	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoderCfg.EncodeLevel = zapcore.CapitalLevelEncoder
 
 	loggerConfig := zap.Config{
 		Level:             zap.NewAtomicLevelAt(zap.InfoLevel),
@@ -60,6 +61,9 @@ func (s *Service) StartWebService() {
 		},
 		ErrorOutputPaths: []string{
 			"stderr",
+		},
+		InitialFields: map[string]interface{}{
+			"service_name": "cloudadmin",
 		},
 	}
 	zapLogger := zap.Must(loggerConfig.Build())

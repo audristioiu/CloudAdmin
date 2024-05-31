@@ -467,7 +467,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 			}
 
 		}
-		p.psqlLogger.Info(selectStatement)
+		p.psqlLogger.Debug("select query", zap.String("query", selectStatement))
 		rows, err = p.conn.Query(p.ctx, selectStatement, filterArguments)
 		if err != nil {
 			p.psqlLogger.Error(" could not retrieve app", zap.Error(err))
@@ -493,7 +493,7 @@ func (p *PostgreSqlRepo) GetAppsData(owner, filterConditions, limit, offset stri
 		if limit != "" {
 			selectStatement += " LIMIT " + limit + " "
 		}
-		p.psqlLogger.Info(selectStatement)
+		p.psqlLogger.Debug("select query", zap.String("query", selectStatement))
 		rows, err = p.conn.Query(p.ctx, selectStatement, owner, appsList)
 		if err != nil {
 			p.psqlLogger.Error(" could not retrieve apps", zap.Error(err))
