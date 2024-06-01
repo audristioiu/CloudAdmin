@@ -22,6 +22,7 @@
     "react-google-forms-hooks": "^1.2.4",
     "react-icons": "^4.10.1",
     "react-input-verification-code": "^1.0.2",
+    "react-loader-spinner": "^6.1.6",
     "react-modal": "^3.16.1",
     "react-paginate": "^8.2.0",
     "react-password-strength-bar": "^0.4.1",

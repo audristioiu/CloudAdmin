@@ -2661,7 +2661,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		return
 	}
 
-	appNamesList := strings.Split(appnames, ",")
+	appNamesList := strings.Split(appnames, ", ")
 
 	if !helpers.CheckAppsExist(userData.Applications, appNamesList) {
 		api.apiLogger.Error("Apps not found", zap.Any("apps", appNamesList))
@@ -2690,6 +2690,9 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
+
+	appPriorityMap := make(map[string]int)
+	if scheduleType == "user_priority_min_min_scheduler" {
 
 	appPrioritiesString := request.QueryParameter("app_priorities")
 	appPriorityMap := make(map[string]int)
