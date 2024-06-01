@@ -2815,7 +2815,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 					return
 				}
 			} else {
-				dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+				dockerRegID := api.dockerRegID
 				tagName = dockerRegID + "/" + strings.ToLower(imageName)
 			}
 
@@ -3580,7 +3580,7 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 					From: 10800,
 					To:   0,
 				},
-				DatasourceUUID: os.Getenv("GF_DATASOURCE_UUID"),
+				DatasourceUUID: api.grafanaDataSourceUUID,
 				Model: domain.Model{
 					Hide:          false,
 					IntervalMs:    1000,
@@ -3670,7 +3670,7 @@ func (api *API) CreateAppAlert(request *restful.Request, response *restful.Respo
 			},
 		},
 	}
-	alertBody.FolderUID = os.Getenv("GF_FOLDER_UID")
+	alertBody.FolderUID = api.grafanaFolderUID
 	respAlert, err := api.grafanaHTTPClient.CreateAlertRule(alertBody)
 	if err != nil {
 		errorData.Message = "Bad Request/ " + err.Error()
@@ -3884,7 +3884,7 @@ func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Respo
 					From: 10800,
 					To:   0,
 				},
-				DatasourceUUID: os.Getenv("GF_DATASOURCE_UUID"),
+				DatasourceUUID: api.grafanaDataSourceUUID,
 				Model: domain.Model{
 					Hide:          false,
 					IntervalMs:    1000,
@@ -3974,7 +3974,7 @@ func (api *API) UpdateAppAlert(request *restful.Request, response *restful.Respo
 			},
 		},
 	}
-	alertBody.FolderUID = os.Getenv("GF_FOLDER_UID")
+	alertBody.FolderUID = api.grafanaFolderUID
 	err = api.grafanaHTTPClient.UpdateAlertRule(alertUIDs[0], alertBody)
 	if err != nil {
 		errorData.Message = "Bad Request/ " + err.Error()

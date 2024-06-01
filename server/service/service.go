@@ -15,6 +15,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -88,17 +89,50 @@ func (s *Service) StartWebService() {
 		BufferItems: 64,      // Number of keys per Get buffer.
 	})
 	if err != nil {
-		zapLogger.Fatal("Error intializing ristretto Cache", zap.Error(err))
+		zapLogger.Fatal("Error initializing ristretto Cache", zap.Error(err))
 		return
 	}
 
-	zapLogger.Info("Initalized local Ristretto Cache")
+	zapLogger.Info("Initialized local Ristretto Cache")
 
 	psqlUser := os.Getenv("POSTGRES_USER")
 	psqlPass := os.Getenv("POSTGRES_PASSWORD")
 	psqlDB := os.Getenv("POSTGRES_DB")
-	psqlHost := "localhost"
-	psqlPort := 5432
+	psqlHost := os.Getenv("POSTGRES_HOST")
+	psqlPort, err := strconv.Atoi(os.Getenv("POSTGRES_PORT"))
+	if err != nil {
+		zapLogger.Fatal("Error in parsing postgres port", zap.Error(err))
+		return
+	}
+
+	activateCPUProfiler := os.Getenv("ACTIVATE_CPU_PROFILER")
+
+	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
+	dockerUsername := os.Getenv("DOCKER_USERNAME")
+	dockerPassword := os.Getenv("DOCKER_PASSWORD")
+
+	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
+
+	graphiteHost := os.Getenv("GRAPHITE_HOST")
+
+	vtAPIKey := os.Getenv("VIRUSTOTAL_KEY")
+
+	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
+	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
+	awsRegion := os.Getenv("AWS_S3_REGION")
+	awsBucket := os.Getenv("AWS_S3_BUCKET")
+	disableS3 := os.Getenv("DISABLE_S3")
+
+	grafanaUser := os.Getenv("GF_SECURITY_ADMIN_USER")
+	grafanaPass := os.Getenv("GF_SECURITY_ADMIN_PASSWORD")
+	grafanaHost := os.Getenv("GF_HOST")
+	grafanaDataSourceUUID := os.Getenv("GF_DATASOURCE_UUID")
+	grafanaFolderUID := os.Getenv("GF_FOLDER_UID")
+
+	certFile := os.Getenv("CERT_FILE")
+	certKeyFile := os.Getenv("CERT_KEY_FILE")
+
+	activateKubeMetrics := os.Getenv("ACTIVATE_KUBERNETES_METRICS")
 
 	// initialize repos
 	psqlRepo := repositories.NewPostgreSqlRepo(ctx, psqlUser, psqlPass, psqlHost, psqlDB, psqlPort, zapLogger)
@@ -106,10 +140,10 @@ func (s *Service) StartWebService() {
 		zapLogger.Fatal("[FATAL] Error in starting postgres service")
 		return
 	}
-	zapLogger.Info("Initalized Postgres Repo")
+	zapLogger.Info("Initialized Postgres Repo")
 
 	var profilerRepo *repositories.ProfilingService
-	activateCPUProfiler := os.Getenv("ACTIVATE_CPU_PROFILER")
+
 	if activateCPUProfiler == "true" {
 		profilerRepo = repositories.NewProfileService("profile_cpu.prof", zapLogger)
 		zapLogger.Info("Initialized Profiling Repo")
@@ -117,10 +151,7 @@ func (s *Service) StartWebService() {
 		profilerRepo = repositories.NewProfileService("", zapLogger)
 	}
 
-	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
-
 	// initialize clients for kubernetes and docker
-	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
 	kubernetesClient := clients.NewKubernetesClient(ctx, zapLogger, kubeConfigPath, dockerRegID)
 	if kubernetesClient == nil {
 		zapLogger.Fatal("[FATAL] Error in creating kubernetes client")
@@ -128,8 +159,6 @@ func (s *Service) StartWebService() {
 	}
 	zapLogger.Info("Initialized Kubernetes client")
 
-	dockerUsername := os.Getenv("DOCKER_USERNAME")
-	dockerPassword := os.Getenv("DOCKER_PASSWORD")
 	if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
 		zapLogger.Fatal("[FATAL] docker registry_id/username/pass not found")
 		return
@@ -143,7 +172,7 @@ func (s *Service) StartWebService() {
 	zapLogger.Info("Initialized Docker client")
 
 	// initialize tcp address for graphite
-	graphiteHost := os.Getenv("GRAPHITE_HOST")
+
 	graphiteAddr, err := net.ResolveTCPAddr("tcp", graphiteHost)
 	if err != nil {
 		zapLogger.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
@@ -156,7 +185,7 @@ func (s *Service) StartWebService() {
 
 	// initialize Virus Total Client
 	var vtClient *vt.Client
-	vtAPIKey := os.Getenv("VIRUSTOTAL_KEY")
+
 	if vtAPIKey != "" {
 		vtClient := vt.NewClient(vtAPIKey)
 		if vtClient == nil {
@@ -170,11 +199,7 @@ func (s *Service) StartWebService() {
 
 	// initialize S3 Client
 	var s3Client *clients.S3Client
-	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
-	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
-	awsRegion := os.Getenv("AWS_S3_REGION")
-	awsBucket := os.Getenv("AWS_S3_BUCKET")
-	disableS3 := os.Getenv("DISABLE_S3")
+
 	if disableS3 == "false" {
 		s3Client, err = clients.NewS3Client(ctx, awsAccessKey, awsSecretKey, awsBucket, awsRegion, zapLogger)
 		if err != nil {
@@ -187,16 +212,14 @@ func (s *Service) StartWebService() {
 	}
 
 	// initialize Grafana Client
-	grafanaUser := os.Getenv("GF_SECURITY_ADMIN_USER")
-	grafanaPass := os.Getenv("GF_SECURITY_ADMIN_PASSWORD")
-	grafanaHost := os.Getenv("GF_HOST")
-	grafanaDataSourceUUID := os.Getenv("GF_DATASOURCE_UUID")
+
 	grafanaHTTPClient := clients.NewGrafanaClient(ctx, grafanaHost, grafanaUser, grafanaPass, grafanaDataSourceUUID, zapLogger)
 	zapLogger.Info("Initialized Grafana Client")
 
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, zapLogger, profilerRepo, dockerClient, kubernetesClient, s3Client,
-		graphiteAddr, requestCount, maxRequestPerMinute, vtClient, grafanaHTTPClient)
+		graphiteAddr, requestCount, maxRequestPerMinute, dockerRegID, grafanaDataSourceUUID, grafanaFolderUID,
+		vtClient, grafanaHTTPClient)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
@@ -247,8 +270,6 @@ func (s *Service) StartWebService() {
 		zapLogger.Fatal("htt2p Configure server", zap.Error(err))
 		return
 	}
-	certFile := os.Getenv("CERT_FILE")
-	certKeyFile := os.Getenv("CERT_KEY_FILE")
 
 	zapLogger.Info("Started api service on port 9443")
 
@@ -265,7 +286,6 @@ func (s *Service) StartWebService() {
 	kubernetesMetrics := make([]string, 0)
 
 	//goroutine to gather and send kubernetes metrics regarding pods and nodes to Grafana using Graphite
-	activateKubeMetrics := os.Getenv("ACTIVATE_KUBERNETES_METRICS")
 	if activateKubeMetrics == "true" {
 		nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
 		go func() {

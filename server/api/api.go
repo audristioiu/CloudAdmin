@@ -36,40 +36,46 @@ const (
 
 // API represents the object used for the api, api handlers and contains context and storage + local cache + profiling service + clients
 type API struct {
-	ctx                 context.Context
-	psqlRepo            *repositories.PostgreSqlRepo
-	apiCache            *ristretto.Cache
-	apiLogger           *zap.Logger
-	profiler            *repositories.ProfilingService
-	dockerClient        *clients.DockerClient
-	kubeClient          *clients.KubernetesClient
-	s3Client            *clients.S3Client
-	graphiteAddr        *net.TCPAddr
-	requestCount        map[string]int
-	maxRequestPerMinute int
-	vtClient            *vt.Client
-	grafanaHTTPClient   *clients.GrafanaClient
+	ctx                   context.Context
+	psqlRepo              *repositories.PostgreSqlRepo
+	apiCache              *ristretto.Cache
+	apiLogger             *zap.Logger
+	profiler              *repositories.ProfilingService
+	dockerClient          *clients.DockerClient
+	kubeClient            *clients.KubernetesClient
+	s3Client              *clients.S3Client
+	graphiteAddr          *net.TCPAddr
+	requestCount          map[string]int
+	maxRequestPerMinute   int
+	dockerRegID           string
+	grafanaDataSourceUUID string
+	grafanaFolderUID      string
+	vtClient              *vt.Client
+	grafanaHTTPClient     *clients.GrafanaClient
 }
 
 // NewAPI returns an API object
 func NewAPI(ctx context.Context, postgresRepo *repositories.PostgreSqlRepo, cache *ristretto.Cache, logger *zap.Logger,
 	cpuProfiler *repositories.ProfilingService, dockerClient *clients.DockerClient, kubeClient *clients.KubernetesClient, s3Client *clients.S3Client,
-	graphiteAddr *net.TCPAddr, requestCount map[string]int, maxRequestPerMinute int, vtClient *vt.Client,
-	grafanaHTTPClient *clients.GrafanaClient) *API {
+	graphiteAddr *net.TCPAddr, requestCount map[string]int, maxRequestPerMinute int, dockerRegID, grafanaDataSourceUUID, grafanaFolderUID string,
+	vtClient *vt.Client, grafanaHTTPClient *clients.GrafanaClient) *API {
 	return &API{
-		ctx:                 ctx,
-		psqlRepo:            postgresRepo,
-		apiCache:            cache,
-		apiLogger:           logger,
-		profiler:            cpuProfiler,
-		dockerClient:        dockerClient,
-		kubeClient:          kubeClient,
-		s3Client:            s3Client,
-		graphiteAddr:        graphiteAddr,
-		requestCount:        requestCount,
-		maxRequestPerMinute: maxRequestPerMinute,
-		vtClient:            vtClient,
-		grafanaHTTPClient:   grafanaHTTPClient,
+		ctx:                   ctx,
+		psqlRepo:              postgresRepo,
+		apiCache:              cache,
+		apiLogger:             logger,
+		profiler:              cpuProfiler,
+		dockerClient:          dockerClient,
+		kubeClient:            kubeClient,
+		s3Client:              s3Client,
+		graphiteAddr:          graphiteAddr,
+		requestCount:          requestCount,
+		maxRequestPerMinute:   maxRequestPerMinute,
+		dockerRegID:           dockerRegID,
+		grafanaDataSourceUUID: grafanaDataSourceUUID,
+		grafanaFolderUID:      grafanaFolderUID,
+		vtClient:              vtClient,
+		grafanaHTTPClient:     grafanaHTTPClient,
 	}
 }
 
