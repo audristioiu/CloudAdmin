@@ -2691,9 +2691,6 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		return
 	}
 
-	appPriorityMap := make(map[string]int)
-	if scheduleType == "user_priority_min_min_scheduler" {
-
 	appPrioritiesString := request.QueryParameter("app_priorities")
 	appPriorityMap := make(map[string]int)
 
