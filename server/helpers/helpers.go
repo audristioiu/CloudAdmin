@@ -18,7 +18,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -706,7 +705,7 @@ func GenerateDockerFile(dirName,
 		logger.Error("failed to create directory", zap.Error(err))
 		return "", nil, err
 	}
-	//todo delete in the end
+
 	if len(files) == 0 {
 
 		_, err = copy(filepath.Join(path, filepath.Base(appData.Name)), filepath.Join(mkDirName, filepath.Base(appData.Name)))
@@ -810,7 +809,7 @@ func GenerateDockerFile(dirName,
 	for _, file := range dataFiles {
 		copy(file, filepath.Join(mkDirName, filepath.Base(file)))
 	}
-	os := runtime.GOOS
+
 	switch mapCodeExtension[extension] {
 	case "nodejs":
 		{
@@ -1013,10 +1012,6 @@ func GenerateDockerFile(dirName,
 				return "", nil, err
 			}
 
-			if os == "windows" {
-				localNewCMD[0] = localNewCMD[0] + ".exe"
-			}
-
 			if scheduleType == "rr_sjf_scheduler" {
 				taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
 					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, localNewCMD, logger)
@@ -1068,9 +1063,7 @@ func GenerateDockerFile(dirName,
 			if err != nil {
 				return "", nil, err
 			}
-			if os == "windows" {
-				localNewCMD[0] = localNewCMD[0] + ".exe"
-			}
+
 			if scheduleType == "rr_sjf_scheduler" {
 				taskExecutionTime, err = GetExecutionTimeForTasks(strings.Split(newRun, " "), []string{appData.FlagArguments}, []string{appData.ParamArguments},
 					[]string{filepath.Join(mkDirName, filepath.Base(appData.Name))}, localNewCMD, logger)
@@ -1092,9 +1085,6 @@ func GenerateDockerFile(dirName,
 // GetExecutionTimeForTasks retrieves list of name-execution time items that will be used in RR SJF algorithm
 func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []string, logger *zap.Logger) ([]domain.TaskItem, error) {
 	tasks := make([]domain.TaskItem, 0)
-
-	os := runtime.GOOS
-
 	for i, namePath := range tasksPath {
 		var execCommand *exec.Cmd
 		var hasFlags, hasParams bool
@@ -1108,7 +1098,7 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 			if slices.Contains(commands, "go") {
 				execCommand = exec.Command(commands[0], commands[1], namePath, flags[i])
 			} else if slices.Contains(commands, "python") {
-				execCommand = exec.Command(commands[0], commands[1], flags[i], namePath)
+				execCommand = exec.Command("bash", "-c", "python3", commands[1], flags[i], namePath)
 			} else if slices.Contains(commands, "gcc") || slices.Contains(commands, "g++") {
 				execCommand = exec.Command(commands[0], commands[1], strings.Split(namePath, ".")[0], flags[i], namePath)
 			} else {
@@ -1117,8 +1107,10 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 
 		}
 		if hasParams && !hasFlags {
-			if slices.Contains(commands, "go") || slices.Contains(commands, "python") {
+			if slices.Contains(commands, "go") {
 				execCommand = exec.Command(commands[0], commands[1], namePath, params[i])
+			} else if slices.Contains(commands, "python") {
+				execCommand = exec.Command("bash", "-c", "python3", commands[1], namePath, params[i])
 			} else if slices.Contains(commands, "gcc") || slices.Contains(commands, "g++") {
 				execCommand = exec.Command(commands[0], commands[1], strings.Split(namePath, ".")[0], namePath)
 			} else if slices.Contains(commands, "javac") {
@@ -1128,8 +1120,10 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 			}
 		}
 		if !hasParams && !hasFlags {
-			if slices.Contains(commands, "go") || slices.Contains(commands, "python") {
+			if slices.Contains(commands, "go") {
 				execCommand = exec.Command(commands[0], commands[1], namePath)
+			} else if slices.Contains(commands, "python") {
+				execCommand = exec.Command("bash", "-c", "python3", commands[1], namePath)
 			} else if slices.Contains(commands, "gcc") || slices.Contains(commands, "g++") {
 				execCommand = exec.Command(commands[0], commands[1], strings.Split(namePath, ".")[0], namePath)
 			} else {
@@ -1140,7 +1134,7 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 			if slices.Contains(commands, "go") {
 				execCommand = exec.Command(commands[0], commands[1], namePath, flags[i], params[i])
 			} else if slices.Contains(commands, "python") {
-				execCommand = exec.Command(commands[0], commands[1], flags[i], namePath, params[i])
+				execCommand = exec.Command("bash", "-c", "python3", commands[1], flags[i], namePath, params[i])
 			} else if slices.Contains(commands, "gcc") || slices.Contains(commands, "g++") {
 				execCommand = exec.Command(commands[0], commands[1], strings.Split(namePath, ".")[0], namePath)
 			} else if slices.Contains(commands, "javac") {
@@ -1155,6 +1149,7 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 		execCommand.Stdout = &out
 		execCommand.Stderr = &stderr
 		start := time.Now()
+
 		err := execCommand.Run()
 		if err != nil {
 			logger.Error("failed to exec command", zap.String("stderr", stderr.String()), zap.Error(err))
@@ -1162,27 +1157,24 @@ func GetExecutionTimeForTasks(commands, flags, params, tasksPath, runCommands []
 		}
 
 		if len(runCommands) > 0 {
+			err = os.Chdir(strings.Split(namePath, "/")[0] + "/")
+			if err != nil {
+				logger.Error("failed to change dir", zap.String("stderr", stderr.String()), zap.Error(err))
+				return nil, err
+			}
 			startCmd := time.Now()
 			var newExecCommand *exec.Cmd
-			if os == "windows" {
-				if len(runCommands) == 2 {
-					newExecCommand = exec.Command("cmd", "/K", runCommands[0], runCommands[1])
-				} else {
-					newExecCommand = exec.Command("cmd", "/K", runCommands[0])
-				}
+			if len(runCommands) == 2 {
+				newExecCommand = exec.Command(runCommands[0], runCommands[1])
 			} else {
-				if len(runCommands) == 2 {
-					newExecCommand = exec.Command(runCommands[0], runCommands[1])
-				} else {
-					newExecCommand = exec.Command(runCommands[0])
-				}
+				newExecCommand = exec.Command(runCommands[0])
 			}
-
 			err := newExecCommand.Run()
 			if err != nil {
 				logger.Error("failed to exec command", zap.String("stderr", stderr.String()), zap.Error(err))
 				return nil, err
 			}
+			os.Remove(runCommands[0])
 			elapsedCMD := time.Since(startCmd)
 			_, folderName := filepath.Split(namePath)
 			_, folderName = filepath.Split(folderName)

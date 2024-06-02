@@ -243,7 +243,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 				},
 			}
 			_, err = k.kubeClient.RbacV1().ClusterRoles().Create(k.ctx, clusterRole, metav1.CreateOptions{})
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "exists") {
 				k.kubeLogger.Error("Failed to create ClusterRole", zap.Error(err))
 				return "", err
 			}
@@ -265,7 +265,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 					},
 				},
 			}, metav1.UpdateOptions{})
-			if err != nil {
+			if err != nil && !strings.Contains(err.Error(), "exists") {
 				k.kubeLogger.Error("failed to update the  scheduler cluster role binding", zap.Error(err))
 				return "", err
 			}

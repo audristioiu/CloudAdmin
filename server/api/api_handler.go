@@ -2759,18 +2759,20 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 	pairNames := make([][]string, 0)
 	deleteDirNames := make([]string, 0)
 
-	errChan := make(chan error)
+	errChan := make(chan error, len(appsInfo.Response))
 
 	var wg sync.WaitGroup
 	var deleteDirNamesMutex sync.Mutex
 	var taskItemsMutex sync.Mutex
 	var pairNamesMutex sync.Mutex
-	wg.Add(len(appsInfo.Response))
-	// push images to docker registry and retrieve task items
+
 	for _, app := range appsInfo.Response {
+		wg.Add(1)
 		go func(app *domain.ApplicationData) {
 			defer wg.Done()
+
 			dirName := strings.ReplaceAll(strings.Split(app.Name, ".")[0], "_", "-")
+
 			filesFromAppFolder := make([]string, 0)
 
 			// Handle s3 operations concurrently
@@ -2793,10 +2795,8 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 
 			newDirName, item, err := helpers.GenerateDockerFile(dirName, scheduleType, filesFromAppFolder, int32(serverPort), app, api.apiLogger)
 			if err != nil {
-				if !strings.Contains(err.Error(), "file already exists") {
-					errChan <- err
-					return
-				}
+				errChan <- err
+				return
 			}
 
 			imageName := newDirName
@@ -2832,10 +2832,12 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			pairNamesMutex.Unlock()
 		}(app)
 	}
+
 	go func() {
 		wg.Wait()
 		close(errChan)
 	}()
+
 	for err := range errChan {
 		api.apiLogger.Error("Got error when generating docker image", zap.Error(err))
 		errorData.Message = "Internal error / error in generating docker image"
@@ -2857,7 +2859,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
-	// aici if nou
+
 	if scheduleType == "rr_sjf_scheduler" {
 
 		file, err := os.Create("tasks_duration.json")
@@ -2868,6 +2870,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			response.WriteEntity(errorData)
 			return
 		}
+		defer file.Close()
 
 		err = os.WriteFile(file.Name(), fileData, 0644)
 		if err != nil {
@@ -3008,9 +3011,22 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		api.apiCache.Del(cachedReq)
 	}
 	cachedRequests[username] = make([]string, 0)
+	if len(deleteDirNames) == 0 {
+		for _, app := range appNamesList {
+			dirName := strings.ReplaceAll(strings.Split(app, ".")[0], "_", "-")
+			deleteDirNames = append(deleteDirNames, dirName+"-"+strings.Split(app, ".")[1])
+		}
+	}
 
 	for _, dir := range deleteDirNames {
-		os.RemoveAll(dir)
+		err = os.RemoveAll(dir)
+		if err != nil {
+			errorData.Message = "Internal error / failed to delete dir " + dir
+			errorData.StatusCode = http.StatusInternalServerError
+			response.WriteHeader(http.StatusInternalServerError)
+			response.WriteEntity(errorData)
+			return
+		}
 	}
 	defer func() {
 		scheduleAppsLatencyMetric.UpdateSince(startTime)
