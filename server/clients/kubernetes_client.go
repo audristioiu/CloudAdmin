@@ -222,7 +222,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 			}
 			clusterRole := &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "node-pod-metrics-reader",
+					Name: scheduleTypeName + "node-pod-metrics-reader",
 				},
 				Rules: []rbacv1.PolicyRule{
 					{
@@ -255,7 +255,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 				RoleRef: rbacv1.RoleRef{
 					APIGroup: "rbac.authorization.k8s.io",
 					Kind:     "ClusterRole",
-					Name:     "node-pod-metrics-reader",
+					Name:     scheduleTypeName + "node-pod-metrics-reader",
 				},
 				Subjects: []rbacv1.Subject{
 					{

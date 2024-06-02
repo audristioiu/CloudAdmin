@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from 'axios';
 import { Agent } from 'https';
 import certs from '../../Certs/certs.js';
@@ -7,12 +7,11 @@ import '../../assets/Error.scss';
 function GetAlert(props) {
   const { app } = props;
   const [appName, setAppName] = useState(app.name);
-  const [appDescription, setAppDescr] = useState("");
-  const [appFlagArguments, setAppFlags] = useState("");
-  const [appParamArguments, setAppParams] = useState("");
+  const [responseData, setResponseData] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  let handleSubmit = async () => {
+  let handleSubmit = async (event) => {
+    event.preventDefault();
 
     try {
       const userInfo = JSON.parse(localStorage.getItem('userInfo'));
@@ -32,16 +31,17 @@ function GetAlert(props) {
         params: {
           "username": username,
           "app_name": appName,
-        }
+        },
+        httpsAgent: agent,
       };
 
-     const resp =  await axios.get(`https://localhost:9443/grafana/alert_trigger`, {
-      }, config,
-        { httpsAgent: agent },);
-      setErrorMessage();  
-      console.log(resp)
+      const resp = await axios.get(`https://localhost:9443/grafana/alert_trigger`, config);
+      setErrorMessage();
+      console.log(resp);
+      setResponseData(resp.data);
     } catch (error) {
-      setErrorMessage('Failed to get alert status for APP. Please try again. /' + error.response.data.message);
+      setErrorMessage('Failed to get alert status for APP. Please try again. /');
+      setResponseData('');
     }
   };
 
@@ -52,10 +52,16 @@ function GetAlert(props) {
           Get alerts for {appName}
         </div>
 
+        {responseData && <div className="response-data">
+          <h3>Response:</h3>
+          <pre>{JSON.stringify(responseData, null, 2)}</pre>
+        </div>}
+
         <button type="submit" className='button-3'>
           Get Alert
         </button>
       </form>
+
       {errorMessage && <div className="error-message"> <span className="error-text">{errorMessage}</span> </div>}
     </div>
   )

@@ -2661,7 +2661,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		return
 	}
 
-	appNamesList := strings.Split(appnames, ",")
+	appNamesList := strings.Split(appnames, ", ")
 
 	if !helpers.CheckAppsExist(userData.Applications, appNamesList) {
 		api.apiLogger.Error("Apps not found", zap.Any("apps", appNamesList))
