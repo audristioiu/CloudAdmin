@@ -342,6 +342,7 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Param(ws.QueryParameter("nr_replicas", "nr of replicas").DataType("integer").Required(true).AllowEmptyValue(false)).
 			Param(ws.QueryParameter("server_port", "server port for app").DataType("integer").Required(false).AllowEmptyValue(true)).
 			Param(ws.QueryParameter("app_priorities", "user app priorities").DataType("string").Required(false).AllowEmptyValue(true).AllowMultiple(true)).
+			Param(ws.QueryParameter("route_paths", "route paths to expose for ingress").DataType("string").Required(false).AllowEmptyValue(true).AllowMultiple(true)).
 			Doc("Schedule apps").
 			Metadata(restfulspec.KeyOpenAPITags, tags).
 			Produces(restful.MIME_JSON).
@@ -387,23 +388,6 @@ func (api *API) RegisterRoutes(ws *restful.WebService) {
 			Filter(api.BasicAuthenticate).
 			Filter(api.CompressedEncodingFilter).
 			To(api.GetPodFile).
-			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
-			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
-	ws.Route(
-		ws.
-			GET(portForwardPath).
-			Param(ws.HeaderParameter("USER-AUTH", "role used for auth").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.HeaderParameter("USER-UUID", "user unique id").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("app_name", "app name from where you want to get file from").DataType("string").Required(true).AllowEmptyValue(false).AllowMultiple(false)).
-			Param(ws.QueryParameter("username", "owner of the app").DataType("string").Required(true).AllowEmptyValue(false)).
-			Param(ws.QueryParameter("file_name", "name of the file you want to download").DataType("string").Required(false).AllowEmptyValue(true)).
-			Doc("Port forward deployment").
-			Metadata(restfulspec.KeyOpenAPITags, tags).
-			Produces(restful.MIME_JSON).
-			Consumes(restful.MIME_JSON).
-			Filter(api.BasicAuthenticate).
-			Filter(api.CompressedEncodingFilter).
-			To(api.PortForward).
 			Returns(http.StatusBadRequest, "Bad Request", domain.ErrorResponse{}).
 			Returns(http.StatusNotFound, "User/Apps/Pod Not Found", domain.ErrorResponse{}))
 	ws.Route(

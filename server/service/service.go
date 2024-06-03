@@ -3,6 +3,7 @@ package service
 import (
 	"cloudadmin/api"
 	"cloudadmin/clients"
+	"cloudadmin/domain"
 	"cloudadmin/helpers"
 	"cloudadmin/repositories"
 	"context"
@@ -15,11 +16,11 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
 	vt "github.com/VirusTotal/vt-go"
+	"github.com/caarlos0/env/v11"
 	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/dgraph-io/ristretto"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
@@ -89,53 +90,20 @@ func (s *Service) StartWebService() {
 		BufferItems: 64,      // Number of keys per Get buffer.
 	})
 	if err != nil {
-		zapLogger.Fatal("Error initializing ristretto Cache", zap.Error(err))
+		zapLogger.Fatal("[FATAL] Error initializing ristretto Cache", zap.Error(err))
 		return
 	}
 
 	zapLogger.Info("Initialized local Ristretto Cache")
 
-	psqlUser := os.Getenv("POSTGRES_USER")
-	psqlPass := os.Getenv("POSTGRES_PASSWORD")
-	psqlDB := os.Getenv("POSTGRES_DB")
-	psqlHost := os.Getenv("POSTGRES_HOST")
-	psqlPort, err := strconv.Atoi(os.Getenv("POSTGRES_PORT"))
+	config := domain.Config{}
+	err = env.Parse(&config)
 	if err != nil {
-		zapLogger.Fatal("Error in parsing postgres port", zap.Error(err))
-		return
+		zapLogger.Fatal("[FATAL] Error in config parse", zap.Error(err))
 	}
 
-	activateCPUProfiler := os.Getenv("ACTIVATE_CPU_PROFILER")
-
-	dockerRegID := os.Getenv("DOCKER_REGISTRY_ID")
-	dockerUsername := os.Getenv("DOCKER_USERNAME")
-	dockerPassword := os.Getenv("DOCKER_PASSWORD")
-
-	kubeConfigPath := os.Getenv("KUBE_CONFIG_PATH")
-
-	graphiteHost := os.Getenv("GRAPHITE_HOST")
-
-	vtAPIKey := os.Getenv("VIRUSTOTAL_KEY")
-
-	awsAccessKey := os.Getenv("AWS_ACCESS_KEY")
-	awsSecretKey := os.Getenv("AWS_SECRET_KEY")
-	awsRegion := os.Getenv("AWS_S3_REGION")
-	awsBucket := os.Getenv("AWS_S3_BUCKET")
-	disableS3 := os.Getenv("DISABLE_S3")
-
-	grafanaUser := os.Getenv("GF_SECURITY_ADMIN_USER")
-	grafanaPass := os.Getenv("GF_SECURITY_ADMIN_PASSWORD")
-	grafanaHost := os.Getenv("GF_HOST")
-	grafanaDataSourceUUID := os.Getenv("GF_DATASOURCE_UUID")
-	grafanaFolderUID := os.Getenv("GF_FOLDER_UID")
-
-	certFile := os.Getenv("CERT_FILE")
-	certKeyFile := os.Getenv("CERT_KEY_FILE")
-
-	activateKubeMetrics := os.Getenv("ACTIVATE_KUBERNETES_METRICS")
-
 	// initialize repos
-	psqlRepo := repositories.NewPostgreSqlRepo(ctx, psqlUser, psqlPass, psqlHost, psqlDB, psqlPort, zapLogger)
+	psqlRepo := repositories.NewPostgreSqlRepo(ctx, config.PsqlUser, config.PsqlPass, config.DbHost, config.DbName, config.DbPort, zapLogger)
 	if psqlRepo == nil {
 		zapLogger.Fatal("[FATAL] Error in starting postgres service")
 		return
@@ -144,7 +112,7 @@ func (s *Service) StartWebService() {
 
 	var profilerRepo *repositories.ProfilingService
 
-	if activateCPUProfiler == "true" {
+	if config.EnableCPUProfiler {
 		profilerRepo = repositories.NewProfileService("profile_cpu.prof", zapLogger)
 		zapLogger.Info("Initialized Profiling Repo")
 	} else {
@@ -152,19 +120,19 @@ func (s *Service) StartWebService() {
 	}
 
 	// initialize clients for kubernetes and docker
-	kubernetesClient := clients.NewKubernetesClient(ctx, zapLogger, kubeConfigPath, dockerRegID)
+	kubernetesClient := clients.NewKubernetesClient(ctx, zapLogger, config.KubeConfigPath, config.RegistryID)
 	if kubernetesClient == nil {
 		zapLogger.Fatal("[FATAL] Error in creating kubernetes client")
 		return
 	}
 	zapLogger.Info("Initialized Kubernetes client")
 
-	if dockerRegID == "" || dockerUsername == "" || dockerPassword == "" {
+	if config.RegistryID == "" || config.DockerUsername == "" || config.DockerPassword == "" {
 		zapLogger.Fatal("[FATAL] docker registry_id/username/pass not found")
 		return
 	}
 
-	dockerClient := clients.NewDockerClient(ctx, zapLogger, dockerRegID, dockerUsername, dockerPassword)
+	dockerClient := clients.NewDockerClient(ctx, zapLogger, config.RegistryID, config.DockerUsername, config.DockerPassword)
 	if dockerClient == nil {
 		zapLogger.Fatal("[FATAL] Error in creating docker client")
 		return
@@ -173,7 +141,7 @@ func (s *Service) StartWebService() {
 
 	// initialize tcp address for graphite
 
-	graphiteAddr, err := net.ResolveTCPAddr("tcp", graphiteHost)
+	graphiteAddr, err := net.ResolveTCPAddr("tcp", config.GraphiteHost)
 	if err != nil {
 		zapLogger.Fatal("[FATAL] Failed to resolve tcp address for graphite", zap.Error(err))
 		return
@@ -181,13 +149,12 @@ func (s *Service) StartWebService() {
 	zapLogger.Info("Initialized graphite for metrics")
 
 	requestCount := make(map[string]int)
-	maxRequestPerMinute := 1000
 
 	// initialize Virus Total Client
 	var vtClient *vt.Client
 
-	if vtAPIKey != "" {
-		vtClient := vt.NewClient(vtAPIKey)
+	if config.VirusTotalKey != "" {
+		vtClient := vt.NewClient(config.VirusTotalKey)
 		if vtClient == nil {
 			zapLogger.Fatal("[FATAL] Failed to create new virus total client")
 			return
@@ -200,8 +167,8 @@ func (s *Service) StartWebService() {
 	// initialize S3 Client
 	var s3Client *clients.S3Client
 
-	if disableS3 == "false" {
-		s3Client, err = clients.NewS3Client(ctx, awsAccessKey, awsSecretKey, awsBucket, awsRegion, zapLogger)
+	if config.EnableS3 {
+		s3Client, err = clients.NewS3Client(ctx, config.AccessKey, config.SecretKey, config.Bucket, config.Region, zapLogger)
 		if err != nil {
 			zapLogger.Fatal("[FATAL] Error in creating s3 client")
 			return
@@ -213,23 +180,24 @@ func (s *Service) StartWebService() {
 
 	// initialize Grafana Client
 
-	grafanaHTTPClient := clients.NewGrafanaClient(ctx, grafanaHost, grafanaUser, grafanaPass, grafanaDataSourceUUID, zapLogger)
+	grafanaHTTPClient := clients.NewGrafanaClient(ctx, config.Host, config.GrafanaAdminUser, config.GrafanaAdminPass,
+		config.DataSourceUUID, zapLogger)
 	zapLogger.Info("Initialized Grafana Client")
 
 	// initialize api
 	apiManager := api.NewAPI(ctx, psqlRepo, cache, zapLogger, profilerRepo, dockerClient, kubernetesClient, s3Client,
-		graphiteAddr, requestCount, maxRequestPerMinute, dockerRegID, grafanaDataSourceUUID, grafanaFolderUID,
+		graphiteAddr, requestCount, config.MaxRequestPerMinute, config.RegistryID, config.DataSourceUUID, config.FolderUID,
 		vtClient, grafanaHTTPClient)
 	apiManager.RegisterRoutes(ws)
 
 	restful.DefaultContainer.Add(ws)
 
-	config := restfulspec.Config{
+	restfulConfig := restfulspec.Config{
 		WebServices:                   restful.RegisteredWebServices(), // you control what services are visible
 		APIPath:                       "/apidocs.json",
 		PostBuildSwaggerObjectHandler: enrichSwaggerObject}
-	restfulspec.BuildSwagger(config)
-	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(config))
+	restfulspec.BuildSwagger(restfulConfig)
+	restful.DefaultContainer.Add(restfulspec.NewOpenAPIService(restfulConfig))
 
 	http.Handle("/apidocs/", http.StripPrefix("/apidocs/", http.FileServer(http.Dir("../swagger-ui/dist"))))
 
@@ -274,7 +242,7 @@ func (s *Service) StartWebService() {
 	zapLogger.Info("Started api service on port 9443")
 
 	go func() {
-		if err = server.ListenAndServeTLS(certFile, certKeyFile); !errors.Is(err, http.ErrServerClosed) {
+		if err = server.ListenAndServeTLS(config.CertFile, config.CertKeyFile); !errors.Is(err, http.ErrServerClosed) {
 			zapLogger.Error("HTTPS server error", zap.Error(err))
 		}
 		for _, metric := range helpers.MetricsName {
@@ -286,7 +254,7 @@ func (s *Service) StartWebService() {
 	kubernetesMetrics := make([]string, 0)
 
 	//goroutine to gather and send kubernetes metrics regarding pods and nodes to Grafana using Graphite
-	if activateKubeMetrics == "true" {
+	if config.EnableKubeMetrics {
 		nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
 		go func() {
 			for {

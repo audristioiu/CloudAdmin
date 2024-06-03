@@ -21,6 +21,7 @@ require (
 
 require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.11
+	github.com/caarlos0/env/v11 v11.0.1
 	golang.org/x/net v0.19.0
 )
 

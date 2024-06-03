@@ -894,9 +894,17 @@ func (api *API) DeleteUser(request *restful.Request, response *restful.Response)
 					response.WriteEntity(errorData)
 					return
 				}
-				err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
+				err = api.kubeClient.DeleteNodePort(deployName, app.Namespace)
 				if err != nil {
-					errorData.Message = "Internal error/ failed to delete load balancer"
+					errorData.Message = "Internal error/ failed to delete node port"
+					errorData.StatusCode = http.StatusInternalServerError
+					response.WriteHeader(http.StatusInternalServerError)
+					response.WriteEntity(errorData)
+					return
+				}
+				err = api.kubeClient.DeleteIngress(deployName, app.Namespace)
+				if err != nil {
+					errorData.Message = "Internal error/ failed to delete ingress"
 					errorData.StatusCode = http.StatusInternalServerError
 					response.WriteHeader(http.StatusInternalServerError)
 					response.WriteEntity(errorData)
@@ -2493,9 +2501,17 @@ func (api *API) DeleteApp(request *restful.Request, response *restful.Response) 
 				response.WriteEntity(errorData)
 				return
 			}
-			err = api.kubeClient.DeleteLoadBalancer(deployName, app.Namespace)
+			err = api.kubeClient.DeleteNodePort(deployName, app.Namespace)
 			if err != nil {
-				errorData.Message = "Internal error/ failed to delete load balancer"
+				errorData.Message = "Internal error/ failed to delete nodeport"
+				errorData.StatusCode = http.StatusInternalServerError
+				response.WriteHeader(http.StatusInternalServerError)
+				response.WriteEntity(errorData)
+				return
+			}
+			err = api.kubeClient.DeleteIngress(deployName, app.Namespace)
+			if err != nil {
+				errorData.Message = "Internal error/ failed to delete ingress"
 				errorData.StatusCode = http.StatusInternalServerError
 				response.WriteHeader(http.StatusInternalServerError)
 				response.WriteEntity(errorData)
@@ -2754,6 +2770,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 		response.WriteEntity(errorData)
 		return
 	}
+	routePaths := strings.Split(request.QueryParameter("route_paths"), ",")
 
 	taskItems := make([]domain.TaskItem, 0)
 	pairNames := make([][]string, 0)
@@ -2917,7 +2934,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 				return
 			}
 			publicIp, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
-				int32(serverPort), int32(nrReplicas))
+				int32(serverPort), int32(nrReplicas), routePaths)
 			if err != nil {
 				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -2935,7 +2952,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 		} else if scheduleType != "normal" {
 			publicIp, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", strings.ReplaceAll(scheduleType, "_", "-")+"-go",
-				int32(0), int32(nrReplicas))
+				int32(0), int32(nrReplicas), []string{})
 			if err != nil {
 				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -2945,7 +2962,7 @@ func (api *API) ScheduleApps(request *restful.Request, response *restful.Respons
 			}
 		} else {
 			_, err = api.kubeClient.CreateDeployment(tagName, imageName, userNameSpace, "", "",
-				int32(serverPort), int32(nrReplicas))
+				int32(serverPort), int32(nrReplicas), []string{})
 			if err != nil {
 				errorData.Message = "Internal error / error in creating deployment"
 				errorData.StatusCode = http.StatusInternalServerError
@@ -3246,117 +3263,6 @@ func (api *API) GetPodFile(request *restful.Request, response *restful.Response)
 	path, _ := os.Getwd()
 	os.Remove(filepath.Join(path, filepath.Base(fileName)))
 	io.Copy(response, bytes.NewReader(podFileContent))
-}
-
-// PortForward does port forwarding for deployment
-func (api *API) PortForward(request *restful.Request, response *restful.Response) {
-
-	errorData := domain.ErrorResponse{}
-
-	username := request.QueryParameter("username")
-	if username == "" {
-		api.apiLogger.Error(" Couldn't read username query parameter")
-		errorData.Message = "Bad Request/ empty username"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-
-	appName := request.QueryParameter("app_name")
-	if appName == "" {
-		api.apiLogger.Error(" Couldn't read app name query parameter")
-		errorData.Message = "Bad Request/ empty app name"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-
-	podName := strings.ReplaceAll(appName, "_", "-")
-	podName = strings.ReplaceAll(podName, ".", "-") + "-deployment"
-
-	userData, err := api.psqlRepo.GetUserData(username)
-	if err != nil {
-		api.apiLogger.Error(" User not found", zap.String("user_name", username))
-		errorData.Message = "User not found"
-		errorData.StatusCode = http.StatusNotFound
-		response.WriteHeader(http.StatusNotFound)
-		response.WriteEntity(errorData)
-		return
-	}
-	userUUID := request.HeaderParameter("USER-UUID")
-	checkUserData, err := api.psqlRepo.GetUserDataWithUUID(userUUID)
-	if err != nil {
-		api.apiLogger.Error(" User not found", zap.String("user_name", userData.UserName))
-		errorData.Message = "User not found"
-		errorData.StatusCode = http.StatusNotFound
-		response.WriteHeader(http.StatusNotFound)
-		response.WriteEntity(errorData)
-		return
-	}
-	if userData.UserName != checkUserData.UserName {
-		errorData.Message = "Status forbidden"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteHeader(http.StatusForbidden)
-		response.WriteEntity(errorData)
-		return
-	}
-	if userData.UserLocked {
-		errorData.Message = "Status forbidden/  You are not allowed to use app anymore.Please contact admin"
-		errorData.StatusCode = http.StatusForbidden
-		response.WriteHeader(http.StatusForbidden)
-		response.WriteEntity(errorData)
-		return
-	}
-
-	if !helpers.CheckAppsExist(userData.Applications, []string{appName}) {
-		api.apiLogger.Error("Apps not found", zap.Any("apps", appName))
-		errorData.Message = "Apps not found"
-		errorData.StatusCode = http.StatusNotFound
-		response.WriteHeader(http.StatusNotFound)
-		response.WriteEntity(errorData)
-		return
-
-	}
-
-	appData := domain.ApplicationData{}
-	_, _, userAppsData, err := api.psqlRepo.GetAppsData(username, "", "", "", []string{appName}, []string{})
-	if err != nil {
-		api.apiLogger.Error("Got error when retrieving apps", zap.Error(err))
-		errorData.Message = "Internal error / error in retrieving apps"
-		errorData.StatusCode = http.StatusInternalServerError
-		response.WriteHeader(http.StatusInternalServerError)
-		response.WriteEntity(errorData)
-		return
-	}
-	appData = *userAppsData[0]
-	if *appData.Port == 0 {
-		errorData.Message = "Bad Request / App not running on port"
-		errorData.StatusCode = http.StatusBadRequest
-		response.WriteHeader(http.StatusBadRequest)
-		response.WriteEntity(errorData)
-		return
-	}
-	go func() {
-		err = api.kubeClient.PortForwarding(podName, appData.Namespace, strconv.Itoa(*appData.Port))
-		if err != nil {
-			errorData.Message = "Bad Request/ Error in port forwarding"
-			errorData.StatusCode = http.StatusBadRequest
-			response.WriteHeader(http.StatusBadRequest)
-			response.WriteEntity(errorData)
-			return
-		}
-	}()
-
-	totalRequestsMetric.Inc(1)
-	go graphite.Graphite(metrics.DefaultRegistry, time.Second, "cloudadminapi", api.graphiteAddr)
-
-	portForwardResponse := domain.QueryResponse{}
-	portForwardResponse.Message = "Port forwarding succesfully achieved"
-	portForwardResponse.ResourcesAffected = append(portForwardResponse.ResourcesAffected, appName)
-	response.WriteEntity(portForwardResponse)
-
 }
 
 // SubmitForm submits form

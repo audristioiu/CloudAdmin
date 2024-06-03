@@ -17,6 +17,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	hpav2 "k8s.io/api/autoscaling/v2"
 	apiv1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -270,7 +271,7 @@ func (k *KubernetesClient) CreateNamespace(userName, scheduleType string) (strin
 				return "", err
 			}
 			_, err = k.CreateDeployment(k.schedulerRegisterID+"/"+scheduleType, scheduleTypeName, "default", scheduleTypeName+"-deployment",
-				"", int32(0), int32(1))
+				"", int32(0), int32(1), []string{})
 			if err != nil {
 				k.kubeLogger.Error("failed to create deployment for scheduler", zap.Error(err), zap.String("schedule_type", scheduleType))
 				return "", err
@@ -316,8 +317,82 @@ func (k *KubernetesClient) DeleteNamespace(userNameSpace string) error {
 	return nil
 }
 
-// CreateLoadBalancer exposes port usingLoadBalancer
-func (k *KubernetesClient) CreateLoadBalancer(imageName, namespace string, port int32) (string, error) {
+func (k *KubernetesClient) CreateIngress(serviceName, namespace string, port int32, routePaths []string) (string, error) {
+	ingressPaths := make([]networkingv1.HTTPIngressPath, 0)
+	pathType := networkingv1.PathTypeImplementationSpecific
+	for _, routePath := range routePaths {
+		ingressPath := networkingv1.HTTPIngressPath{
+			Path:     routePath,
+			PathType: &pathType,
+			Backend: networkingv1.IngressBackend{
+				Service: &networkingv1.IngressServiceBackend{
+					Name: serviceName + "-service",
+					Port: networkingv1.ServiceBackendPort{
+						Number: port,
+					},
+				},
+			},
+		}
+		ingressPaths = append(ingressPaths, ingressPath)
+	}
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName + "-ingress",
+			Namespace: namespace,
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: serviceName + ".conf",
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: ingressPaths,
+						},
+					},
+				},
+			},
+		},
+	}
+	ingressClient := k.kubeClient.NetworkingV1().Ingresses(namespace)
+	ing, err := ingressClient.Create(k.ctx, ingress, metav1.CreateOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to create ingress", zap.String("ingress_name", serviceName), zap.Error(err))
+		return "", err
+	}
+	k.kubeLogger.Info("Created ingress", zap.String("ingress_name", ing.GetName()))
+
+	for {
+		resGetIng, err := ingressClient.Get(k.ctx, ing.GetName(), metav1.GetOptions{})
+		if err != nil {
+			k.kubeLogger.Error("failed to GET ingress", zap.String("ingress_name", ing.GetName()), zap.Error(err))
+			return "", err
+		}
+		if len(resGetIng.Status.LoadBalancer.Ingress) > 0 {
+			ingressIP := resGetIng.Status.LoadBalancer.Ingress[0].IP
+			if ingressIP != "" {
+				return ingressIP, nil
+			}
+		}
+	}
+}
+
+// DeleteIngress deletes ingress from the required namespace
+func (k *KubernetesClient) DeleteIngress(serviceName, namespace string) error {
+	servicesClient := k.kubeClient.ExtensionsV1beta1().Ingresses(namespace)
+	deletePolicy := metav1.DeletePropagationForeground
+	err := servicesClient.Delete(k.ctx, serviceName+"-ingress", metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})
+	if err != nil {
+		k.kubeLogger.Error("failed to delete ingress", zap.String("ingress", serviceName), zap.Error(err))
+		return err
+	}
+	k.kubeLogger.Info("Deleted ingress", zap.String("ingress", serviceName))
+	return nil
+}
+
+// CreateNodePort exposes port using NodePort
+func (k *KubernetesClient) CreateNodePort(imageName, namespace string, port int32) (int32, error) {
 	nodeport := apiv1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      imageName + "-service",
@@ -337,53 +412,43 @@ func (k *KubernetesClient) CreateLoadBalancer(imageName, namespace string, port 
 			Selector: map[string]string{
 				"app": imageName + "-deployment",
 			},
-			Type: apiv1.ServiceTypeLoadBalancer,
+			Type: apiv1.ServiceTypeNodePort,
 		},
 	}
 	svc, err := k.kubeClient.CoreV1().Services(namespace).Create(k.ctx, &nodeport, metav1.CreateOptions{})
 	if err != nil {
-		k.kubeLogger.Error("failed to create load balancer service", zap.Error(err))
-		return "", err
+		k.kubeLogger.Error("failed to create nodeport service", zap.Error(err))
+		return 0, err
 	}
-	k.kubeLogger.Info("Created balancer service", zap.String("load_balancer_name", svc.GetName()))
+	k.kubeLogger.Info("Created nodeport service", zap.String("nodeport_name", svc.GetName()))
 
-	// get load balancer details
-	var ip string
-	for {
-		getSvc, err := k.kubeClient.CoreV1().Services(namespace).Get(k.ctx, svc.GetName(), metav1.GetOptions{})
-		if err != nil {
-			k.kubeLogger.Error("failed to get load balancer service", zap.Error(err))
-			return "", err
-		}
-		if len(getSvc.Status.LoadBalancer.Ingress) > 0 {
-			ip = getSvc.Status.LoadBalancer.Ingress[0].IP
-			break
-		} else {
-			k.kubeLogger.Warn("waiting for load balancer ingress")
-		}
-
+	getSvc, err := k.kubeClient.CoreV1().Services(namespace).Get(k.ctx, svc.GetName(), metav1.GetOptions{})
+	if err != nil {
+		k.kubeLogger.Error("failed to get nodeport service", zap.Error(err))
+		return 0, err
 	}
-	return ip, nil
+
+	return getSvc.Spec.Ports[0].NodePort, err
 }
 
-// DeleteLoadBalancer deletes load balancer from the required namespace
-func (k *KubernetesClient) DeleteLoadBalancer(serviceName, namespace string) error {
+// DeleteNodePort deletes nodeport from the required namespace
+func (k *KubernetesClient) DeleteNodePort(serviceName, namespace string) error {
 	servicesClient := k.kubeClient.CoreV1().Services(namespace)
 	deletePolicy := metav1.DeletePropagationForeground
 	err := servicesClient.Delete(k.ctx, serviceName+"-service", metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	})
 	if err != nil {
-		k.kubeLogger.Error("failed to delete load balancer", zap.String("lb_name", serviceName), zap.Error(err))
+		k.kubeLogger.Error("failed to delete nodeport", zap.String("nodeport_name", serviceName), zap.Error(err))
 		return err
 	}
-	k.kubeLogger.Info("Deleted service", zap.String("lb_name", serviceName))
+	k.kubeLogger.Info("Deleted nodeort", zap.String("nodeort_name", serviceName))
 	return nil
 }
 
 // CreateDeployment creates a deployment for image in the required namespace with a specific nr of replicas
 func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, serviceName,
-	schedulerName string, portNr, nrReplicas int32) (string, error) {
+	schedulerName string, portNr, nrReplicas int32, routePaths []string) (string, error) {
 	var cpuLimit, memLimit, cpuReq, memReq string
 	if schedulerName != "" {
 		cpuLimit = "500m"
@@ -451,11 +516,15 @@ func (k *KubernetesClient) CreateDeployment(tagName, imageName, namespace, servi
 	}
 	var publicIp string
 	if portNr != int32(0) {
-		loadBalancerIP, err := k.CreateLoadBalancer(imageName, namespace, portNr)
+		exposedPort, err := k.CreateNodePort(imageName, namespace, portNr)
 		if err != nil {
 			return "", err
 		}
-		publicIp = loadBalancerIP
+		loadBalancerIP, err := k.CreateIngress(imageName, namespace, portNr, routePaths)
+		if err != nil {
+			return "", err
+		}
+		publicIp = loadBalancerIP + ":" + strconv.Itoa(int(exposedPort))
 
 	}
 	k.kubeLogger.Info("Created deployment", zap.String("deployment_name", result.GetName()))
@@ -651,21 +720,6 @@ func (k *KubernetesClient) GetPodFile(fileName, appName, deploymentName, namespa
 	}
 	return fileContent, nil
 
-}
-
-// PortForwarding executes kubectl port forward command
-func (k *KubernetesClient) PortForwarding(deploymentName, namespace, port string) error {
-	command := exec.Command("kubectl", "port-forward", "deployment.apps/"+deploymentName, port+":"+port, "-n", namespace)
-
-	var out bytes.Buffer
-	command.Stdout = &out
-	command.Stderr = os.Stderr
-	err := command.Run()
-	if err != nil {
-		k.kubeLogger.Error("failed to run kubectl port-forward command", zap.Error(err))
-		return err
-	}
-	return nil
 }
 
 // CreateAutoScaler creates a horizontal pod auto scaler for deploymentName
