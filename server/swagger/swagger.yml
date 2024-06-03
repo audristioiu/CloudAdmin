@@ -426,6 +426,12 @@ paths:
           description: user app priorities
           required: false
           schema:
+            type: string
+        - name: route_paths
+          in: query
+          description: route paths to expose for ingress
+          required: false
+          schema:
             type: string    
       responses:
         '200':
