@@ -25,7 +25,6 @@ const (
 	schedulePath            = "/schedule"
 	getPodResultPath        = "/getresults"
 	getPodFilePath          = "/getpodfile"
-	portForwardPath         = "/portforward"
 	grafanaDataSourcePath   = "/grafana/datasource"
 	grafanaAlertPath        = "/grafana/alert"
 	grafanaUpdateAlertPath  = "/grafana/update_alert"
