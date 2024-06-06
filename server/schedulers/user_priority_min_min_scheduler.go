@@ -118,12 +118,17 @@ func (s *UserPriorityMinMinScheduler) calculateCompletionTime(node *v1.Node, pod
 
 	cpuUsage := nodeMetrics.Usage.Cpu().MilliValue()
 	cpuCapacity := node.Status.Capacity.Cpu().MilliValue()
-
 	cpuUtilization := float64(cpuUsage) / float64(cpuCapacity)
 
-	log.Println("node cpu:", cpuUtilization)
+	memoryUsage := nodeMetrics.Usage.Memory().Value()
+	memoryCapacity := node.Status.Capacity.Memory().Value()
+	memoryUtilization := float64(memoryUsage) / float64(memoryCapacity)
 
-	return cpuUtilization * 100.0
+	log.Printf("Node CPU Utilization: %.2f, Node Memory Utilization: %.2f", cpuUtilization, memoryUtilization)
+
+	combinedScore := (cpuUtilization * 0.5) + (memoryUtilization * 0.5)
+
+	return combinedScore * 100.0
 }
 
 func (s *UserPriorityMinMinScheduler) bindPod(p *v1.Pod, node string) error {
