@@ -255,10 +255,9 @@ func (s *Service) StartWebService() {
 
 	//goroutine to gather and send kubernetes metrics regarding pods and nodes to Grafana using Graphite
 	if config.EnableKubeMetrics {
-		nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
 		go func() {
 			for {
-
+				nodeMetricsMap, _ := kubernetesClient.ListNodesMetrics()
 				if len(nodeMetricsMap) > 0 {
 					for node, nodeMetrics := range nodeMetricsMap {
 
