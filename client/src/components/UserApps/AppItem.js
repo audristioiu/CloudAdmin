@@ -5,6 +5,7 @@ import EditApp from "./EditApp";
 import ScheduleApp from "./ScheduleApp";
 import GetApp from "./GetApp";
 import { useNavigate } from 'react-router-dom';
+import GetAppFile from "./GetAppFile";
 
 function AppItem({ app, onSelect, isSelected }) {
   const [appName, setAppName] = useState(app.name);
@@ -19,6 +20,7 @@ function AppItem({ app, onSelect, isSelected }) {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isGetAppModalOpen, setIsGetAppModalOpen] = useState(false);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
 
   const history = useNavigate();
 
@@ -69,6 +71,14 @@ function AppItem({ app, onSelect, isSelected }) {
 
   const handleCloseGetAppModal = () => {
     setIsGetAppModalOpen(false);
+  };
+
+  const handleOpenDownloadModal = () => {
+    setIsDownloadModalOpen(true);
+  };
+
+  const handleCloseDownloadModal = () => {
+    setIsDownloadModalOpen(false);
   };
 
   return (
@@ -127,6 +137,18 @@ function AppItem({ app, onSelect, isSelected }) {
           overlayClassName="Overlay"
         >
           <GetApp app={app} />
+        </Modal>
+
+        <button className='button-3' onClick={handleOpenDownloadModal}>
+          Download File
+        </button>
+        <Modal
+          isOpen={isDownloadModalOpen}
+          onRequestClose={handleCloseDownloadModal}
+          className="Modal"
+          overlayClassName="Overlay"
+        >
+          <GetAppFile app={app} />
         </Modal>
 
         {appRunningState === "true" && (
